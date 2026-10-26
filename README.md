@@ -6,7 +6,8 @@ começa com R$ 100 mil fictícios, entra nos IPOs, compra e vende num livro de
 ofertas e recebe dividendos quando o clube pontua ou avança em copas. O preço é
 formado pelos próprios jogadores; os dividendos dos resultados reais são a âncora.
 
-Plano completo: https://claude.ai/artifact/2zXaWiDMEYT8T3jjR7bWaw
+Plano, decisões e andamento ficam no vault de conhecimento do projeto:
+https://github.com/thaiangomes/FutBolsa---Brain (comece por `Plano.md`).
 
 Moeda só fictícia, sem dinheiro real, e sem escudos ou marcas oficiais dos clubes.
 
