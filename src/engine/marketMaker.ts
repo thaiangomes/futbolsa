@@ -18,6 +18,14 @@ export interface MarketMakerConfig {
   matchSpread: number;
   /** Quantidade por lado enquanto o clube está em campo. */
   matchQuantity: number;
+  /**
+   * Em volta de qual preço cotar:
+   * - "lastTrade": último negócio, inclusive os da própria casa. Quem vende
+   *   para a casa empurra a próxima cotação para baixo (e quem compra, para cima).
+   * - "peer": último negócio entre pessoas. Na Fase 0 isso criou um piso: a casa
+   *   recomprava sempre no mesmo preço enquanto só ela comprava.
+   */
+  anchor: "lastTrade" | "peer";
 }
 
 export const DEFAULT_MARKET_MAKER: MarketMakerConfig = {
@@ -25,6 +33,7 @@ export const DEFAULT_MARKET_MAKER: MarketMakerConfig = {
   quantity: 100,
   matchSpread: 0.06,
   matchQuantity: 25,
+  anchor: "lastTrade",
 };
 
 export interface Quote {
@@ -72,7 +81,10 @@ export class MarketMaker {
    */
   refresh(clubId: string, inMatch: boolean): Quote {
     this.exchange.cancelAll(this.accountId, clubId);
-    const reference = this.exchange.price(clubId);
+    const reference =
+      this.config.anchor === "lastTrade"
+        ? (this.exchange.lastTradePrice(clubId) ?? this.exchange.price(clubId))
+        : this.exchange.price(clubId);
     if (reference === undefined) return {};
     const quote = computeQuote(
       reference,

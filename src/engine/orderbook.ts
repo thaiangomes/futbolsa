@@ -63,11 +63,16 @@ interface Book {
 }
 
 export interface ExchangeOptions {
-  /**
-   * Contas da casa (tesouraria / formador de mercado). Negócios com elas não
-   * mudam o "preço" exibido, que é o dos negócios entre pessoas.
-   */
+  /** Contas da casa (tesouraria / formador de mercado). */
   houseAccounts?: Iterable<string>;
+  /**
+   * Se negócios com a casa contam para o preço exibido. O plano previa que não
+   * (preço = negócios entre pessoas), mas na simulação da Fase 0 isso enviesou
+   * o preço para cima: quando a tesouraria fica sem ações, a casa só compra, as
+   * vendas batem nela sem mexer no preço e as compras batem em pessoas e mexem.
+   * Padrão: true.
+   */
+  houseTradesSetPrice?: boolean;
 }
 
 export class Exchange {
@@ -77,6 +82,7 @@ export class Exchange {
   private readonly lastPeerTrade = new Map<string, Cents>();
   private readonly reference = new Map<string, Cents>();
   private readonly house: Set<string>;
+  private readonly houseTradesSetPrice: boolean;
   private nextId = 1;
   private seq = 0;
   private listeners: Array<(t: Trade) => void> = [];
@@ -88,6 +94,7 @@ export class Exchange {
     options: ExchangeOptions = {},
   ) {
     this.house = new Set(options.houseAccounts ?? []);
+    this.houseTradesSetPrice = options.houseTradesSetPrice ?? true;
   }
 
   setTime(t: number): void {
@@ -104,7 +111,7 @@ export class Exchange {
     this.reference.set(clubId, price);
   }
 
-  /** Último preço entre pessoas; se ainda não houve, o de referência (IPO). */
+  /** Preço exibido: último negócio (ver houseTradesSetPrice); antes do 1º, o do IPO. */
   price(clubId: string): Cents | undefined {
     return this.lastPeerTrade.get(clubId) ?? this.reference.get(clubId);
   }
@@ -264,7 +271,8 @@ export class Exchange {
       };
       trades.push(trade);
       this.lastTrade.set(trade.clubId, price);
-      if (!this.house.has(trade.buyerId) && !this.house.has(trade.sellerId)) {
+      const withHouse = this.house.has(trade.buyerId) || this.house.has(trade.sellerId);
+      if (this.houseTradesSetPrice || !withHouse) {
         this.lastPeerTrade.set(trade.clubId, price);
       }
       for (const l of this.listeners) l(trade);

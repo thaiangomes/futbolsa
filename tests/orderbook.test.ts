@@ -11,7 +11,7 @@ function setup() {
     ledger.open(id, 100_000); // R$ 1.000,00
     ledger.adjustShares(id, CLUB, 100);
   }
-  const exchange = new Exchange(ledger, { houseAccounts: ["casa"] });
+  const exchange = new Exchange(ledger, { houseAccounts: ["casa"], houseTradesSetPrice: false });
   exchange.setReferencePrice(CLUB, 1000);
   return { ledger, exchange };
 }
@@ -121,7 +121,7 @@ describe("Exchange", () => {
     }
   });
 
-  it("negócio com a casa não muda o preço exibido", () => {
+  it("com houseTradesSetPrice=false, negócio com a casa não muda o preço exibido", () => {
     ledger.open("casa", 0);
     ledger.adjustShares("casa", CLUB, 50);
     limit("casa", "sell", 10, 1500);
