@@ -7,7 +7,9 @@
  *
  * --bots   bots por perfil (4 perfis)
  * --ponto  dividendo por ponto, em centavos (padrão 10 = R$ 0,10)
- * --ancora preço de referência do formador de mercado: lastTrade ou peer
+ * --ancora preço de referência do formador de mercado: lastTrade (padrão, o
+ *          último negócio, inclusive com a casa) ou peer (só negócios entre
+ *          jogadores; os negócios com a casa deixam de mexer no preço)
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

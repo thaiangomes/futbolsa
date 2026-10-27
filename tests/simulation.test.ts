@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadSeason, markOutOfWindow } from "../src/data/season.js";
+import { DEFAULT_MARKET_MAKER } from "../src/engine/marketMaker.js";
 import type { Match } from "../src/engine/types.js";
 import { simulate, TREASURY } from "../src/sim/simulate.js";
 
@@ -28,6 +29,11 @@ describe("simulação com o fixture de exemplo", () => {
     const again = simulate(season, small);
     expect(again.clubs.map((c) => c.finalPrice)).toEqual(result.clubs.map((c) => c.finalPrice));
     expect(again.bots.map((b) => b.finalWorth)).toEqual(result.bots.map((b) => b.finalWorth));
+  });
+
+  it("a âncora peer muda o resultado (só negócios entre bots formam o preço)", () => {
+    const peer = simulate(season, { ...small, marketMaker: { ...DEFAULT_MARKET_MAKER, anchor: "peer" } });
+    expect(peer.clubs.map((c) => c.finalPrice)).not.toEqual(result.clubs.map((c) => c.finalPrice));
   });
 
   it("ninguém termina com patrimônio negativo e a tesouraria não recebe dividendos", () => {

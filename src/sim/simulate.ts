@@ -99,7 +99,13 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
 
   const ledger = new Ledger();
   ledger.open(TREASURY, 0);
-  const exchange = new Exchange(ledger, { houseAccounts: [TREASURY] });
+  // Com a âncora "peer" o preço volta a ser formado só pelos negócios entre
+  // jogadores, como no plano original; senão o formador cotaria em volta do
+  // mesmo preço do "lastTrade" e a opção não teria efeito.
+  const exchange = new Exchange(ledger, {
+    houseAccounts: [TREASURY],
+    houseTradesSetPrice: config.marketMaker.anchor === "lastTrade",
+  });
   const view = new MarketView(exchange, ledger, clubIds, config.rules, matches);
   const maker = new MarketMaker(exchange, ledger, TREASURY, config.marketMaker);
 
