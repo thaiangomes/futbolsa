@@ -31,7 +31,7 @@ export interface SimConfig {
 }
 
 export const DEFAULT_SIM: SimConfig = {
-  seed: 2025,
+  seed: 1, // Só um número para os sorteios dos bots; não tem relação com o ano dos dados.
   bots: { dividendos: 25, momentum: 25, torcedor: 25, aleatorio: 25 },
   initialCash: 10_000_000, // R$ 100 mil
   sharesPerPlayer: 150,

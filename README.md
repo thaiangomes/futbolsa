@@ -45,7 +45,7 @@ Opções da simulação:
 npm run sim -- --seed 7 --bots 25 --ponto 30 --ancora peer
 ```
 
-- `--seed`: semente (a simulação é reproduzível).
+- `--seed`: semente, o número que fixa os sorteios dos bots (padrão 1). A mesma semente repete o mesmo resultado. Os jogos são sempre os reais do arquivo de dados, em qualquer semente.
 - `--bots`: bots por perfil (padrão 25, ou seja, 100 jogadores).
 - `--ponto`: dividendo por ponto em centavos (padrão 10 = R$ 0,10). O dividendo da colocação final acompanha a mesma escala.
 - `--ancora`: preço em volta do qual o formador de mercado cota: `lastTrade` (padrão, último negócio inclusive com a casa) ou `peer` (só negócios entre jogadores).
@@ -59,7 +59,7 @@ variável de ambiente (veja `.env.example`).
 
 ## O que a simulação de 2025 mostrou
 
-Semente 2025, 100 bots, valores do plano. Resumo completo em `npm run sim`.
+Semente 2025 (a padrão na época; desde 2026-10-28 a padrão é 1, para não confundir com o ano), 100 bots, valores do plano. Os números abaixo são dessa semente.
 
 1. **O IPO fica abaixo do esperado.** Com 150 ações por jogador, 11 dos 20 clubes
    saíram no piso da faixa e sobrou ação para a tesouraria; os outros 9, os mais

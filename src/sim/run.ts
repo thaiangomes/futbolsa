@@ -2,7 +2,7 @@
  * Roda a simulação de uma temporada e grava o resultado em sim-output/.
  *
  * Uso:
- *   npm run sim -- [--data data/brasileirao-2025.json] [--seed 2025]
+ *   npm run sim -- [--data data/brasileirao-2025.json] [--seed 1]
  *                  [--bots 25] [--ponto 10] [--out sim-output]
  *
  * --bots   bots por perfil (4 perfis)
@@ -23,7 +23,7 @@ import { simulate } from "./simulate.js";
 const { values } = parseArgs({
   options: {
     data: { type: "string", default: "data/brasileirao-2025.json" },
-    seed: { type: "string", default: "2025" },
+    seed: { type: "string", default: "1" },
     bots: { type: "string", default: "25" },
     ponto: { type: "string", default: String(BRASILEIRAO_A.perPoint) },
     out: { type: "string", default: "sim-output" },
