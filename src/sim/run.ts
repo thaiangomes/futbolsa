@@ -3,13 +3,15 @@
  *
  * Uso:
  *   npm run sim -- [--data data/brasileirao-2025.json] [--seed 1]
- *                  [--bots 25] [--ponto 10] [--out sim-output]
+ *                  [--bots 25] [--ponto 10] [--recompra 0] [--out sim-output]
  *
  * --bots   bots por perfil (4 perfis)
  * --ponto  dividendo por ponto, em centavos (padrão 10 = R$ 0,10)
  * --ancora preço de referência do formador de mercado: lastTrade (padrão, o
  *          último negócio, inclusive com a casa) ou peer (só negócios entre
  *          jogadores; os negócios com a casa deixam de mexer no preço)
+ * --recompra múltiplo dos dividendos da temporada que a casa paga por ação ao
+ *          recomprar todas no fim (padrão 0 = sem recompra)
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -28,6 +30,7 @@ const { values } = parseArgs({
     ponto: { type: "string", default: String(BRASILEIRAO_A.perPoint) },
     out: { type: "string", default: "sim-output" },
     ancora: { type: "string", default: DEFAULT_MARKET_MAKER.anchor },
+    recompra: { type: "string", default: "0" },
   },
 });
 
@@ -43,11 +46,12 @@ const result = simulate(season, {
   // O dividendo da colocação final acompanha a mesma escala do dividendo por ponto.
   rules: { perPoint, placement: BRASILEIRAO_A.placement.map((v) => Math.round(v * scale)) },
   marketMaker: { ...DEFAULT_MARKET_MAKER, anchor: values.ancora === "peer" ? "peer" : "lastTrade" },
+  buyback: Number(values.recompra),
 });
 const report = renderReport(result);
 
 mkdirSync(values.out!, { recursive: true });
-const tag = `${season.season}-semente${values.seed}-ponto${perPoint}-${values.ancora}`;
+const tag = `${season.season}-semente${values.seed}-ponto${perPoint}-${values.ancora}-recompra${values.recompra}`;
 writeFileSync(join(values.out!, `resultado-${tag}.json`), JSON.stringify(result, null, 2));
 writeFileSync(join(values.out!, `resumo-${tag}.md`), report);
 console.log(report);

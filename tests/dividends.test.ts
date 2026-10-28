@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyBuyback,
   applyPayout,
   BRASILEIRAO_A,
   BRASILEIRAO_B,
   computeStandings,
+  scheduleBuyback,
   scheduleCupPayouts,
   scheduleLeaguePayouts,
   type CupRules,
@@ -195,5 +197,37 @@ describe("applyPayout", () => {
     expect(ledger.get("ana").cash).toBe(3000);
     expect(ledger.get("bia").cash).toBe(1500);
     expect(ledger.get("tesouraria").cash).toBe(0);
+  });
+});
+
+describe("recompra de fim de temporada", () => {
+  const p = (at: number, clubId: string, perShare: number, competition = "brasileirao-a") => ({
+    at, clubId, perShare, kind: "points" as const, competition, detail: "",
+  });
+
+  it("paga o múltiplo da soma dos dividendos de todas as competições, depois do último", () => {
+    const payouts = [p(10, "FLA3", 30), p(20, "FLA3", 500), p(15, "FLA3", 800, "copa-do-brasil"), p(20, "PAL3", 40)];
+    expect(scheduleBuyback(payouts, 2)).toEqual([
+      expect.objectContaining({ clubId: "FLA3", perShare: 2 * 1330, at: 21, kind: "buyback" }),
+      expect.objectContaining({ clubId: "PAL3", perShare: 80, at: 21, kind: "buyback" }),
+    ]);
+    expect(scheduleBuyback(payouts, 0)).toEqual([]);
+  });
+
+  it("paga os acionistas, menos a tesouraria, e zera as ações de todos", () => {
+    const ledger = new Ledger();
+    ledger.open("ana", 0);
+    ledger.open("tesouraria", 0);
+    ledger.adjustShares("ana", "FLA3", 100);
+    ledger.adjustShares("tesouraria", "FLA3", 1000);
+    const total = applyBuyback(
+      ledger,
+      { at: 0, clubId: "FLA3", perShare: 600, kind: "buyback", competition: "temporada", detail: "" },
+      new Set(["tesouraria"]),
+    );
+    expect(total).toBe(60000);
+    expect(ledger.get("ana").cash).toBe(60000);
+    expect(ledger.get("tesouraria").cash).toBe(0);
+    expect(ledger.totalShares("FLA3")).toBe(0);
   });
 });

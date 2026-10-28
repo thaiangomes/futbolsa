@@ -3,7 +3,7 @@
  * para testar uma hipótese de calibração de cada vez contra a linha de base.
  *
  * Uso:
- *   npm run sim:lote -- [--sementes 10] [--ponto 10] [--ancora lastTrade] [--bots 25]
+ *   npm run sim:lote -- [--sementes 10] [--ponto 10] [--ancora lastTrade] [--recompra 0] [--bots 25]
  *                       [--data data/brasileirao-2025.json] [--out sim-output]
  *
  * --sementes  quantas sementes, de 1 até esse número (padrão 10)
@@ -27,6 +27,7 @@ const { values } = parseArgs({
     ponto: { type: "string", default: String(BRASILEIRAO_A.perPoint) },
     out: { type: "string", default: "sim-output" },
     ancora: { type: "string", default: DEFAULT_MARKET_MAKER.anchor },
+    recompra: { type: "string", default: "0" },
   },
 });
 
@@ -35,6 +36,7 @@ const perBot = Number(values.bots);
 const perPoint = Number(values.ponto);
 const scale = perPoint / BRASILEIRAO_A.perPoint;
 const anchor = values.ancora === "peer" ? "peer" : "lastTrade";
+const buyback = Number(values.recompra);
 
 export interface LoteLinha {
   semente: number;
@@ -89,6 +91,7 @@ for (let seed = 1; seed <= n; seed++) {
     // O dividendo da colocação final acompanha a mesma escala do dividendo por ponto.
     rules: { perPoint, placement: BRASILEIRAO_A.placement.map((v) => Math.round(v * scale)) },
     marketMaker: { ...DEFAULT_MARKET_MAKER, anchor },
+    buyback,
   });
   linhas.push(resumir(result));
 }
@@ -101,7 +104,7 @@ const faixa = (f: (l: LoteLinha) => number) => {
 const pct = (x: number) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(0)}%`;
 
 const out: string[] = [];
-out.push(`# Lote: ${n} sementes, R$ ${(perPoint / 100).toFixed(2).replace(".", ",")} por ponto, âncora ${anchor}, ${perBot * 4} bots`);
+out.push(`# Lote: ${n} sementes, R$ ${(perPoint / 100).toFixed(2).replace(".", ",")} por ponto, âncora ${anchor}, recompra ${buyback}×, ${perBot * 4} bots`);
 out.push("");
 out.push("| Medida | Média | Menor–maior |");
 out.push("|---|---|---|");
@@ -117,7 +120,7 @@ out.push(`Retorno médio por perfil: ${PROFILES.map((p) => `${p} ${pct(media((l)
 const report = out.join("\n");
 
 mkdirSync(values.out!, { recursive: true });
-const tag = `${season.season}-sementes1a${n}-ponto${perPoint}-${anchor}`;
+const tag = `${season.season}-sementes1a${n}-ponto${perPoint}-${anchor}-recompra${buyback}`;
 writeFileSync(join(values.out!, `lote-${tag}.json`), JSON.stringify(linhas, null, 2));
 console.log(report);
 console.log(`\n(${((Date.now() - started) / 1000).toFixed(1)} s; linhas por semente em ${values.out}/lote-${tag}.json)`);

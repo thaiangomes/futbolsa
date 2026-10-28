@@ -18,6 +18,8 @@ export class MarketView {
   /** Pontos já pagos em dividendos, por clube. */
   readonly paidPoints = new Map<string, number>();
   placementPaid = false;
+  /** Recompra no fim da temporada, em múltiplos dos dividendos dela (0 = sem recompra). */
+  buybackMultiple = 0;
   private readonly gamesPerClub: number;
 
   constructor(
@@ -69,7 +71,8 @@ export class MarketView {
   /**
    * Valor justo estimado: pontos já ganhos e ainda não pagos, mais os pontos
    * esperados nos jogos que faltam, vezes o dividendo por ponto, mais o
-   * dividendo da colocação final projetada.
+   * dividendo da colocação final projetada, mais a recompra esperada (o
+   * múltiplo vezes os dividendos projetados da temporada inteira).
    */
   fairValue(clubId: string): Cents {
     const row = this.standings.get(clubId);
@@ -78,10 +81,10 @@ export class MarketView {
     const remaining = Math.max(0, this.gamesPerClub - played);
     const ppg = this.ppg(clubId);
     const unpaid = points - (this.paidPoints.get(clubId) ?? 0);
-    const placement = this.placementPaid
-      ? 0
-      : (this.rules.placement[this.projectedRank.get(clubId)! - 1] ?? 0);
-    return Math.round((unpaid + ppg * remaining) * this.rules.perPoint + placement);
+    const projectedPlacement = this.rules.placement[this.projectedRank.get(clubId)! - 1] ?? 0;
+    const placement = this.placementPaid ? 0 : projectedPlacement;
+    const seasonTotal = (points + ppg * remaining) * this.rules.perPoint + projectedPlacement;
+    return Math.round((unpaid + ppg * remaining) * this.rules.perPoint + placement + this.buybackMultiple * seasonTotal);
   }
 
   private ppg(clubId: string): number {

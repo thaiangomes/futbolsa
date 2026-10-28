@@ -36,6 +36,22 @@ describe("simulação com o fixture de exemplo", () => {
     expect(peer.clubs.map((c) => c.finalPrice)).not.toEqual(result.clubs.map((c) => c.finalPrice));
   });
 
+  it("com recompra, a casa recompra todas as ações pelo múltiplo dos dividendos", () => {
+    const comRecompra = simulate(season, { ...small, buyback: 1 });
+    // A régua passa a contar a recompra: no IPO, FLA3 ainda tem a pagar
+    // R$ 6,10 de dividendos e mais R$ 6,10 de recompra.
+    expect(comRecompra.checkpoints[0]!.remainingDividends.FLA3).toBe(2 * (110 + 500));
+    expect(comRecompra.totalBuyback).toBeGreaterThan(0);
+    expect(result.totalBuyback).toBe(0);
+    // Sem ações no fim, o patrimônio dos bots é só caixa, e o dinheiro fecha:
+    // caixa inicial + dividendos + recompra = bots + tesouraria.
+    const bots = comRecompra.bots.reduce((s, b) => s + b.finalWorth, 0);
+    expect(comRecompra.treasury.finalSharesValue).toBe(0);
+    expect(bots + comRecompra.treasury.finalCash).toBe(
+      10 * comRecompra.config.initialCash + comRecompra.totalDividends + comRecompra.totalBuyback,
+    );
+  });
+
   it("ninguém termina com patrimônio negativo e a tesouraria não recebe dividendos", () => {
     for (const b of result.bots) expect(b.finalWorth).toBeGreaterThan(0);
     expect(result.bots.find((b) => b.id === TREASURY)).toBeUndefined();

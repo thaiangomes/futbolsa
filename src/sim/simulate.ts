@@ -1,5 +1,15 @@
 import { priceBand, runBookbuilding, suggestedPrice, type Bid, type PriceBand } from "../engine/bookbuilding.js";
-import { applyPayout, BRASILEIRAO_A, computeStandings, roundCloseTimes, scheduleLeaguePayouts, type LeagueRules, type Payout } from "../engine/dividends.js";
+import {
+  applyBuyback,
+  applyPayout,
+  BRASILEIRAO_A,
+  computeStandings,
+  roundCloseTimes,
+  scheduleBuyback,
+  scheduleLeaguePayouts,
+  type LeagueRules,
+  type Payout,
+} from "../engine/dividends.js";
 import { Ledger } from "../engine/ledger.js";
 import { DEFAULT_MARKET_MAKER, MarketMaker, type MarketMakerConfig } from "../engine/marketMaker.js";
 import type { Cents } from "../engine/money.js";
@@ -28,6 +38,8 @@ export interface SimConfig {
   rules: LeagueRules;
   bandWidth: number;
   marketMaker: MarketMakerConfig;
+  /** Recompra no fim da temporada, em múltiplos dos dividendos dela (0 = sem recompra). */
+  buyback: number;
 }
 
 export const DEFAULT_SIM: SimConfig = {
@@ -40,6 +52,7 @@ export const DEFAULT_SIM: SimConfig = {
   rules: BRASILEIRAO_A,
   bandWidth: 0.4,
   marketMaker: DEFAULT_MARKET_MAKER,
+  buyback: 0,
 };
 
 export const TREASURY = "tesouraria";
@@ -67,7 +80,7 @@ export interface Checkpoint {
   label: string;
   at: number;
   prices: Record<string, Cents>;
-  /** Dividendos que ainda seriam pagos depois deste momento (com o resultado real). */
+  /** Dividendos (e recompra) que ainda seriam pagos depois deste momento, com o resultado real. */
   remainingDividends: Record<string, Cents>;
 }
 
@@ -89,6 +102,8 @@ export interface SimResult {
   treasury: { startCash: Cents; finalCash: Cents; finalSharesValue: Cents };
   dailyPrices: Record<string, Cents[]>;
   totalDividends: Cents;
+  /** Total pago na recompra de fim de temporada. */
+  totalBuyback: Cents;
 }
 
 export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): SimResult {
@@ -107,6 +122,7 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
     houseTradesSetPrice: config.marketMaker.anchor === "lastTrade",
   });
   const view = new MarketView(exchange, ledger, clubIds, config.rules, matches);
+  view.buybackMultiple = config.buyback;
   const maker = new MarketMaker(exchange, ledger, TREASURY, config.marketMaker);
 
   // Bots: torcedores distribuídos pelos clubes em ordem.
@@ -155,7 +171,8 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
   const treasuryStartCash = ledger.get(TREASURY).cash;
 
   // ---- Temporada -------------------------------------------------------------
-  const payouts: Payout[] = scheduleLeaguePayouts(matches, config.rules);
+  const league = scheduleLeaguePayouts(matches, config.rules);
+  const payouts: Payout[] = [...league, ...scheduleBuyback(league, config.buyback)];
   const closes = [...roundCloseTimes(matches)].sort((a, b) => a[1] - b[1]);
   const lastPayoutAt = Math.max(...payouts.map((p) => p.at));
   const finalPayoutAt = Math.max(...payouts.filter((p) => p.kind === "placement").map((p) => p.at), lastPayoutAt);
@@ -178,6 +195,7 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
   const priceBeforeFinal = new Map<string, Cents>();
   const exclude = new Set([TREASURY]);
   let totalDividends = 0;
+  let totalBuyback = 0;
 
   let trades = 0;
   let peerTrades = 0;
@@ -200,6 +218,11 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
     // Dividendos com data até agora, pagos a quem tem a ação neste momento.
     while (payoutIdx < payouts.length && payouts[payoutIdx]!.at <= t) {
       const p = payouts[payoutIdx++]!;
+      if (p.kind === "buyback") {
+        for (const account of ledger.all()) exchange.cancelAll(account.id, p.clubId);
+        totalBuyback += applyBuyback(ledger, p, exclude);
+        continue;
+      }
       if (p.at === finalPayoutAt && p.kind === "placement" && !priceBeforeFinal.size) {
         for (const id of clubIds) priceBeforeFinal.set(id, view.price(id));
       }
@@ -299,5 +322,6 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
     treasury: { startCash: treasuryStartCash, finalCash: treasury.cash, finalSharesValue: treasurySharesValue },
     dailyPrices: Object.fromEntries(view.history),
     totalDividends,
+    totalBuyback,
   };
 }

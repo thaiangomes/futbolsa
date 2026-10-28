@@ -17,9 +17,14 @@ import { finishTime, type Match } from "./types.js";
  * Copas
  * - Fase avançada: quando terminam todos os jogos daquela fase.
  * - Título: no apito final da decisão.
+ *
+ * Recompra (opcional, para calibração)
+ * - Logo depois do último dividendo da temporada, a casa recompra todas as
+ *   ações de cada clube por um múltiplo do total que a ação pagou de dividendos
+ *   na temporada, somando todas as competições. As ações deixam de existir.
  */
 
-export type PayoutKind = "points" | "placement" | "cup-phase" | "cup-title";
+export type PayoutKind = "points" | "placement" | "cup-phase" | "cup-title" | "buyback";
 
 export interface Payout {
   /** Momento do pagamento (ms desde 1970). */
@@ -279,6 +284,46 @@ export function scheduleCupPayouts(matches: readonly Match[], rules: CupRules): 
 function winnerByScore(m: Match): string | undefined {
   if (m.homeGoals === null || m.awayGoals === null || m.homeGoals === m.awayGoals) return undefined;
   return m.homeGoals > m.awayGoals ? m.home : m.away;
+}
+
+/**
+ * Recompra de fim de temporada: para cada clube, `multiple` vezes a soma dos
+ * dividendos por ação de `payouts` (todas as competições), paga 1 ms depois do
+ * último dividendo, para vir sempre depois dele. Múltiplo zero: sem recompra.
+ */
+export function scheduleBuyback(payouts: readonly Payout[], multiple: number): Payout[] {
+  if (multiple <= 0 || payouts.length === 0) return [];
+  const at = Math.max(...payouts.map((p) => p.at)) + 1;
+  const totals = new Map<string, Cents>();
+  for (const p of payouts) {
+    if (p.kind === "buyback") continue;
+    totals.set(p.clubId, (totals.get(p.clubId) ?? 0) + p.perShare);
+  }
+  return [...totals]
+    .map(([clubId, total]) => ({
+      at,
+      clubId,
+      perShare: Math.round(total * multiple),
+      kind: "buyback" as const,
+      competition: "temporada",
+      detail: `recompra: ${multiple}× os dividendos da temporada`,
+    }))
+    .sort((a, b) => a.clubId.localeCompare(b.clubId));
+}
+
+/**
+ * Executa a recompra: paga `perShare` por ação a cada acionista (menos as
+ * contas em `exclude`) e zera as ações do clube em todas as contas, inclusive
+ * nas excluídas. As ordens com essas ações precisam ser canceladas antes.
+ * Devolve o total pago.
+ */
+export function applyBuyback(ledger: Ledger, payout: Payout, exclude: ReadonlySet<string> = new Set()): Cents {
+  const total = applyPayout(ledger, payout, exclude);
+  for (const account of ledger.all()) {
+    const shares = account.positions.get(payout.clubId)?.shares ?? 0;
+    if (shares > 0) ledger.adjustShares(account.id, payout.clubId, -shares);
+  }
+  return total;
 }
 
 /**
