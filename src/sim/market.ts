@@ -134,6 +134,32 @@ export class MarketView {
     return Math.round((unpaid + ppg * remaining) * this.rules.perPoint + placement + this.buybackMultiple * seasonTotal);
   }
 
+  /** Linha da tabela do clube com os jogos já encerrados. */
+  standing(clubId: string): StandingRow | undefined {
+    return this.standings.get(clubId);
+  }
+
+  /**
+   * Valor justo com outra estimativa de pontos por jogo nos jogos que faltam
+   * (a mesma conta de `fairValue`, inclusive a colocação projetada com ela).
+   */
+  fairValueWith(clubId: string, ppg: (clubId: string) => number): Cents {
+    const final = (id: string) => {
+      const row = this.standings.get(id);
+      return (row?.points ?? 0) + ppg(id) * Math.max(0, this.gamesPerClub - (row?.played ?? 0));
+    };
+    const mine = final(clubId);
+    const rank = 1 + this.clubIds.filter((id) => id !== clubId && final(id) > mine).length;
+    const row = this.standings.get(clubId);
+    const points = row?.points ?? 0;
+    const unpaid = points - (this.paidPoints.get(clubId) ?? 0);
+    const projectedPlacement = this.rules.placement[rank - 1] ?? 0;
+    const placement = this.placementPaid ? 0 : projectedPlacement;
+    const rest = mine - points;
+    const seasonTotal = mine * this.rules.perPoint + projectedPlacement;
+    return Math.round((unpaid + rest) * this.rules.perPoint + placement + this.buybackMultiple * seasonTotal);
+  }
+
   private ppg(clubId: string): number {
     const row = this.standings.get(clubId);
     return ((row?.points ?? 0) + this.priorPpg * this.priorWeight) / ((row?.played ?? 0) + this.priorWeight);

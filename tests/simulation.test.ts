@@ -5,7 +5,7 @@ import type { Match } from "../src/engine/types.js";
 import { simulate, TREASURY } from "../src/sim/simulate.js";
 
 const season = loadSeason("tests/fixtures/mini-season.json");
-const small = { bots: { dividendos: 2, momentum: 2, torcedor: 4, aleatorio: 2, trader: 0, captura: 0 }, stepHours: 6 };
+const small = { bots: { dividendos: 2, momentum: 2, torcedor: 4, aleatorio: 2, trader: 0, captura: 0, analista: 0, concentrador: 0, antecipador: 0 }, stepHours: 6 };
 
 describe("simulação com o fixture de exemplo", () => {
   const result = simulate(season, small);
@@ -73,6 +73,13 @@ describe("simulação com o fixture de exemplo", () => {
     expect(bots + comCaptura.treasury.finalCash).toBe(
       12 * comCaptura.config.initialCash + comCaptura.totalDividends + comCaptura.totalBuyback,
     );
+  });
+
+  it("analista, concentrador e antecipador negociam e o dinheiro continua fechando", () => {
+    const extras = simulate(season, { ...small, bots: { ...small.bots, analista: 1, concentrador: 1, antecipador: 1 }, buyback: 1 });
+    expect(extras.bots.filter((b) => ["analista", "concentrador", "antecipador"].includes(b.profile))).toHaveLength(3);
+    const bots = extras.bots.reduce((s, b) => s + b.finalWorth, 0);
+    expect(bots + extras.treasury.finalCash).toBe(13 * extras.config.initialCash + extras.totalDividends + extras.totalBuyback);
   });
 
   it("ninguém termina com patrimônio negativo e a tesouraria não recebe dividendos", () => {

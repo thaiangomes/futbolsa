@@ -16,11 +16,13 @@ import type { Rng } from "./rng.js";
  * - trader: compra antes do jogo o clube que deve vencer, sem pagar muito
  *   acima do valor justo, segura até o resultado e vende o resto;
  * - captura: só compra para receber o dividendo da rodada e vende depois
- *   (checagem da regra, fora da mistura padrão).
+ *   (checagem da regra, fora da mistura padrão);
+ * - analista, concentrador e antecipador: tentativas de bot mais esperto que
+ *   o de dividendos (fora da mistura padrão).
  */
-export type BotProfile = "dividendos" | "momentum" | "torcedor" | "aleatorio" | "trader" | "captura";
+export type BotProfile = "dividendos" | "momentum" | "torcedor" | "aleatorio" | "trader" | "captura" | "analista" | "concentrador" | "antecipador";
 
-export const PROFILES: BotProfile[] = ["dividendos", "momentum", "torcedor", "aleatorio", "trader", "captura"];
+export const PROFILES: BotProfile[] = ["dividendos", "momentum", "torcedor", "aleatorio", "trader", "captura", "analista", "concentrador", "antecipador"];
 
 export interface Bot {
   readonly id: string;
@@ -360,5 +362,145 @@ export class CaptureBot extends BaseBot {
         view.limit(this.id, clubId, "sell", held, price * 0.99);
       }
     }
+  }
+}
+
+/**
+ * Analista: opera como o bot de dividendos, mas estima melhor os pontos que
+ * faltam. Parte de um palpite por clube pela colocação do ano anterior (em vez
+ * de 1,35 ponto por jogo para todos) e mistura pontos com saldo de gols, que
+ * mostra a força do time mais cedo.
+ */
+export class AnalystBot extends ValueBot {
+  readonly profile = "analista";
+  private cacheAt = -1;
+  private readonly cache = new Map<string, number>();
+
+  constructor(
+    id: string,
+    rng: Rng,
+    /** Colocação de cada clube no ano anterior (1 a 20; 17 a 20 são os que subiram). */
+    private readonly lastYear: ReadonlyMap<string, number>,
+  ) {
+    super(id, rng);
+  }
+
+  /** Pontos por jogo esperados: palpite do ano anterior com peso de 8 jogos, mais pontos e saldo de gols. */
+  private ppg(view: MarketView, clubId: string): number {
+    const prior = 1.9 - ((this.lastYear.get(clubId) ?? 10) - 1) * 0.045;
+    const row = view.standing(clubId);
+    const played = row?.played ?? 0;
+    if (!played) return prior;
+    const byPoints = row!.points / played;
+    const byGoals = 1.35 + (0.4 * (row!.goalsFor - row!.goalsAgainst)) / played;
+    return (prior * 8 + ((byPoints + byGoals) / 2) * played) / (8 + played);
+  }
+
+  protected override estimate(view: MarketView, clubId: string): number {
+    if (this.cacheAt !== view.now) {
+      this.cache.clear();
+      this.cacheAt = view.now;
+    }
+    let v = this.cache.get(clubId);
+    if (v === undefined) {
+      v = view.fairValueWith(clubId, (id) => this.ppg(view, id));
+      this.cache.set(clubId, v);
+    }
+    return v;
+  }
+
+  ipoBids(view: MarketView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
+    return this.valueIpoBids(view, bands, cash * 0.9);
+  }
+
+  act(view: MarketView): void {
+    view.exchange.cancelAll(this.id);
+    const worth = view.netWorth(this.id);
+    for (const clubId of this.rng.shuffle([...view.clubIds]).slice(0, 4)) this.tradeOnValue(view, clubId, worth);
+  }
+}
+
+/**
+ * Concentrador: usa a mesma estimativa do bot de dividendos, mas a cada vez
+ * ordena os 20 clubes pelo desconto (preço ÷ justo) e mantém o dinheiro nos
+ * mais baratos, vendendo o que deixou de ter desconto.
+ */
+export class ConcentratorBot extends ValueBot {
+  readonly profile = "concentrador";
+  /** Quantos clubes mantém na carteira. */
+  private readonly size: number;
+
+  constructor(id: string, rng: Rng) {
+    super(id, rng);
+    this.size = rng.int(3, 6);
+  }
+
+  ipoBids(view: MarketView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
+    return this.valueIpoBids(view, bands, cash * 0.9);
+  }
+
+  act(view: MarketView): void {
+    view.exchange.cancelAll(this.id);
+    const worth = view.netWorth(this.id);
+    const ranked = view.clubIds
+      .map((clubId) => ({ clubId, price: view.price(clubId), fair: this.estimate(view, clubId) }))
+      .map((c) => ({ ...c, ratio: c.price / Math.max(1, c.fair) }))
+      .sort((a, b) => a.ratio - b.ratio);
+    const best = new Set(ranked.filter((c) => c.ratio < 1 - this.margin).slice(0, this.size).map((c) => c.clubId));
+    for (const c of ranked) {
+      const held = view.ledger.availableShares(this.id, c.clubId);
+      if (best.has(c.clubId)) {
+        const room = (worth * 0.95) / this.size - held * c.price;
+        const limit = Math.min(c.fair * (1 - this.margin), c.price * 1.03);
+        if (room > 0) view.limit(this.id, c.clubId, "buy", room / limit, limit);
+      } else if (held > 0 && c.ratio >= 1) {
+        // Sem desconto: vende pelo justo ou acima.
+        view.limit(this.id, c.clubId, "sell", held, Math.max(c.fair, c.price * 0.99));
+      }
+    }
+  }
+}
+
+/**
+ * Antecipador: opera pelo valor, mas tenta lucrar com a emoção dos outros.
+ * Compra o clube que vem de 2 vitórias e joga em breve, porque uma 3ª vitória
+ * dispara a compra do momentum, e vende para eles quando a sequência chega a 3.
+ */
+export class AnticipatorBot extends ValueBot {
+  readonly profile = "antecipador";
+  private readonly horizon: number;
+
+  constructor(id: string, rng: Rng) {
+    super(id, rng);
+    this.horizon = rng.uniform(24, 72) * 60 * 60 * 1000;
+  }
+
+  ipoBids(view: MarketView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
+    return this.valueIpoBids(view, bands, cash * 0.9);
+  }
+
+  act(view: MarketView): void {
+    view.exchange.cancelAll(this.id);
+    const worth = view.netWorth(this.id);
+    const done = new Set<string>();
+    for (const clubId of view.clubIds) {
+      const streak = view.winStreak(clubId);
+      const held = view.ledger.availableShares(this.id, clubId);
+      const price = view.price(clubId);
+      const fair = this.estimate(view, clubId);
+      const next = view.nextMatch(clubId);
+      const soon = next !== undefined && kickoffTime(next) - view.now <= this.horizon;
+      if (streak === 2 && soon && price <= fair * 1.05) {
+        const room = worth * 0.1 - held * price;
+        if (room > 0) view.limit(this.id, clubId, "buy", room / (price * 1.01), price * 1.01);
+        done.add(clubId);
+      } else if (held > 0 && streak >= 3) {
+        // O momentum está comprando: vende um pouco acima do preço.
+        view.limit(this.id, clubId, "sell", held, Math.max(price * 1.02, fair));
+        done.add(clubId);
+      }
+    }
+    const rest = view.clubIds.filter((id) => !done.has(id));
+    for (const clubId of this.rng.shuffle(rest).slice(0, 4)) this.tradeOnValue(view, clubId, worth);
   }
 }

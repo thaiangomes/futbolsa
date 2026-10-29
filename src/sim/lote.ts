@@ -5,6 +5,7 @@
  * Uso:
  *   npm run sim:lote -- [--sementes 10] [--ponto 10] [--ancora lastTrade] [--recompra 0] [--bots 25] [--traders 0]
  *                       [--acerto 0.3,0.5,0.7] [--captura 0]
+ *                       [--extras analista=25]
  *                       [--data data/brasileirao-2025.json] [--out sim-output]
  *
  * --sementes  quantas sementes, de 1 até esse número (padrão 10)
@@ -31,6 +32,7 @@ const { values } = parseArgs({
     recompra: { type: "string", default: "0" },
     traders: { type: "string", default: "0" },
     captura: { type: "string", default: "0" },
+    extras: { type: "string", default: "" },
     acerto: { type: "string", default: "" },
   },
 });
@@ -38,6 +40,11 @@ const { values } = parseArgs({
 const season = loadSeason(values.data!);
 const perBot = Number(values.bots);
 const traders = Number(values.traders);
+// Perfis fora da mistura padrão, como analista=25,concentrador=25.
+const extras = Object.fromEntries((values.extras ?? "").split(",").filter(Boolean).map((p) => {
+  const [k, n] = p.split("=");
+  return [k!, Number(n)];
+}));
 const acerto = values.acerto ? values.acerto.split(",").map(Number) : [];
 const perPoint = Number(values.ponto);
 const scale = perPoint / BRASILEIRAO_A.perPoint;
@@ -93,7 +100,7 @@ const linhas: LoteLinha[] = [];
 for (let seed = 1; seed <= n; seed++) {
   const result = simulate(season, {
     seed,
-    bots: { dividendos: perBot, momentum: perBot, torcedor: perBot, aleatorio: perBot, trader: traders, captura: Number(values.captura) },
+    bots: { dividendos: perBot, momentum: perBot, torcedor: perBot, aleatorio: perBot, trader: traders, captura: Number(values.captura), analista: 0, concentrador: 0, antecipador: 0, ...extras },
     // O dividendo da colocação final acompanha a mesma escala do dividendo por ponto.
     rules: { perPoint, placement: BRASILEIRAO_A.placement.map((v) => Math.round(v * scale)) },
     marketMaker: { ...DEFAULT_MARKET_MAKER, anchor },
@@ -111,7 +118,7 @@ const faixa = (f: (l: LoteLinha) => number) => {
 const pct = (x: number) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(0)}%`;
 
 const out: string[] = [];
-out.push(`# Lote: ${n} sementes, R$ ${(perPoint / 100).toFixed(2).replace(".", ",")} por ponto, âncora ${anchor}, recompra ${buyback}×, ${perBot * 4} bots${traders ? ` + ${traders} traders` : ""}${acerto.length ? ` (acerto ${acerto.join(", ")})` : ""}${values.captura !== "0" ? ` + ${values.captura} de captura` : ""}`);
+out.push(`# Lote: ${n} sementes, R$ ${(perPoint / 100).toFixed(2).replace(".", ",")} por ponto, âncora ${anchor}, recompra ${buyback}×, ${perBot * 4} bots${traders ? ` + ${traders} traders` : ""}${acerto.length ? ` (acerto ${acerto.join(", ")})` : ""}${values.captura !== "0" ? ` + ${values.captura} de captura` : ""}${values.extras ? ` + ${values.extras}` : ""}`);
 out.push("");
 out.push("| Medida | Média | Menor–maior |");
 out.push("|---|---|---|");
@@ -127,7 +134,7 @@ out.push(`Retorno médio por perfil: ${PROFILES.filter((p) => !Number.isNaN(medi
 const report = out.join("\n");
 
 mkdirSync(values.out!, { recursive: true });
-const tag = `${season.season}-sementes1a${n}-ponto${perPoint}-${anchor}-recompra${buyback}${traders ? `-traders${traders}` : ""}${acerto.length ? `-acerto${acerto.join("_")}` : ""}${values.captura !== "0" ? `-captura${values.captura}` : ""}`;
+const tag = `${season.season}-sementes1a${n}-ponto${perPoint}-${anchor}-recompra${buyback}${traders ? `-traders${traders}` : ""}${acerto.length ? `-acerto${acerto.join("_")}` : ""}${values.captura !== "0" ? `-captura${values.captura}` : ""}${values.extras ? `-${values.extras.replace(/[=,]/g, "")}` : ""}`;
 writeFileSync(join(values.out!, `lote-${tag}.json`), JSON.stringify(linhas, null, 2));
 console.log(report);
 console.log(`\n(${((Date.now() - started) / 1000).toFixed(1)} s; linhas por semente em ${values.out}/lote-${tag}.json)`);

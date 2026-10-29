@@ -16,7 +16,7 @@ import type { Cents } from "../engine/money.js";
 import { Exchange } from "../engine/orderbook.js";
 import { finishTime, kickoffTime } from "../engine/types.js";
 import type { SeasonFile } from "../data/season.js";
-import { CaptureBot, DividendBot, FanBot, MomentumBot, PROFILES, RandomBot, TraderBot, type Bot, type BotProfile } from "./bots.js";
+import { AnalystBot, AnticipatorBot, CaptureBot, ConcentratorBot, DividendBot, FanBot, MomentumBot, PROFILES, RandomBot, TraderBot, type Bot, type BotProfile } from "./bots.js";
 import { MarketView } from "./market.js";
 import { Rng } from "./rng.js";
 
@@ -49,7 +49,7 @@ export interface SimConfig {
 
 export const DEFAULT_SIM: SimConfig = {
   seed: 1, // Só um número para os sorteios dos bots; não tem relação com o ano dos dados.
-  bots: { dividendos: 25, momentum: 25, torcedor: 25, aleatorio: 25, trader: 0, captura: 0 },
+  bots: { dividendos: 25, momentum: 25, torcedor: 25, aleatorio: 25, trader: 0, captura: 0, analista: 0, concentrador: 0, antecipador: 0 },
   initialCash: 10_000_000, // R$ 100 mil
   sharesPerPlayer: 150,
   stepHours: 3,
@@ -134,6 +134,7 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
   const maker = new MarketMaker(exchange, ledger, TREASURY, config.marketMaker);
 
   // Bots: torcedores distribuídos pelos clubes em ordem.
+  const lastYear = new Map(season.clubs.map((c) => [c.id, c.ipoPosition]));
   const bots: Bot[] = [];
   let fanIndex = 0;
   for (const profile of PROFILES) {
@@ -145,6 +146,9 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
         : profile === "momentum" ? new MomentumBot(id, botRng)
         : profile === "torcedor" ? new FanBot(id, botRng, clubIds[fanIndex++ % clubIds.length]!)
         : profile === "captura" ? new CaptureBot(id, botRng)
+        : profile === "analista" ? new AnalystBot(id, botRng, lastYear)
+        : profile === "concentrador" ? new ConcentratorBot(id, botRng)
+        : profile === "antecipador" ? new AnticipatorBot(id, botRng)
         : profile === "trader" ? new TraderBot(id, botRng, config.traderHitRates.length ? config.traderHitRates[i % config.traderHitRates.length] : undefined)
         : new RandomBot(id, botRng),
       );
