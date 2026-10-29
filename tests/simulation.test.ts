@@ -5,7 +5,7 @@ import type { Match } from "../src/engine/types.js";
 import { simulate, TREASURY } from "../src/sim/simulate.js";
 
 const season = loadSeason("tests/fixtures/mini-season.json");
-const small = { bots: { dividendos: 2, momentum: 2, torcedor: 4, aleatorio: 2 }, stepHours: 6 };
+const small = { bots: { dividendos: 2, momentum: 2, torcedor: 4, aleatorio: 2, trader: 0 }, stepHours: 6 };
 
 describe("simulação com o fixture de exemplo", () => {
   const result = simulate(season, small);
@@ -49,6 +49,17 @@ describe("simulação com o fixture de exemplo", () => {
     expect(comRecompra.treasury.finalSharesValue).toBe(0);
     expect(bots + comRecompra.treasury.finalCash).toBe(
       10 * comRecompra.config.initialCash + comRecompra.totalDividends + comRecompra.totalBuyback,
+    );
+  });
+
+  it("o trader negocia e o dinheiro continua fechando", () => {
+    const comTrader = simulate(season, { ...small, bots: { ...small.bots, trader: 2 }, buyback: 1 });
+    const traders = comTrader.bots.filter((b) => b.profile === "trader");
+    expect(traders).toHaveLength(2);
+    expect(comTrader.trades.total).not.toBe(simulate(season, { ...small, buyback: 1 }).trades.total);
+    const bots = comTrader.bots.reduce((s, b) => s + b.finalWorth, 0);
+    expect(bots + comTrader.treasury.finalCash).toBe(
+      12 * comTrader.config.initialCash + comTrader.totalDividends + comTrader.totalBuyback,
     );
   });
 

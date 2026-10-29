@@ -1,5 +1,6 @@
 import type { Bid, PriceBand } from "../engine/bookbuilding.js";
 import type { Cents } from "../engine/money.js";
+import { kickoffTime } from "../engine/types.js";
 import type { MarketView } from "./market.js";
 import type { Rng } from "./rng.js";
 
@@ -9,11 +10,13 @@ import type { Rng } from "./rng.js";
  *   vende o que está caro;
  * - momentum: segue a tendência dos últimos dias;
  * - torcedor: só compra o próprio time, mais depois de vitória;
- * - aleatório: gera volume com ordens perto do preço.
+ * - aleatório: gera volume com ordens perto do preço;
+ * - trader: compra antes do jogo o clube que deve vencer e vende o resto,
+ *   sem pagar muito acima do valor justo.
  */
-export type BotProfile = "dividendos" | "momentum" | "torcedor" | "aleatorio";
+export type BotProfile = "dividendos" | "momentum" | "torcedor" | "aleatorio" | "trader";
 
-export const PROFILES: BotProfile[] = ["dividendos", "momentum", "torcedor", "aleatorio"];
+export const PROFILES: BotProfile[] = ["dividendos", "momentum", "torcedor", "aleatorio", "trader"];
 
 export interface Bot {
   readonly id: string;
@@ -204,6 +207,60 @@ export class RandomBot extends BaseBot {
         view.market(this.id, clubId, side, side === "sell" ? Math.min(held, quantity) : quantity);
       } else {
         view.limit(this.id, clubId, side, quantity, price * (1 + this.rng.normal(0, 0.015)));
+      }
+    }
+  }
+}
+
+const HOUR_MS = 60 * 60 * 1000;
+
+export class TraderBot extends BaseBot {
+  readonly profile = "trader";
+  /** Vantagem mínima esperada no próximo jogo, em pontos por jogo. */
+  private readonly threshold: number;
+  /** Quanto aceita pagar acima do valor justo. */
+  private readonly tolerance: number;
+  /** Com quanta antecedência do jogo passa a comprar. */
+  private readonly horizon: number;
+
+  constructor(id: string, rng: Rng) {
+    super(id, rng);
+    this.threshold = rng.uniform(0.2, 0.5);
+    this.tolerance = rng.uniform(0.1, 0.3);
+    this.horizon = rng.uniform(24, 72) * HOUR_MS;
+  }
+
+  ipoBids(view: MarketView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
+    const bids = new Map<string, Bid>();
+    // No IPO só entra onde o preço cabe no valor justo; o resto do caixa fica para os jogos.
+    const targets = [...bands].filter(([clubId, band]) => view.fairValue(clubId) >= band.min);
+    const budget = (cash * 0.4) / Math.max(1, targets.length);
+    for (const [clubId, band] of targets) {
+      const maxPrice = Math.min(band.max, view.fairValue(clubId));
+      const b = this.bid(budget / maxPrice, maxPrice);
+      if (b) bids.set(clubId, b);
+    }
+    return bids;
+  }
+
+  act(view: MarketView): void {
+    view.exchange.cancelAll(this.id);
+    const worth = view.netWorth(this.id);
+    for (const clubId of view.clubIds) {
+      const price = view.price(clubId);
+      const fair = view.fairValue(clubId);
+      const held = view.ledger.availableShares(this.id, clubId);
+      const next = view.nextMatch(clubId);
+      const soon = next !== undefined && kickoffTime(next) - view.now <= this.horizon;
+      const favored = soon && view.matchEdge(clubId, next) > this.threshold;
+      if (favored && price <= fair * (1 + this.tolerance)) {
+        // Até 10% do patrimônio por clube.
+        const room = worth * 0.1 - held * price;
+        if (room > 0) view.limit(this.id, clubId, "buy", room / (price * 1.01), price * 1.01);
+      } else if (held > 0 && !favored) {
+        view.limit(this.id, clubId, "sell", held, price * 0.99);
+      } else if (held > 0 && price > fair * (1 + this.tolerance)) {
+        view.limit(this.id, clubId, "sell", held, Math.max(price * 0.99, fair));
       }
     }
   }

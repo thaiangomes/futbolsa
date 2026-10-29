@@ -2,7 +2,7 @@ import { computeStandings, type LeagueRules, type StandingRow } from "../engine/
 import type { Ledger } from "../engine/ledger.js";
 import { MIN_PRICE, type Cents } from "../engine/money.js";
 import type { Exchange, Side } from "../engine/orderbook.js";
-import { finishTime, type Match } from "../engine/types.js";
+import { finishTime, kickoffTime, type Match } from "../engine/types.js";
 
 /**
  * O que os bots enxergam do mercado e do campeonato num instante: preços,
@@ -21,6 +21,9 @@ export class MarketView {
   /** Recompra no fim da temporada, em múltiplos dos dividendos dela (0 = sem recompra). */
   buybackMultiple = 0;
   private readonly gamesPerClub: number;
+  /** Jogos de cada clube em ordem de início, e o índice do próximo a começar. */
+  private readonly fixtures = new Map<string, Match[]>();
+  private readonly nextIdx = new Map<string, number>();
 
   constructor(
     readonly exchange: Exchange,
@@ -37,8 +40,32 @@ export class MarketView {
     for (const id of clubIds) {
       this.history.set(id, []);
       this.paidPoints.set(id, 0);
+      this.fixtures.set(
+        id,
+        allMatches.filter((m) => m.home === id || m.away === id).sort((a, b) => kickoffTime(a) - kickoffTime(b)),
+      );
+      this.nextIdx.set(id, 0);
     }
     this.recompute();
+  }
+
+  /** Próximo jogo do clube que ainda não começou (o tempo da simulação só anda para a frente). */
+  nextMatch(clubId: string): Match | undefined {
+    const list = this.fixtures.get(clubId)!;
+    let i = this.nextIdx.get(clubId)!;
+    while (i < list.length && kickoffTime(list[i]!) <= this.now) i++;
+    this.nextIdx.set(clubId, i);
+    return list[i];
+  }
+
+  /**
+   * Vantagem esperada do clube no jogo: pontos por jogo dele menos os do
+   * adversário, mais um bônus por jogar em casa (negativo fora).
+   */
+  matchEdge(clubId: string, match: Match, homeBonus = 0.3): number {
+    const home = match.home === clubId;
+    const opponent = home ? match.away : match.home;
+    return this.ppg(clubId) - this.ppg(opponent) + (home ? homeBonus : -homeBonus);
   }
 
   price(clubId: string): Cents {

@@ -3,7 +3,7 @@
  * para testar uma hipótese de calibração de cada vez contra a linha de base.
  *
  * Uso:
- *   npm run sim:lote -- [--sementes 10] [--ponto 10] [--ancora lastTrade] [--recompra 0] [--bots 25]
+ *   npm run sim:lote -- [--sementes 10] [--ponto 10] [--ancora lastTrade] [--recompra 0] [--bots 25] [--traders 0]
  *                       [--data data/brasileirao-2025.json] [--out sim-output]
  *
  * --sementes  quantas sementes, de 1 até esse número (padrão 10)
@@ -28,11 +28,13 @@ const { values } = parseArgs({
     out: { type: "string", default: "sim-output" },
     ancora: { type: "string", default: DEFAULT_MARKET_MAKER.anchor },
     recompra: { type: "string", default: "0" },
+    traders: { type: "string", default: "0" },
   },
 });
 
 const season = loadSeason(values.data!);
 const perBot = Number(values.bots);
+const traders = Number(values.traders);
 const perPoint = Number(values.ponto);
 const scale = perPoint / BRASILEIRAO_A.perPoint;
 const anchor = values.ancora === "peer" ? "peer" : "lastTrade";
@@ -87,7 +89,7 @@ const linhas: LoteLinha[] = [];
 for (let seed = 1; seed <= n; seed++) {
   const result = simulate(season, {
     seed,
-    bots: { dividendos: perBot, momentum: perBot, torcedor: perBot, aleatorio: perBot },
+    bots: { dividendos: perBot, momentum: perBot, torcedor: perBot, aleatorio: perBot, trader: traders },
     // O dividendo da colocação final acompanha a mesma escala do dividendo por ponto.
     rules: { perPoint, placement: BRASILEIRAO_A.placement.map((v) => Math.round(v * scale)) },
     marketMaker: { ...DEFAULT_MARKET_MAKER, anchor },
@@ -104,7 +106,7 @@ const faixa = (f: (l: LoteLinha) => number) => {
 const pct = (x: number) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(0)}%`;
 
 const out: string[] = [];
-out.push(`# Lote: ${n} sementes, R$ ${(perPoint / 100).toFixed(2).replace(".", ",")} por ponto, âncora ${anchor}, recompra ${buyback}×, ${perBot * 4} bots`);
+out.push(`# Lote: ${n} sementes, R$ ${(perPoint / 100).toFixed(2).replace(".", ",")} por ponto, âncora ${anchor}, recompra ${buyback}×, ${perBot * 4} bots${traders ? ` + ${traders} traders` : ""}`);
 out.push("");
 out.push("| Medida | Média | Menor–maior |");
 out.push("|---|---|---|");
@@ -116,11 +118,11 @@ out.push(`| Correlação mínima | ${media((l) => l.correlacaoMinima).toFixed(2)
 out.push(`| IPOs no piso da faixa (de 20) | ${media((l) => l.ipoNoPiso).toFixed(1)} | ${faixa((l) => l.ipoNoPiso)} |`);
 out.push(`| Negócios | ${Math.round(media((l) => l.negocios)).toLocaleString("pt-BR")} | |`);
 out.push("");
-out.push(`Retorno médio por perfil: ${PROFILES.map((p) => `${p} ${pct(media((l) => l.retorno[p]))}`).join(", ")}.`);
+out.push(`Retorno médio por perfil: ${PROFILES.filter((p) => !Number.isNaN(media((l) => l.retorno[p]))).map((p) => `${p} ${pct(media((l) => l.retorno[p]))}`).join(", ")}.`);
 const report = out.join("\n");
 
 mkdirSync(values.out!, { recursive: true });
-const tag = `${season.season}-sementes1a${n}-ponto${perPoint}-${anchor}-recompra${buyback}`;
+const tag = `${season.season}-sementes1a${n}-ponto${perPoint}-${anchor}-recompra${buyback}${traders ? `-traders${traders}` : ""}`;
 writeFileSync(join(values.out!, `lote-${tag}.json`), JSON.stringify(linhas, null, 2));
 console.log(report);
 console.log(`\n(${((Date.now() - started) / 1000).toFixed(1)} s; linhas por semente em ${values.out}/lote-${tag}.json)`);
