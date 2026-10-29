@@ -95,6 +95,20 @@ export class MarketView {
     return undefined;
   }
 
+  /** Vitórias seguidas do clube nos últimos jogos encerrados. */
+  winStreak(clubId: string): number {
+    let n = 0;
+    for (let i = this.known.length - 1; i >= 0; i--) {
+      const m = this.known[i]!;
+      if (m.home !== clubId && m.away !== clubId) continue;
+      const mine = m.home === clubId ? m.homeGoals! : m.awayGoals!;
+      const theirs = m.home === clubId ? m.awayGoals! : m.homeGoals!;
+      if (mine <= theirs) break;
+      n++;
+    }
+    return n;
+  }
+
   /**
    * Valor justo estimado: pontos já ganhos e ainda não pagos, mais os pontos
    * esperados nos jogos que faltam, vezes o dividendo por ponto, mais o

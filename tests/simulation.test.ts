@@ -32,8 +32,10 @@ describe("simulação com o fixture de exemplo", () => {
   });
 
   it("a âncora peer muda o resultado (só negócios entre bots formam o preço)", () => {
-    const peer = simulate(season, { ...small, marketMaker: { ...DEFAULT_MARKET_MAKER, anchor: "peer" } });
-    expect(peer.clubs.map((c) => c.finalPrice)).not.toEqual(result.clubs.map((c) => c.finalPrice));
+    // Com recompra: sem ela o valor justo fica abaixo do IPO no fixture e os bots, que olham o valor, nem negociam.
+    const last = simulate(season, { ...small, buyback: 1 });
+    const peer = simulate(season, { ...small, buyback: 1, marketMaker: { ...DEFAULT_MARKET_MAKER, anchor: "peer" } });
+    expect(peer.clubs.map((c) => c.finalPrice)).not.toEqual(last.clubs.map((c) => c.finalPrice));
   });
 
   it("com recompra, a casa recompra todas as ações pelo múltiplo dos dividendos", () => {
