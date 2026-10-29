@@ -6,6 +6,8 @@ import {
   computeStandings,
   roundCloseTimes,
   scheduleBuyback,
+  scheduleCupPayouts,
+  type CupRules,
   scheduleLeaguePayouts,
   type LeagueRules,
   type Payout,
@@ -14,7 +16,7 @@ import { Ledger } from "../engine/ledger.js";
 import { DEFAULT_MARKET_MAKER, MarketMaker, type MarketMakerConfig } from "../engine/marketMaker.js";
 import type { Cents } from "../engine/money.js";
 import { Exchange } from "../engine/orderbook.js";
-import { finishTime, kickoffTime } from "../engine/types.js";
+import { finishTime, kickoffTime, type Match } from "../engine/types.js";
 import type { SeasonFile } from "../data/season.js";
 import { AnalystBot, AnticipatorBot, CaptureBot, ConcentratorBot, DividendBot, FanBot, MomentumBot, PROFILES, RandomBot, TraderBot, type Bot, type BotProfile } from "./bots.js";
 import { MarketView } from "./market.js";
@@ -45,6 +47,10 @@ export interface SimConfig {
    * 1ª, o 2º a 2ª...). Vazio: todos palpitam pela campanha dos times.
    */
   traderHitRates: number[];
+  /** Copas que pagam dividendos, com todos os jogos de cada uma (vazio: só o Brasileirão). */
+  cups: Array<{ matches: Match[]; rules: CupRules }>;
+  /** Torcedores compram o próprio time antes dos mata-matas de copa. */
+  fanCupHype: boolean;
 }
 
 export const DEFAULT_SIM: SimConfig = {
@@ -59,6 +65,8 @@ export const DEFAULT_SIM: SimConfig = {
   marketMaker: DEFAULT_MARKET_MAKER,
   buyback: 0,
   traderHitRates: [],
+  cups: [],
+  fanCupHype: false,
 };
 
 export const TREASURY = "tesouraria";
@@ -131,6 +139,8 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
   });
   const view = new MarketView(exchange, ledger, clubIds, config.rules, matches);
   view.buybackMultiple = config.buyback;
+  view.setCups(config.cups);
+  view.cupHype = config.fanCupHype;
   const maker = new MarketMaker(exchange, ledger, TREASURY, config.marketMaker);
 
   // Bots: torcedores distribuídos pelos clubes em ordem.
@@ -186,7 +196,10 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
 
   // ---- Temporada -------------------------------------------------------------
   const league = scheduleLeaguePayouts(matches, config.rules);
-  const payouts: Payout[] = [...league, ...scheduleBuyback(league, config.buyback)];
+  // Só os clubes com ações recebem; os de fora da Série A só decidem quando cada fase termina.
+  const cupPayouts = config.cups.flatMap((c) => scheduleCupPayouts(c.matches, c.rules)).filter((p) => clubIds.includes(p.clubId));
+  const dividends = [...league, ...cupPayouts].sort((a, b) => a.at - b.at || a.clubId.localeCompare(b.clubId));
+  const payouts: Payout[] = [...dividends, ...scheduleBuyback(dividends, config.buyback)];
   const closes = [...roundCloseTimes(matches)].sort((a, b) => a[1] - b[1]);
   const lastPayoutAt = Math.max(...payouts.map((p) => p.at));
   const finalPayoutAt = Math.max(...payouts.filter((p) => p.kind === "placement").map((p) => p.at), lastPayoutAt);
@@ -250,6 +263,8 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
         view.paidPoints.set(p.clubId, view.paidPoints.get(p.clubId)! + p.perShare / config.rules.perPoint);
       } else if (p.kind === "placement") {
         view.placementPaid = true;
+      } else {
+        view.cupPaid.set(p.clubId, (view.cupPaid.get(p.clubId) ?? 0) + p.perShare);
       }
     }
 

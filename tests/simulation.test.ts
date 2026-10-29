@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadSeason, markOutOfWindow } from "../src/data/season.js";
+import { LIBERTADORES } from "../src/engine/dividends.js";
 import { DEFAULT_MARKET_MAKER } from "../src/engine/marketMaker.js";
 import type { Match } from "../src/engine/types.js";
 import { simulate, TREASURY } from "../src/sim/simulate.js";
@@ -80,6 +81,22 @@ describe("simulação com o fixture de exemplo", () => {
     expect(extras.bots.filter((b) => ["analista", "concentrador", "antecipador"].includes(b.profile))).toHaveLength(3);
     const bots = extras.bots.reduce((s, b) => s + b.finalWorth, 0);
     expect(bots + extras.treasury.finalCash).toBe(13 * extras.config.initialCash + extras.totalDividends + extras.totalBuyback);
+  });
+
+  it("com a Libertadores, os dividendos de copa entram na régua e o dinheiro fecha", () => {
+    const j = (phase: string, day: string, home: string, away: string): Match => ({
+      id: `${phase}-${home}`, competition: "libertadores", phase, kickoff: `${day}T21:30:00-03:00`,
+      home, away, homeGoals: 1, awayGoals: 0, status: "finished",
+    });
+    // FLA3 ganha tudo; PAL3 cai nas oitavas. Clubes de fora da Série A não recebem.
+    const matches = [j("grupos", "2025-04-08", "FLA3", "EXT-A"), j("grupos", "2025-04-09", "PAL3", "EXT-B"),
+      j("oitavas", "2025-04-15", "FLA3", "EXT-C"), j("oitavas", "2025-04-16", "EXT-D", "PAL3"),
+      j("quartas", "2025-04-22", "FLA3", "EXT-D"), j("semifinal", "2025-04-29", "FLA3", "EXT-E"), j("final", "2025-05-06", "FLA3", "EXT-F")];
+    const comCopa = simulate(season, { ...small, buyback: 1, cups: [{ matches, rules: LIBERTADORES }] });
+    // FLA3: 110 + 500 do campeonato, mais 150 + 225 + 375 + 600 + 1200 da copa, e a recompra de 1×.
+    expect(comCopa.checkpoints[0]!.remainingDividends.FLA3).toBe(2 * (110 + 500 + 2550));
+    const bots = comCopa.bots.reduce((s, b) => s + b.finalWorth, 0);
+    expect(bots + comCopa.treasury.finalCash).toBe(10 * comCopa.config.initialCash + comCopa.totalDividends + comCopa.totalBuyback);
   });
 
   it("ninguém termina com patrimônio negativo e a tesouraria não recebe dividendos", () => {

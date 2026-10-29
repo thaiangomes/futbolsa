@@ -32,6 +32,9 @@ export interface Bot {
   act(view: MarketView): void;
 }
 
+const HOUR_MS = 60 * 60 * 1000;
+const KNOCKOUT = new Set(["oitavas", "quartas", "semifinal", "final"]);
+
 abstract class BaseBot implements Bot {
   abstract readonly profile: BotProfile;
   constructor(
@@ -150,6 +153,8 @@ export class MomentumBot extends ValueBot {
 export class FanBot extends ValueBot {
   readonly profile = "torcedor";
   private lastSeen = 0;
+  /** Jogos de copa em que já decidiu se comprava antes. */
+  private readonly hyped = new Set<string>();
   /** Quanto aceita pagar acima do justo pelo próprio time. */
   private readonly bias: number;
 
@@ -178,8 +183,14 @@ export class FanBot extends ValueBot {
     const last = view.lastResult(this.club);
     const newWin = last !== undefined && last.at > this.lastSeen && last.result === "W";
     if (last) this.lastSeen = Math.max(this.lastSeen, last.at);
+    // Antes de um mata-mata de copa, a emoção fala mais alto: metade das vezes
+    // nas oitavas e quartas, 80% na semifinal e na final.
+    const cup = view.cupHype ? view.nextCupMatch(this.club) : undefined;
+    const decisive = cup !== undefined && KNOCKOUT.has(cup.phase ?? "") && kickoffTime(cup) - view.now <= 48 * HOUR_MS && !this.hyped.has(cup.id);
+    if (decisive) this.hyped.add(cup!.id);
+    const hype = decisive && this.rng.chance(cup!.phase === "semifinal" || cup!.phase === "final" ? 0.8 : 0.5);
     // Às vezes (30% das vitórias) a emoção fala mais alto e compra caro o próprio time.
-    if (newWin && this.rng.chance(0.3)) {
+    if (hype || (newWin && this.rng.chance(0.3))) {
       const price = view.price(this.club);
       const limit = Math.min(price * 1.03, this.estimate(view, this.club) * (1 + this.bias));
       view.limit(this.id, this.club, "buy", (view.ledger.availableCash(this.id) * 0.3) / limit, limit);
@@ -244,7 +255,6 @@ export class RandomBot extends BaseBot {
   }
 }
 
-const HOUR_MS = 60 * 60 * 1000;
 const OUTCOMES = ["H", "D", "A"] as const;
 
 export class TraderBot extends BaseBot {

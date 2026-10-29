@@ -14,7 +14,8 @@
     "sim": "tsx src/sim/run.ts",
     "sim:lote": "tsx src/sim/lote.ts",
     "data:convert": "tsx scripts/convert-openfootball.ts",
-    "data:fetch": "tsx scripts/fetch-results.ts"
+    "data:fetch": "tsx scripts/fetch-results.ts",
+    "data:convert-copa": "tsx scripts/convert-openfootball-copa.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

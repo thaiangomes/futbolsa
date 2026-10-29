@@ -1,4 +1,4 @@
-import { computeStandings, type LeagueRules, type StandingRow } from "../engine/dividends.js";
+import { computeStandings, type CupRules, type LeagueRules, type StandingRow } from "../engine/dividends.js";
 import type { Ledger } from "../engine/ledger.js";
 import { MIN_PRICE, type Cents } from "../engine/money.js";
 import type { Exchange, Side } from "../engine/orderbook.js";
@@ -20,6 +20,11 @@ export class MarketView {
   placementPaid = false;
   /** Recompra no fim da temporada, em múltiplos dos dividendos dela (0 = sem recompra). */
   buybackMultiple = 0;
+  /** Dividendos de copa já pagos por ação, por clube. */
+  readonly cupPaid = new Map<string, number>();
+  /** Torcedores compram o próprio time antes dos mata-matas de copa. */
+  cupHype = false;
+  private cups: Cup[] = [];
   private readonly gamesPerClub: number;
   /** Jogos de cada clube em ordem de início, e o índice do próximo a começar. */
   private readonly fixtures = new Map<string, Match[]>();
@@ -47,6 +52,76 @@ export class MarketView {
       this.nextIdx.set(id, 0);
     }
     this.recompute();
+  }
+
+  /** Copas que valem dividendos nesta temporada, com todos os jogos (inclusive os que ainda vão acontecer). */
+  setCups(cups: ReadonlyArray<{ matches: readonly Match[]; rules: CupRules }>): void {
+    this.cups = cups.map(({ matches, rules }) => {
+      const live = matches.filter((m) => m.status !== "cancelled");
+      const phases = [...new Set([...live].sort((a, b) => kickoffTime(a) - kickoffTime(b)).map((m) => m.phase!))];
+      const byPhase = new Map(phases.map((p) => [p, live.filter((m) => m.phase === p)]));
+      const completeAt = new Map(
+        phases.map((p) => {
+          const list = byPhase.get(p)!;
+          return [p, list.every((m) => m.status === "finished") ? Math.max(...list.map(finishTime)) : Infinity];
+        }),
+      );
+      return { rules, phases, byPhase, completeAt };
+    });
+  }
+
+  /**
+   * Fase em que o clube está vivo na copa, só com o que já se sabe agora: ele
+   * passa para a fase seguinte quando a atual termina e ele aparece nela.
+   * -1 se não disputa, foi eliminado ou a copa acabou.
+   */
+  private cupStage(cup: Cup, clubId: string): number {
+    const plays = (p: string) => cup.byPhase.get(p)!.some((m) => m.home === clubId || m.away === clubId);
+    let i = cup.phases.findIndex(plays);
+    if (i < 0) return -1;
+    while (this.now >= cup.completeAt.get(cup.phases[i]!)!) {
+      if (i === cup.phases.length - 1 || !plays(cup.phases[i + 1]!)) return -1;
+      i++;
+    }
+    return i;
+  }
+
+  /**
+   * Dividendos de copa que o clube ainda pode receber, esperados com metade de
+   * chance de passar de cada fase (inclusive as preliminares, que não pagam).
+   */
+  cupExpected(clubId: string): Cents {
+    let total = 0;
+    for (const cup of this.cups) {
+      const stage = this.cupStage(cup, clubId);
+      if (stage < 0) continue;
+      const first = cup.phases.indexOf(cup.rules.phases[0]!);
+      const ahead = cup.rules.phases;
+      // Fase atual dentro das que pagam; nas preliminares, ainda falta passar por elas.
+      const start = Math.max(0, ahead.indexOf(cup.phases[stage]!));
+      const pre = stage < first ? first - stage : 0;
+      let chance = 0.5 ** pre;
+      for (let j = start; j < ahead.length - 1; j++) {
+        chance *= 0.5;
+        total += chance * (cup.rules.advance[ahead[j]!] ?? 0);
+      }
+      total += chance * 0.5 * cup.rules.title;
+    }
+    return Math.round(total);
+  }
+
+  /** Próximo jogo de copa do clube na fase em que ele está vivo. */
+  nextCupMatch(clubId: string): Match | undefined {
+    let best: Match | undefined;
+    for (const cup of this.cups) {
+      const stage = this.cupStage(cup, clubId);
+      if (stage < 0) continue;
+      for (const m of cup.byPhase.get(cup.phases[stage]!)!) {
+        if ((m.home !== clubId && m.away !== clubId) || kickoffTime(m) <= this.now) continue;
+        if (!best || kickoffTime(m) < kickoffTime(best)) best = m;
+      }
+    }
+    return best;
   }
 
   /** Próximo jogo do clube que ainda não começou (o tempo da simulação só anda para a frente). */
@@ -118,8 +193,9 @@ export class MarketView {
   /**
    * Valor justo estimado: pontos já ganhos e ainda não pagos, mais os pontos
    * esperados nos jogos que faltam, vezes o dividendo por ponto, mais o
-   * dividendo da colocação final projetada, mais a recompra esperada (o
-   * múltiplo vezes os dividendos projetados da temporada inteira).
+   * dividendo da colocação final projetada, mais os dividendos de copa
+   * esperados, mais a recompra esperada (o múltiplo vezes os dividendos
+   * projetados da temporada inteira, copas incluídas).
    */
   fairValue(clubId: string): Cents {
     const row = this.standings.get(clubId);
@@ -130,8 +206,9 @@ export class MarketView {
     const unpaid = points - (this.paidPoints.get(clubId) ?? 0);
     const projectedPlacement = this.rules.placement[this.projectedRank.get(clubId)! - 1] ?? 0;
     const placement = this.placementPaid ? 0 : projectedPlacement;
-    const seasonTotal = (points + ppg * remaining) * this.rules.perPoint + projectedPlacement;
-    return Math.round((unpaid + ppg * remaining) * this.rules.perPoint + placement + this.buybackMultiple * seasonTotal);
+    const cup = this.cupExpected(clubId);
+    const seasonTotal = (points + ppg * remaining) * this.rules.perPoint + projectedPlacement + (this.cupPaid.get(clubId) ?? 0) + cup;
+    return Math.round((unpaid + ppg * remaining) * this.rules.perPoint + placement + cup + this.buybackMultiple * seasonTotal);
   }
 
   /** Linha da tabela do clube com os jogos já encerrados. */
@@ -156,8 +233,9 @@ export class MarketView {
     const projectedPlacement = this.rules.placement[rank - 1] ?? 0;
     const placement = this.placementPaid ? 0 : projectedPlacement;
     const rest = mine - points;
-    const seasonTotal = mine * this.rules.perPoint + projectedPlacement;
-    return Math.round((unpaid + rest) * this.rules.perPoint + placement + this.buybackMultiple * seasonTotal);
+    const cup = this.cupExpected(clubId);
+    const seasonTotal = mine * this.rules.perPoint + projectedPlacement + (this.cupPaid.get(clubId) ?? 0) + cup;
+    return Math.round((unpaid + rest) * this.rules.perPoint + placement + cup + this.buybackMultiple * seasonTotal);
   }
 
   private ppg(clubId: string): number {
@@ -202,4 +280,13 @@ export class MarketView {
     if (qty <= 0) return;
     this.exchange.placeOrder({ accountId, clubId, side, type: "market", quantity: qty });
   }
+}
+
+interface Cup {
+  rules: CupRules;
+  /** Fases na ordem em que começam, inclusive as preliminares que não pagam. */
+  phases: string[];
+  byPhase: Map<string, Match[]>;
+  /** Fim do último jogo de cada fase (Infinity se ainda falta jogo). */
+  completeAt: Map<string, number>;
 }

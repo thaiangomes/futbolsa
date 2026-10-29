@@ -3,7 +3,7 @@
  *
  * Uso:
  *   npm run sim -- [--data data/brasileirao-2025.json] [--seed 1]
- *                  [--bots 25] [--ponto 10] [--recompra 0] [--traders 0] [--acerto 0.3,0.5,0.7] [--captura 0] [--extras analista=25] [--out sim-output]
+ *                  [--bots 25] [--ponto 10] [--recompra 0] [--traders 0] [--acerto 0.3,0.5,0.7] [--captura 0] [--extras analista=25] [--copas libertadores] [--torcida-copa] [--out sim-output]
  *
  * --bots   bots por perfil (4 perfis)
  * --ponto  dividendo por ponto, em centavos (padrão 10 = R$ 0,10)
@@ -16,12 +16,15 @@
  * --acerto  taxas de acerto dos traders, em rodízio (padrão: palpite pela campanha)
  * --captura quantos bots de captura de dividendo, além dos outros (padrão 0)
  * --extras  outros perfis fora da mistura padrão, como analista=25,concentrador=25
+ * --copas   copas que pagam dividendos (hoje só libertadores)
+ * --torcida-copa  torcedores compram o próprio time antes dos mata-matas de copa
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { loadSeason } from "../data/season.js";
-import { BRASILEIRAO_A } from "../engine/dividends.js";
+import { BRASILEIRAO_A, LIBERTADORES } from "../engine/dividends.js";
+import type { Match } from "../engine/types.js";
 import { DEFAULT_MARKET_MAKER } from "../engine/marketMaker.js";
 import { renderReport } from "./report.js";
 import { simulate } from "./simulate.js";
@@ -38,6 +41,8 @@ const { values } = parseArgs({
     traders: { type: "string", default: "0" },
     captura: { type: "string", default: "0" },
     extras: { type: "string", default: "" },
+    copas: { type: "string", default: "" },
+    "torcida-copa": { type: "boolean", default: false },
     acerto: { type: "string", default: "" },
   },
 });
@@ -45,6 +50,12 @@ const { values } = parseArgs({
 const season = loadSeason(values.data!);
 const perBot = Number(values.bots);
 const traders = Number(values.traders);
+// Copas: hoje só a Libertadores, com os jogos de data/libertadores-<ano>.json.
+const cups = (values.copas ?? "").split(",").filter(Boolean).map((c) => {
+  if (c !== "libertadores") throw new Error(`Copa desconhecida: ${c}`);
+  const file = JSON.parse(readFileSync(`data/libertadores-${season.season}.json`, "utf8")) as { matches: Match[] };
+  return { matches: file.matches, rules: LIBERTADORES };
+});
 // Perfis fora da mistura padrão, como analista=25,concentrador=25.
 const extras = Object.fromEntries((values.extras ?? "").split(",").filter(Boolean).map((p) => {
   const [k, n] = p.split("=");
@@ -63,11 +74,13 @@ const result = simulate(season, {
   marketMaker: { ...DEFAULT_MARKET_MAKER, anchor: values.ancora === "peer" ? "peer" : "lastTrade" },
   buyback: Number(values.recompra),
   traderHitRates: acerto,
+  cups,
+  fanCupHype: values["torcida-copa"],
 });
 const report = renderReport(result);
 
 mkdirSync(values.out!, { recursive: true });
-const tag = `${season.season}-semente${values.seed}-ponto${perPoint}-${values.ancora}-recompra${values.recompra}${traders ? `-traders${traders}` : ""}${acerto.length ? `-acerto${acerto.join("_")}` : ""}${values.captura !== "0" ? `-captura${values.captura}` : ""}${values.extras ? `-${values.extras.replace(/[=,]/g, "")}` : ""}`;
+const tag = `${season.season}-semente${values.seed}-ponto${perPoint}-${values.ancora}-recompra${values.recompra}${traders ? `-traders${traders}` : ""}${acerto.length ? `-acerto${acerto.join("_")}` : ""}${values.captura !== "0" ? `-captura${values.captura}` : ""}${values.extras ? `-${values.extras.replace(/[=,]/g, "")}` : ""}${cups.length ? `-copas${values.copas!.replace(/,/g, "_")}` : ""}${values["torcida-copa"] ? "-torcidacopa" : ""}`;
 writeFileSync(join(values.out!, `resultado-${tag}.json`), JSON.stringify(result, null, 2));
 writeFileSync(join(values.out!, `resumo-${tag}.md`), report);
 console.log(report);
