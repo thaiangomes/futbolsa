@@ -1,6 +1,6 @@
 import type { Bid, PriceBand } from "../engine/bookbuilding.js";
 import type { Cents } from "../engine/money.js";
-import { kickoffTime } from "../engine/types.js";
+import { finishTime, kickoffTime, type Match } from "../engine/types.js";
 import type { MarketView } from "./market.js";
 import type { Rng } from "./rng.js";
 
@@ -13,8 +13,8 @@ import type { Rng } from "./rng.js";
  *   mais para vendê-lo;
  * - aleatório: gera volume com ordens perto do preço, mas não compra muito acima
  *   do justo nem vende muito abaixo;
- * - trader: compra antes do jogo o clube que deve vencer e vende o resto,
- *   sem pagar muito acima do valor justo.
+ * - trader: compra antes do jogo o clube que deve vencer, sem pagar muito
+ *   acima do valor justo, segura até o resultado e vende o resto.
  */
 export type BotProfile = "dividendos" | "momentum" | "torcedor" | "aleatorio" | "trader";
 
@@ -241,17 +241,32 @@ export class RandomBot extends BaseBot {
 }
 
 const HOUR_MS = 60 * 60 * 1000;
+const OUTCOMES = ["H", "D", "A"] as const;
 
 export class TraderBot extends BaseBot {
   readonly profile = "trader";
-  /** Vantagem mínima esperada no próximo jogo, em pontos por jogo. */
+  /** Vantagem mínima esperada no próximo jogo, em pontos por jogo (palpite pela campanha). */
   private readonly threshold: number;
   /** Quanto aceita pagar acima do valor justo. */
   private readonly tolerance: number;
   /** Com quanta antecedência do jogo passa a comprar. */
   private readonly horizon: number;
+  /** Jogo em que apostou, por clube: segura a ação até sair o resultado dele. */
+  private readonly bets = new Map<string, Match>();
+  /** Palpite de cada jogo (vitória do mandante, empate ou do visitante), sorteado uma vez. */
+  private readonly guesses = new Map<string, (typeof OUTCOMES)[number]>();
 
-  constructor(id: string, rng: Rng) {
+  constructor(
+    id: string,
+    rng: Rng,
+    /**
+     * Taxa de acerto do palpite (0 a 1). Sem ela, o palpite vem da campanha dos
+     * dois times; com ela, a simulação usa o resultado real para fazer o trader
+     * acertar o resultado nessa proporção dos jogos, como um jogador mais ou
+     * menos habilidoso.
+     */
+    readonly hitRate?: number,
+  ) {
     super(id, rng);
     this.threshold = rng.uniform(0.2, 0.5);
     this.tolerance = rng.uniform(0.1, 0.3);
@@ -271,6 +286,17 @@ export class TraderBot extends BaseBot {
     return bids;
   }
 
+  private expectsWin(view: MarketView, clubId: string, match: Match): boolean {
+    if (this.hitRate === undefined) return view.matchEdge(clubId, match) > this.threshold;
+    let guess = this.guesses.get(match.id);
+    if (guess === undefined) {
+      const real = match.homeGoals! > match.awayGoals! ? "H" : match.homeGoals! < match.awayGoals! ? "A" : "D";
+      guess = this.rng.chance(this.hitRate) ? real : this.rng.pick(OUTCOMES.filter((o) => o !== real));
+      this.guesses.set(match.id, guess);
+    }
+    return guess === (match.home === clubId ? "H" : "A");
+  }
+
   act(view: MarketView): void {
     view.exchange.cancelAll(this.id);
     const worth = view.netWorth(this.id);
@@ -278,9 +304,13 @@ export class TraderBot extends BaseBot {
       const price = view.price(clubId);
       const fair = view.fairValue(clubId);
       const held = view.ledger.availableShares(this.id, clubId);
+      const bet = this.bets.get(clubId);
+      // Segura a ação até sair o resultado do jogo em que apostou.
+      if (held > 0 && bet && view.now < finishTime(bet)) continue;
       const next = view.nextMatch(clubId);
       const soon = next !== undefined && kickoffTime(next) - view.now <= this.horizon;
-      const favored = soon && view.matchEdge(clubId, next) > this.threshold;
+      const favored = soon && this.expectsWin(view, clubId, next);
+      if (favored) this.bets.set(clubId, next);
       if (favored && price <= fair * (1 + this.tolerance)) {
         // Até 10% do patrimônio por clube.
         const room = worth * 0.1 - held * price;

@@ -55,9 +55,9 @@ describe("simulação com o fixture de exemplo", () => {
   });
 
   it("o trader negocia e o dinheiro continua fechando", () => {
-    const comTrader = simulate(season, { ...small, bots: { ...small.bots, trader: 2 }, buyback: 1 });
+    const comTrader = simulate(season, { ...small, bots: { ...small.bots, trader: 2 }, buyback: 1, traderHitRates: [0.3, 0.7] });
     const traders = comTrader.bots.filter((b) => b.profile === "trader");
-    expect(traders).toHaveLength(2);
+    expect(traders.map((b) => b.hitRate)).toEqual([0.3, 0.7]);
     expect(comTrader.trades.total).not.toBe(simulate(season, { ...small, buyback: 1 }).trades.total);
     const bots = comTrader.bots.reduce((s, b) => s + b.finalWorth, 0);
     expect(bots + comTrader.treasury.finalCash).toBe(

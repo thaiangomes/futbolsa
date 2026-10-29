@@ -40,6 +40,11 @@ export interface SimConfig {
   marketMaker: MarketMakerConfig;
   /** Recompra no fim da temporada, em múltiplos dos dividendos dela (0 = sem recompra). */
   buyback: number;
+  /**
+   * Taxas de acerto dos traders, distribuídas em rodízio (o 1º trader recebe a
+   * 1ª, o 2º a 2ª...). Vazio: todos palpitam pela campanha dos times.
+   */
+  traderHitRates: number[];
 }
 
 export const DEFAULT_SIM: SimConfig = {
@@ -53,6 +58,7 @@ export const DEFAULT_SIM: SimConfig = {
   bandWidth: 0.4,
   marketMaker: DEFAULT_MARKET_MAKER,
   buyback: 0,
+  traderHitRates: [],
 };
 
 export const TREASURY = "tesouraria";
@@ -88,6 +94,8 @@ export interface BotResult {
   id: string;
   profile: BotProfile;
   club?: string;
+  /** Taxa de acerto do trader, quando definida. */
+  hitRate?: number;
   finalWorth: Cents;
   dividendsReceived: Cents;
 }
@@ -136,7 +144,7 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
         profile === "dividendos" ? new DividendBot(id, botRng)
         : profile === "momentum" ? new MomentumBot(id, botRng)
         : profile === "torcedor" ? new FanBot(id, botRng, clubIds[fanIndex++ % clubIds.length]!)
-        : profile === "trader" ? new TraderBot(id, botRng)
+        : profile === "trader" ? new TraderBot(id, botRng, config.traderHitRates.length ? config.traderHitRates[i % config.traderHitRates.length] : undefined)
         : new RandomBot(id, botRng),
       );
       ledger.open(id, config.initialCash);
@@ -316,6 +324,7 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
       id: b.id,
       profile: b.profile,
       club: b instanceof FanBot ? b.club : undefined,
+      hitRate: b instanceof TraderBot ? b.hitRate : undefined,
       finalWorth: view.netWorth(b.id),
       dividendsReceived: botDividends.get(b.id)!,
     })),
