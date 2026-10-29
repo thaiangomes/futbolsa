@@ -5,7 +5,7 @@ import type { Match } from "../src/engine/types.js";
 import { simulate, TREASURY } from "../src/sim/simulate.js";
 
 const season = loadSeason("tests/fixtures/mini-season.json");
-const small = { bots: { dividendos: 2, momentum: 2, torcedor: 4, aleatorio: 2, trader: 0 }, stepHours: 6 };
+const small = { bots: { dividendos: 2, momentum: 2, torcedor: 4, aleatorio: 2, trader: 0, captura: 0 }, stepHours: 6 };
 
 describe("simulação com o fixture de exemplo", () => {
   const result = simulate(season, small);
@@ -62,6 +62,16 @@ describe("simulação com o fixture de exemplo", () => {
     const bots = comTrader.bots.reduce((s, b) => s + b.finalWorth, 0);
     expect(bots + comTrader.treasury.finalCash).toBe(
       12 * comTrader.config.initialCash + comTrader.totalDividends + comTrader.totalBuyback,
+    );
+  });
+
+  it("com bots de captura de dividendo o dinheiro continua fechando", () => {
+    const comCaptura = simulate(season, { ...small, bots: { ...small.bots, captura: 2 }, buyback: 1 });
+    const captura = comCaptura.bots.filter((b) => b.profile === "captura");
+    expect(captura).toHaveLength(2);
+    const bots = comCaptura.bots.reduce((s, b) => s + b.finalWorth, 0);
+    expect(bots + comCaptura.treasury.finalCash).toBe(
+      12 * comCaptura.config.initialCash + comCaptura.totalDividends + comCaptura.totalBuyback,
     );
   });
 

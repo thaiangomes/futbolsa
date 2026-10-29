@@ -3,7 +3,7 @@
  *
  * Uso:
  *   npm run sim -- [--data data/brasileirao-2025.json] [--seed 1]
- *                  [--bots 25] [--ponto 10] [--recompra 0] [--traders 0] [--acerto 0.3,0.5,0.7] [--out sim-output]
+ *                  [--bots 25] [--ponto 10] [--recompra 0] [--traders 0] [--acerto 0.3,0.5,0.7] [--captura 0] [--out sim-output]
  *
  * --bots   bots por perfil (4 perfis)
  * --ponto  dividendo por ponto, em centavos (padrão 10 = R$ 0,10)
@@ -14,6 +14,7 @@
  *          recomprar todas no fim (padrão 0 = sem recompra)
  * --traders quantos bots do perfil trader, além dos 4 perfis (padrão 0)
  * --acerto  taxas de acerto dos traders, em rodízio (padrão: palpite pela campanha)
+ * --captura quantos bots de captura de dividendo, além dos outros (padrão 0)
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -34,6 +35,7 @@ const { values } = parseArgs({
     ancora: { type: "string", default: DEFAULT_MARKET_MAKER.anchor },
     recompra: { type: "string", default: "0" },
     traders: { type: "string", default: "0" },
+    captura: { type: "string", default: "0" },
     acerto: { type: "string", default: "" },
   },
 });
@@ -48,7 +50,7 @@ const scale = perPoint / BRASILEIRAO_A.perPoint;
 const started = Date.now();
 const result = simulate(season, {
   seed: Number(values.seed),
-  bots: { dividendos: perBot, momentum: perBot, torcedor: perBot, aleatorio: perBot, trader: traders },
+  bots: { dividendos: perBot, momentum: perBot, torcedor: perBot, aleatorio: perBot, trader: traders, captura: Number(values.captura) },
   // O dividendo da colocação final acompanha a mesma escala do dividendo por ponto.
   rules: { perPoint, placement: BRASILEIRAO_A.placement.map((v) => Math.round(v * scale)) },
   marketMaker: { ...DEFAULT_MARKET_MAKER, anchor: values.ancora === "peer" ? "peer" : "lastTrade" },
@@ -58,7 +60,7 @@ const result = simulate(season, {
 const report = renderReport(result);
 
 mkdirSync(values.out!, { recursive: true });
-const tag = `${season.season}-semente${values.seed}-ponto${perPoint}-${values.ancora}-recompra${values.recompra}${traders ? `-traders${traders}` : ""}${acerto.length ? `-acerto${acerto.join("_")}` : ""}`;
+const tag = `${season.season}-semente${values.seed}-ponto${perPoint}-${values.ancora}-recompra${values.recompra}${traders ? `-traders${traders}` : ""}${acerto.length ? `-acerto${acerto.join("_")}` : ""}${values.captura !== "0" ? `-captura${values.captura}` : ""}`;
 writeFileSync(join(values.out!, `resultado-${tag}.json`), JSON.stringify(result, null, 2));
 writeFileSync(join(values.out!, `resumo-${tag}.md`), report);
 console.log(report);

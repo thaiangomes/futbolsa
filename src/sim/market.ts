@@ -95,6 +95,12 @@ export class MarketView {
     return undefined;
   }
 
+  /** Dividendo por ação dos pontos já ganhos e ainda não pagos (sai no fechamento da rodada). */
+  unpaidDividend(clubId: string): Cents {
+    const points = this.standings.get(clubId)?.points ?? 0;
+    return Math.round((points - (this.paidPoints.get(clubId) ?? 0)) * this.rules.perPoint);
+  }
+
   /** Vitórias seguidas do clube nos últimos jogos encerrados. */
   winStreak(clubId: string): number {
     let n = 0;

@@ -14,11 +14,13 @@ import type { Rng } from "./rng.js";
  * - aleatório: gera volume com ordens perto do preço, mas não compra muito acima
  *   do justo nem vende muito abaixo;
  * - trader: compra antes do jogo o clube que deve vencer, sem pagar muito
- *   acima do valor justo, segura até o resultado e vende o resto.
+ *   acima do valor justo, segura até o resultado e vende o resto;
+ * - captura: só compra para receber o dividendo da rodada e vende depois
+ *   (checagem da regra, fora da mistura padrão).
  */
-export type BotProfile = "dividendos" | "momentum" | "torcedor" | "aleatorio" | "trader";
+export type BotProfile = "dividendos" | "momentum" | "torcedor" | "aleatorio" | "trader" | "captura";
 
-export const PROFILES: BotProfile[] = ["dividendos", "momentum", "torcedor", "aleatorio", "trader"];
+export const PROFILES: BotProfile[] = ["dividendos", "momentum", "torcedor", "aleatorio", "trader", "captura"];
 
 export interface Bot {
   readonly id: string;
@@ -319,6 +321,43 @@ export class TraderBot extends BaseBot {
         view.limit(this.id, clubId, "sell", held, price * 0.99);
       } else if (held > 0 && price > fair * (1 + this.tolerance)) {
         view.limit(this.id, clubId, "sell", held, Math.max(price * 0.99, fair));
+      }
+    }
+  }
+}
+
+/**
+ * Captura de dividendo: compra o clube que já ganhou pontos ainda não pagos,
+ * logo antes do fechamento da rodada, e vende depois do pagamento. Serve para
+ * checar se a regra deixa lucrar só por estar com a ação na hora certa.
+ */
+export class CaptureBot extends BaseBot {
+  readonly profile = "captura";
+  /** Dividendo mínimo, como fração do preço, para entrar. */
+  private readonly minYield: number;
+
+  constructor(id: string, rng: Rng) {
+    super(id, rng);
+    this.minYield = rng.uniform(0.005, 0.015);
+  }
+
+  ipoBids(): Map<string, Bid> {
+    return new Map();
+  }
+
+  act(view: MarketView): void {
+    view.exchange.cancelAll(this.id);
+    const worth = view.netWorth(this.id);
+    for (const clubId of view.clubIds) {
+      const price = view.price(clubId);
+      const held = view.ledger.availableShares(this.id, clubId);
+      const pending = view.unpaidDividend(clubId);
+      if (pending > 0 && pending / price >= this.minYield) {
+        // Até 10% do patrimônio por clube.
+        const room = worth * 0.1 - held * price;
+        if (room > 0) view.limit(this.id, clubId, "buy", room / (price * 1.01), price * 1.01);
+      } else if (pending === 0 && held > 0) {
+        view.limit(this.id, clubId, "sell", held, price * 0.99);
       }
     }
   }
