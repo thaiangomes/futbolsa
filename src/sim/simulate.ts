@@ -143,13 +143,13 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
   // mesmo preço do "lastTrade" e a opção não teria efeito.
   const exchange = new Exchange(ledger, {
     houseAccounts: [TREASURY],
-    houseTradesSetPrice: config.marketMaker.anchor === "lastTrade",
+    houseTradesSetPrice: config.marketMaker.anchor !== "peer",
   });
   const view = new MarketView(exchange, ledger, clubIds, config.rules, matches);
   view.buybackMultiple = config.buyback;
   view.setCups(config.cups);
   view.cupHype = config.fanCupHype;
-  const maker = new MarketMaker(exchange, ledger, TREASURY, config.marketMaker);
+  const maker = new MarketMaker(exchange, ledger, TREASURY, config.marketMaker, (id) => view.fairValue(id));
 
   // Bots: torcedores distribuídos pelos clubes em ordem.
   const lastYear = new Map(season.clubs.map((c) => [c.id, c.ipoPosition]));

@@ -24,8 +24,11 @@ export interface MarketMakerConfig {
    *   para a casa empurra a próxima cotação para baixo (e quem compra, para cima).
    * - "peer": último negócio entre pessoas. Na Fase 0 isso criou um piso: a casa
    *   recomprava sempre no mesmo preço enquanto só ela comprava.
+   * - "fair": o valor que a casa considera justo para o clube (dividendos que
+   *   faltam e recompra esperados). Negócios, com a casa ou entre pessoas, não
+   *   mexem na cotação; ela só muda quando um jogo termina ou um dividendo é pago.
    */
-  anchor: "lastTrade" | "peer";
+  anchor: "lastTrade" | "peer" | "fair";
 }
 
 export const DEFAULT_MARKET_MAKER: MarketMakerConfig = {
@@ -73,6 +76,8 @@ export class MarketMaker {
     private readonly ledger: Ledger,
     readonly accountId: string,
     private readonly config: MarketMakerConfig = DEFAULT_MARKET_MAKER,
+    /** Valor justo de cada clube, usado com a âncora "fair". */
+    private readonly fairValue?: (clubId: string) => Cents,
   ) {}
 
   /**
@@ -82,9 +87,11 @@ export class MarketMaker {
   refresh(clubId: string, inMatch: boolean): Quote {
     this.exchange.cancelAll(this.accountId, clubId);
     const reference =
-      this.config.anchor === "lastTrade"
-        ? (this.exchange.lastTradePrice(clubId) ?? this.exchange.price(clubId))
-        : this.exchange.price(clubId);
+      this.config.anchor === "fair" && this.fairValue
+        ? Math.max(MIN_PRICE, this.fairValue(clubId))
+        : this.config.anchor === "lastTrade"
+          ? (this.exchange.lastTradePrice(clubId) ?? this.exchange.price(clubId))
+          : this.exchange.price(clubId);
     if (reference === undefined) return {};
     const quote = computeQuote(
       reference,

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { Ledger } from "../src/engine/ledger.js";
-import { computeQuote, MarketMaker } from "../src/engine/marketMaker.js";
+import { computeQuote, DEFAULT_MARKET_MAKER, MarketMaker } from "../src/engine/marketMaker.js";
 import { Exchange } from "../src/engine/orderbook.js";
 
 const CLUB = "FLA3";
@@ -168,5 +168,14 @@ describe("MarketMaker", () => {
     expect(exchange.openOrders("casa")).toHaveLength(2);
     expect(exchange.bestBid(CLUB)?.limitPrice).toBe(990);
     expect(exchange.bestAsk(CLUB)?.limitPrice).toBe(1010);
+  });
+  it("com a âncora fair cota em volta do valor justo, não do último negócio", () => {
+    const { ledger, exchange } = setup();
+    ledger.open("casa", 1_000_000);
+    ledger.adjustShares("casa", CLUB, 500);
+    const mm = new MarketMaker(exchange, ledger, "casa", { ...DEFAULT_MARKET_MAKER, anchor: "fair" }, () => 2000);
+    mm.refresh(CLUB, false);
+    expect(exchange.bestBid(CLUB)?.limitPrice).toBe(1980);
+    expect(exchange.bestAsk(CLUB)?.limitPrice).toBe(2020);
   });
 });

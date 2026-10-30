@@ -65,7 +65,7 @@ const extras = Object.fromEntries((values.extras ?? "").split(",").filter(Boolea
 const acerto = values.acerto ? values.acerto.split(",").map(Number) : [];
 const perPoint = Number(values.ponto);
 const scale = perPoint / BRASILEIRAO_A.perPoint;
-const anchor = values.ancora === "peer" ? "peer" : "lastTrade";
+const anchor = values.ancora === "peer" || values.ancora === "fair" ? values.ancora : "lastTrade";
 const buyback = Number(values.recompra);
 
 export interface LoteLinha {

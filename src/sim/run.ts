@@ -8,7 +8,8 @@
  * --bots   bots por perfil (4 perfis)
  * --ponto  dividendo por ponto, em centavos (padrão 10 = R$ 0,10)
  * --ancora preço de referência do formador de mercado: lastTrade (padrão, o
- *          último negócio, inclusive com a casa) ou peer (só negócios entre
+ *          último negócio, inclusive com a casa), fair (o valor justo da casa;
+ *          negócios não mexem na cotação) ou peer (só negócios entre
  *          jogadores; os negócios com a casa deixam de mexer no preço)
  * --recompra múltiplo dos dividendos da temporada que a casa paga por ação ao
  *          recomprar todas no fim (padrão 0 = sem recompra)
@@ -81,7 +82,7 @@ const result = simulate(season, {
   bots: { dividendos: perBot, momentum: perBot, torcedor: perBot, aleatorio: perBot, trader: traders, captura: Number(values.captura), analista: 0, concentrador: 0, antecipador: 0, ...extras },
   // O dividendo da colocação final acompanha a mesma escala do dividendo por ponto.
   rules: { perPoint, placement: BRASILEIRAO_A.placement.map((v) => Math.round(v * scale)) },
-  marketMaker: { ...DEFAULT_MARKET_MAKER, anchor: values.ancora === "peer" ? "peer" : "lastTrade" },
+  marketMaker: { ...DEFAULT_MARKET_MAKER, anchor: values.ancora === "peer" || values.ancora === "fair" ? values.ancora : "lastTrade" },
   buyback: Number(values.recompra),
   traderHitRates: acerto,
   cups,
