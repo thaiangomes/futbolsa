@@ -3,7 +3,7 @@
  *
  * Uso:
  *   npm run sim -- [--data data/brasileirao-2025.json] [--seed 1]
- *                  [--bots 25] [--ponto 10] [--recompra 0] [--traders 0] [--acerto 0.3,0.5,0.7] [--captura 0] [--extras analista=25] [--copas libertadores,copa-do-brasil,sul-americana] [--torcida-copa] [--ipo-copas] [--out sim-output]
+ *                  [--bots 25] [--ponto 10] [--recompra 0] [--traders 50] [--acerto 0.3,0.5,0.7] [--captura 25] [--extras analista=25,concentrador=25,antecipador=25] [--copas libertadores,copa-do-brasil,sul-americana] [--torcida-copa] [--ipo-copas] [--faixa 0.4] [--out sim-output]
  *
  * --bots   bots por perfil (4 perfis)
  * --ponto  dividendo por ponto, em centavos (padrão 10 = R$ 0,10)
@@ -12,13 +12,14 @@
  *          jogadores; os negócios com a casa deixam de mexer no preço)
  * --recompra múltiplo dos dividendos da temporada que a casa paga por ação ao
  *          recomprar todas no fim (padrão 0 = sem recompra)
- * --traders quantos bots do perfil trader, além dos 4 perfis (padrão 0)
- * --acerto  taxas de acerto dos traders, em rodízio (padrão: palpite pela campanha)
- * --captura quantos bots de captura de dividendo, além dos outros (padrão 0)
- * --extras  outros perfis fora da mistura padrão, como analista=25,concentrador=25
+ * --traders quantos bots do perfil trader, além dos 4 perfis (padrão 50)
+ * --acerto  taxas de acerto dos traders, em rodízio (padrão 0.3,0.5,0.7; vazio: palpite pela campanha)
+ * --captura quantos bots de captura de dividendo, além dos outros (padrão 25)
+ * --extras  outros perfis: analista, concentrador e antecipador (padrão 25 de cada)
  * --copas   copas que pagam dividendos: libertadores, copa-do-brasil, sul-americana
  * --torcida-copa  torcedores compram o próprio time antes dos mata-matas de copa
  * --ipo-copas  a faixa do IPO soma os dividendos de copa esperados (com a recompra)
+ * --faixa  largura da faixa do IPO para cada lado do centro (padrão 0.4 = 60% a 140%)
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -39,13 +40,14 @@ const { values } = parseArgs({
     out: { type: "string", default: "sim-output" },
     ancora: { type: "string", default: DEFAULT_MARKET_MAKER.anchor },
     recompra: { type: "string", default: "0" },
-    traders: { type: "string", default: "0" },
-    captura: { type: "string", default: "0" },
-    extras: { type: "string", default: "" },
+    traders: { type: "string", default: "50" },
+    captura: { type: "string", default: "25" },
+    extras: { type: "string", default: "analista=25,concentrador=25,antecipador=25" },
     copas: { type: "string", default: "" },
     "torcida-copa": { type: "boolean", default: false },
     "ipo-copas": { type: "boolean", default: false },
-    acerto: { type: "string", default: "" },
+    acerto: { type: "string", default: "0.3,0.5,0.7" },
+    faixa: { type: "string", default: "0.4" },
   },
 });
 
@@ -85,11 +87,12 @@ const result = simulate(season, {
   cups,
   fanCupHype: values["torcida-copa"],
   ipoCups: values["ipo-copas"],
+  bandWidth: Number(values.faixa),
 });
 const report = renderReport(result);
 
 mkdirSync(values.out!, { recursive: true });
-const tag = `${season.season}-semente${values.seed}-ponto${perPoint}-${values.ancora}-recompra${values.recompra}${traders ? `-traders${traders}` : ""}${acerto.length ? `-acerto${acerto.join("_")}` : ""}${values.captura !== "0" ? `-captura${values.captura}` : ""}${values.extras ? `-${values.extras.replace(/[=,]/g, "")}` : ""}${cups.length ? `-copas${values.copas!.replace(/,/g, "_")}` : ""}${values["torcida-copa"] ? "-torcidacopa" : ""}${values["ipo-copas"] ? "-ipocopas" : ""}`;
+const tag = `${season.season}-semente${values.seed}-ponto${perPoint}-${values.ancora}-recompra${values.recompra}${traders ? `-traders${traders}` : ""}${acerto.length ? `-acerto${acerto.join("_")}` : ""}${values.captura !== "0" ? `-captura${values.captura}` : ""}${values.extras ? `-${values.extras.replace(/[=,]/g, "")}` : ""}${cups.length ? `-copas${values.copas!.replace(/,/g, "_")}` : ""}${values["torcida-copa"] ? "-torcidacopa" : ""}${values["ipo-copas"] ? "-ipocopas" : ""}${values.faixa !== "0.4" ? `-faixa${values.faixa}` : ""}`;
 writeFileSync(join(values.out!, `resultado-${tag}.json`), JSON.stringify(result, null, 2));
 writeFileSync(join(values.out!, `resumo-${tag}.md`), report);
 console.log(report);

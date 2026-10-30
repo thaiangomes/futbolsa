@@ -61,7 +61,8 @@ export interface SimConfig {
 
 export const DEFAULT_SIM: SimConfig = {
   seed: 1, // Só um número para os sorteios dos bots; não tem relação com o ano dos dados.
-  bots: { dividendos: 25, momentum: 25, torcedor: 25, aleatorio: 25, trader: 0, captura: 0, analista: 0, concentrador: 0, antecipador: 0 },
+  // Todos os perfis em toda simulação (decisão do Thaian em 2026-10-30).
+  bots: { dividendos: 25, momentum: 25, torcedor: 25, aleatorio: 25, trader: 50, captura: 25, analista: 25, concentrador: 25, antecipador: 25 },
   initialCash: 10_000_000, // R$ 100 mil
   sharesPerPlayer: 150,
   stepHours: 3,
@@ -70,7 +71,7 @@ export const DEFAULT_SIM: SimConfig = {
   bandWidth: 0.4,
   marketMaker: DEFAULT_MARKET_MAKER,
   buyback: 0,
-  traderHitRates: [],
+  traderHitRates: [0.3, 0.5, 0.7],
   cups: [],
   fanCupHype: false,
   ipoCups: false,
