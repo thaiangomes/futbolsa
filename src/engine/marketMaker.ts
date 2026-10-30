@@ -31,13 +31,17 @@ export interface MarketMakerConfig {
   anchor: "lastTrade" | "peer" | "fair";
 }
 
+// Valor justo com faixa de 10% (14% durante os jogos): decisão do Thaian em 2026-10-30, rodada T.
 export const DEFAULT_MARKET_MAKER: MarketMakerConfig = {
-  spread: 0.02,
+  spread: 0.1,
   quantity: 100,
-  matchSpread: 0.06,
+  matchSpread: 0.14,
   matchQuantity: 25,
-  anchor: "lastTrade",
+  anchor: "fair",
 };
+
+/** Formador das rodadas antigas da calibração: último negócio com spread de 2% (6% nos jogos). */
+export const LAST_TRADE_MARKET_MAKER: MarketMakerConfig = { ...DEFAULT_MARKET_MAKER, spread: 0.02, matchSpread: 0.06, anchor: "lastTrade" };
 
 export interface Quote {
   bid?: { price: Cents; quantity: number };

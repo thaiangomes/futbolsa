@@ -3,7 +3,7 @@
  * para testar uma hipótese de calibração de cada vez contra a linha de base.
  *
  * Uso:
- *   npm run sim:lote -- [--sementes 10] [--ponto 10] [--ancora lastTrade] [--recompra 0] [--bots 25] [--traders 50]
+ *   npm run sim:lote -- [--sementes 10] [--ponto 10] [--ancora fair] [--recompra 0] [--bots 25] [--traders 50]
  *                       [--acerto 0.3,0.5,0.7] [--captura 25]
  *                       [--extras analista=25,concentrador=25,antecipador=25] [--copas libertadores,copa-do-brasil,sul-americana] [--torcida-copa] [--ipo-copas] [--faixa 0.4]
  *                       [--data data/brasileirao-2025.json] [--out sim-output]
@@ -17,7 +17,7 @@ import { parseArgs } from "node:util";
 import { loadSeason } from "../data/season.js";
 import { BRASILEIRAO_A, COPA_DO_BRASIL, LIBERTADORES, SULAMERICANA, type CupRules } from "../engine/dividends.js";
 import type { Match } from "../engine/types.js";
-import { DEFAULT_MARKET_MAKER } from "../engine/marketMaker.js";
+import { DEFAULT_MARKET_MAKER, LAST_TRADE_MARKET_MAKER } from "../engine/marketMaker.js";
 import { PROFILES, type BotProfile } from "./bots.js";
 import { checkpointStats } from "./report.js";
 import { simulate, type SimResult } from "./simulate.js";
@@ -120,7 +120,7 @@ for (let seed = 1; seed <= n; seed++) {
     bots: { dividendos: perBot, momentum: perBot, torcedor: perBot, aleatorio: perBot, trader: traders, captura: Number(values.captura), analista: 0, concentrador: 0, antecipador: 0, ...extras },
     // O dividendo da colocação final acompanha a mesma escala do dividendo por ponto.
     rules: { perPoint, placement: BRASILEIRAO_A.placement.map((v) => Math.round(v * scale)) },
-    marketMaker: { ...DEFAULT_MARKET_MAKER, anchor },
+    marketMaker: anchor === "fair" ? DEFAULT_MARKET_MAKER : { ...LAST_TRADE_MARKET_MAKER, anchor },
     buyback,
     traderHitRates: acerto,
     cups,

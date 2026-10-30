@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { Ledger } from "../src/engine/ledger.js";
-import { computeQuote, DEFAULT_MARKET_MAKER, MarketMaker } from "../src/engine/marketMaker.js";
+import { computeQuote, DEFAULT_MARKET_MAKER, LAST_TRADE_MARKET_MAKER as LT, MarketMaker } from "../src/engine/marketMaker.js";
 import { Exchange } from "../src/engine/orderbook.js";
 
 const CLUB = "FLA3";
@@ -133,27 +133,27 @@ describe("Exchange", () => {
 
 describe("MarketMaker", () => {
   it("cota perto do último preço com spread de ~2%", () => {
-    expect(computeQuote(1000, false, 1_000_000, 1000)).toEqual({
+    expect(computeQuote(1000, false, 1_000_000, 1000, LT)).toEqual({
       bid: { price: 990, quantity: 100 },
       ask: { price: 1010, quantity: 100 },
     });
   });
 
   it("amplia o spread e reduz a quantidade durante os jogos do clube", () => {
-    expect(computeQuote(1000, true, 1_000_000, 1000)).toEqual({
+    expect(computeQuote(1000, true, 1_000_000, 1000, LT)).toEqual({
       bid: { price: 970, quantity: 25 },
       ask: { price: 1030, quantity: 25 },
     });
   });
 
   it("só cota o que a tesouraria tem", () => {
-    const q = computeQuote(1000, false, 4_950, 0);
+    const q = computeQuote(1000, false, 4_950, 0, LT);
     expect(q.bid).toEqual({ price: 990, quantity: 5 });
     expect(q.ask).toBeUndefined();
   });
 
   it("nunca cota abaixo de R$ 0,50", () => {
-    const q = computeQuote(50, true, 1_000_000, 100);
+    const q = computeQuote(50, true, 1_000_000, 100, LT);
     expect(q.bid!.price).toBeGreaterThanOrEqual(50);
     expect(q.ask!.price).toBeGreaterThan(q.bid!.price);
   });
@@ -162,7 +162,7 @@ describe("MarketMaker", () => {
     const { ledger, exchange } = setup();
     ledger.open("casa", 1_000_000);
     ledger.adjustShares("casa", CLUB, 500);
-    const mm = new MarketMaker(exchange, ledger, "casa");
+    const mm = new MarketMaker(exchange, ledger, "casa", LT);
     mm.refresh(CLUB, false);
     mm.refresh(CLUB, false);
     expect(exchange.openOrders("casa")).toHaveLength(2);
@@ -173,9 +173,9 @@ describe("MarketMaker", () => {
     const { ledger, exchange } = setup();
     ledger.open("casa", 1_000_000);
     ledger.adjustShares("casa", CLUB, 500);
-    const mm = new MarketMaker(exchange, ledger, "casa", { ...DEFAULT_MARKET_MAKER, anchor: "fair" }, () => 2000);
+    const mm = new MarketMaker(exchange, ledger, "casa", DEFAULT_MARKET_MAKER, () => 2000);
     mm.refresh(CLUB, false);
-    expect(exchange.bestBid(CLUB)?.limitPrice).toBe(1980);
-    expect(exchange.bestAsk(CLUB)?.limitPrice).toBe(2020);
+    expect(exchange.bestBid(CLUB)?.limitPrice).toBe(1900);
+    expect(exchange.bestAsk(CLUB)?.limitPrice).toBe(2100);
   });
 });
