@@ -202,6 +202,8 @@ export interface CupRules {
   phases: string[];
   /** Dividendo por avançar de cada fase (chave = fase da qual o clube saiu). */
   advance: Record<string, Cents>;
+  /** Valor diferente conforme a fase para onde o clube foi, ex.: { grupos: { playoffs: 30 } }. */
+  advanceTo?: Record<string, Record<string, Cents>>;
   title: Cents;
 }
 
@@ -226,12 +228,14 @@ export const LIBERTADORES: CupRules = {
 };
 
 /**
- * Sul-Americana: 40% da Libertadores por fase; título R$ 4,80. Os playoffs
- * (segundos dos grupos contra terceiros da Libertadores) pagam como os grupos.
+ * Sul-Americana: 40% da Libertadores por fase; título R$ 4,80. Chegar às
+ * oitavas vale R$ 0,60 pelos dois caminhos: o primeiro do grupo recebe tudo
+ * nos grupos; o segundo recebe metade nos grupos e metade se vencer os playoffs.
  */
 export const SULAMERICANA: CupRules = {
   phases: ["grupos", "playoffs", "oitavas", "quartas", "semifinal", "final"],
-  advance: { grupos: 60, playoffs: 60, oitavas: 90, quartas: 150, semifinal: 240 },
+  advance: { grupos: 60, playoffs: 30, oitavas: 90, quartas: 150, semifinal: 240 },
+  advanceTo: { grupos: { playoffs: 30 } },
   title: 480,
 };
 
@@ -275,14 +279,18 @@ export function scheduleCupPayouts(matches: readonly Match[], rules: CupRules): 
     if (amount === 0) return;
     // Quem passou aparece numa fase seguinte; pode pular uma (o primeiro do grupo
     // da Sul-Americana vai direto às oitavas, sem os playoffs).
-    const later = new Set(rules.phases.slice(i + 1).flatMap((p) => [...clubsIn(byPhase.get(p) ?? [])]));
+    // Cada clube vai para a primeira fase seguinte em que aparece.
+    const dest = new Map<string, string>();
+    for (const p of rules.phases.slice(i + 1)) {
+      for (const clubId of clubsIn(byPhase.get(p) ?? [])) if (!dest.has(clubId)) dest.set(clubId, p);
+    }
     const here = clubsIn(list);
-    for (const clubId of later) {
+    for (const [clubId, to] of dest) {
       if (!here.has(clubId)) continue; // entrou direto numa fase seguinte
       payouts.push({
         at,
         clubId,
-        perShare: amount,
+        perShare: rules.advanceTo?.[phase]?.[to] ?? amount,
         kind: "cup-phase",
         competition,
         detail: `avançou da fase ${phase}`,
