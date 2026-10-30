@@ -3,9 +3,9 @@
  * para testar uma hipótese de calibração de cada vez contra a linha de base.
  *
  * Uso:
- *   npm run sim:lote -- [--sementes 10] [--ponto 10] [--ancora fair] [--recompra 0] [--bots 25] [--traders 50]
+ *   npm run sim:lote -- [--sementes 10] [--ponto 10] [--ancora fair] [--recompra 1.5] [--bots 25] [--traders 50]
  *                       [--acerto 0.3,0.5,0.7] [--captura 25]
- *                       [--extras analista=25,concentrador=25,antecipador=25] [--copas libertadores,copa-do-brasil,sul-americana] [--torcida-copa] [--ipo-copas] [--faixa 0.4]
+ *                       [--extras analista=25,concentrador=25,antecipador=25] [--copas libertadores,copa-do-brasil,sul-americana] [--torcida-copa] [--no-ipo-copas] [--faixa 0.4]
  *                       [--data data/brasileirao-2025.json] [--out sim-output]
  *
  * --sementes  quantas sementes, de 1 até esse número (padrão 10)
@@ -23,6 +23,7 @@ import { checkpointStats } from "./report.js";
 import { simulate, type SimResult } from "./simulate.js";
 
 const { values } = parseArgs({
+  allowNegative: true,
   options: {
     data: { type: "string", default: "data/brasileirao-2025.json" },
     sementes: { type: "string", default: "10" },
@@ -30,13 +31,13 @@ const { values } = parseArgs({
     ponto: { type: "string", default: String(BRASILEIRAO_A.perPoint) },
     out: { type: "string", default: "sim-output" },
     ancora: { type: "string", default: DEFAULT_MARKET_MAKER.anchor },
-    recompra: { type: "string", default: "0" },
+    recompra: { type: "string", default: "1.5" },
     traders: { type: "string", default: "50" },
     captura: { type: "string", default: "25" },
     extras: { type: "string", default: "analista=25,concentrador=25,antecipador=25" },
-    copas: { type: "string", default: "" },
+    copas: { type: "string", default: "libertadores,copa-do-brasil,sul-americana" },
     "torcida-copa": { type: "boolean", default: false },
-    "ipo-copas": { type: "boolean", default: false },
+    "ipo-copas": { type: "boolean", default: true },
     acerto: { type: "string", default: "0.3,0.5,0.7" },
     faixa: { type: "string", default: "0.4" },
   },

@@ -70,11 +70,11 @@ export const DEFAULT_SIM: SimConfig = {
   rules: BRASILEIRAO_A,
   bandWidth: 0.4,
   marketMaker: DEFAULT_MARKET_MAKER,
-  buyback: 0,
+  buyback: 1.5, // Recompra de 1,5× (decisão do Thaian em 2026-10-30, rodada U).
   traderHitRates: [0.3, 0.5, 0.7],
   cups: [],
   fanCupHype: false,
-  ipoCups: false,
+  ipoCups: true, // O IPO conta as copas esperadas (decisão do Thaian em 2026-10-30, rodada U).
 };
 
 export const TREASURY = "tesouraria";

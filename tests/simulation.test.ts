@@ -9,7 +9,7 @@ const season = loadSeason("tests/fixtures/mini-season.json");
 const small = { bots: { dividendos: 2, momentum: 2, torcedor: 4, aleatorio: 2, trader: 0, captura: 0, analista: 0, concentrador: 0, antecipador: 0 }, stepHours: 6 };
 
 describe("simulação com o fixture de exemplo", () => {
-  const result = simulate(season, small);
+  const result = simulate(season, { ...small, buyback: 0 });
 
   it("faz IPO de todos os clubes dentro da faixa", () => {
     expect(result.clubs).toHaveLength(4);
@@ -92,7 +92,7 @@ describe("simulação com o fixture de exemplo", () => {
     const matches = [j("grupos", "2025-04-08", "FLA3", "EXT-A"), j("grupos", "2025-04-09", "PAL3", "EXT-B"),
       j("oitavas", "2025-04-15", "FLA3", "EXT-C"), j("oitavas", "2025-04-16", "EXT-D", "PAL3"),
       j("quartas", "2025-04-22", "FLA3", "EXT-D"), j("semifinal", "2025-04-29", "FLA3", "EXT-E"), j("final", "2025-05-06", "FLA3", "EXT-F")];
-    const comCopa = simulate(season, { ...small, buyback: 1, cups: [{ matches, rules: LIBERTADORES }] });
+    const comCopa = simulate(season, { ...small, buyback: 1, cups: [{ matches, rules: LIBERTADORES }], ipoCups: false });
     // FLA3: 110 + 500 do campeonato, mais 150 + 225 + 375 + 600 + 1200 da copa, e a recompra de 1×.
     expect(comCopa.checkpoints[0]!.remainingDividends.FLA3).toBe(2 * (110 + 500 + 2550));
     const bots = comCopa.bots.reduce((s, b) => s + b.finalWorth, 0);
