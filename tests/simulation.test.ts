@@ -27,7 +27,7 @@ describe("simulação com o fixture de exemplo", () => {
   });
 
   it("é reproduzível com a mesma semente", () => {
-    const again = simulate(season, small);
+    const again = simulate(season, { ...small, buyback: 0 });
     expect(again.clubs.map((c) => c.finalPrice)).toEqual(result.clubs.map((c) => c.finalPrice));
     expect(again.bots.map((b) => b.finalWorth)).toEqual(result.bots.map((b) => b.finalWorth));
   });
