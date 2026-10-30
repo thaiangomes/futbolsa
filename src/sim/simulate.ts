@@ -51,6 +51,12 @@ export interface SimConfig {
   cups: Array<{ matches: Match[]; rules: CupRules }>;
   /** Torcedores compram o próprio time antes dos mata-matas de copa. */
   fanCupHype: boolean;
+  /**
+   * O centro da faixa do IPO soma, ao preço da colocação do ano anterior, os
+   * dividendos de copa esperados na data do IPO (metade de chance por fase)
+   * vezes 1 + o múltiplo da recompra.
+   */
+  ipoCups: boolean;
 }
 
 export const DEFAULT_SIM: SimConfig = {
@@ -67,6 +73,7 @@ export const DEFAULT_SIM: SimConfig = {
   traderHitRates: [],
   cups: [],
   fanCupHype: false,
+  ipoCups: false,
 };
 
 export const TREASURY = "tesouraria";
@@ -173,7 +180,10 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
   view.now = ipoAt;
 
   const bands = new Map<string, PriceBand>(
-    season.clubs.map((c) => [c.id, priceBand(suggestedPrice(c.ipoPosition), config.bandWidth)]),
+    season.clubs.map((c) => {
+      const cups = config.ipoCups ? Math.round(view.cupExpected(c.id) * (1 + config.buyback)) : 0;
+      return [c.id, priceBand(suggestedPrice(c.ipoPosition) + cups, config.bandWidth)];
+    }),
   );
   const bidsByClub = new Map<string, Bid[]>(clubIds.map((id) => [id, []]));
   for (const bot of bots) {

@@ -3,7 +3,7 @@
  *
  * Uso:
  *   npm run sim -- [--data data/brasileirao-2025.json] [--seed 1]
- *                  [--bots 25] [--ponto 10] [--recompra 0] [--traders 0] [--acerto 0.3,0.5,0.7] [--captura 0] [--extras analista=25] [--copas libertadores,copa-do-brasil,sul-americana] [--torcida-copa] [--out sim-output]
+ *                  [--bots 25] [--ponto 10] [--recompra 0] [--traders 0] [--acerto 0.3,0.5,0.7] [--captura 0] [--extras analista=25] [--copas libertadores,copa-do-brasil,sul-americana] [--torcida-copa] [--ipo-copas] [--out sim-output]
  *
  * --bots   bots por perfil (4 perfis)
  * --ponto  dividendo por ponto, em centavos (padrão 10 = R$ 0,10)
@@ -18,6 +18,7 @@
  * --extras  outros perfis fora da mistura padrão, como analista=25,concentrador=25
  * --copas   copas que pagam dividendos: libertadores, copa-do-brasil, sul-americana
  * --torcida-copa  torcedores compram o próprio time antes dos mata-matas de copa
+ * --ipo-copas  a faixa do IPO soma os dividendos de copa esperados (com a recompra)
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -43,6 +44,7 @@ const { values } = parseArgs({
     extras: { type: "string", default: "" },
     copas: { type: "string", default: "" },
     "torcida-copa": { type: "boolean", default: false },
+    "ipo-copas": { type: "boolean", default: false },
     acerto: { type: "string", default: "" },
   },
 });
@@ -82,11 +84,12 @@ const result = simulate(season, {
   traderHitRates: acerto,
   cups,
   fanCupHype: values["torcida-copa"],
+  ipoCups: values["ipo-copas"],
 });
 const report = renderReport(result);
 
 mkdirSync(values.out!, { recursive: true });
-const tag = `${season.season}-semente${values.seed}-ponto${perPoint}-${values.ancora}-recompra${values.recompra}${traders ? `-traders${traders}` : ""}${acerto.length ? `-acerto${acerto.join("_")}` : ""}${values.captura !== "0" ? `-captura${values.captura}` : ""}${values.extras ? `-${values.extras.replace(/[=,]/g, "")}` : ""}${cups.length ? `-copas${values.copas!.replace(/,/g, "_")}` : ""}${values["torcida-copa"] ? "-torcidacopa" : ""}`;
+const tag = `${season.season}-semente${values.seed}-ponto${perPoint}-${values.ancora}-recompra${values.recompra}${traders ? `-traders${traders}` : ""}${acerto.length ? `-acerto${acerto.join("_")}` : ""}${values.captura !== "0" ? `-captura${values.captura}` : ""}${values.extras ? `-${values.extras.replace(/[=,]/g, "")}` : ""}${cups.length ? `-copas${values.copas!.replace(/,/g, "_")}` : ""}${values["torcida-copa"] ? "-torcidacopa" : ""}${values["ipo-copas"] ? "-ipocopas" : ""}`;
 writeFileSync(join(values.out!, `resultado-${tag}.json`), JSON.stringify(result, null, 2));
 writeFileSync(join(values.out!, `resumo-${tag}.md`), report);
 console.log(report);

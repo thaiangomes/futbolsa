@@ -5,7 +5,7 @@
  * Uso:
  *   npm run sim:lote -- [--sementes 10] [--ponto 10] [--ancora lastTrade] [--recompra 0] [--bots 25] [--traders 0]
  *                       [--acerto 0.3,0.5,0.7] [--captura 0]
- *                       [--extras analista=25] [--copas libertadores,copa-do-brasil,sul-americana] [--torcida-copa]
+ *                       [--extras analista=25] [--copas libertadores,copa-do-brasil,sul-americana] [--torcida-copa] [--ipo-copas]
  *                       [--data data/brasileirao-2025.json] [--out sim-output]
  *
  * --sementes  quantas sementes, de 1 até esse número (padrão 10)
@@ -36,6 +36,7 @@ const { values } = parseArgs({
     extras: { type: "string", default: "" },
     copas: { type: "string", default: "" },
     "torcida-copa": { type: "boolean", default: false },
+    "ipo-copas": { type: "boolean", default: false },
     acerto: { type: "string", default: "" },
   },
 });
@@ -123,6 +124,7 @@ for (let seed = 1; seed <= n; seed++) {
     traderHitRates: acerto,
     cups,
     fanCupHype: values["torcida-copa"],
+    ipoCups: values["ipo-copas"],
   });
   linhas.push(resumir(result));
 }
@@ -135,7 +137,7 @@ const faixa = (f: (l: LoteLinha) => number) => {
 const pct = (x: number) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(0)}%`;
 
 const out: string[] = [];
-out.push(`# Lote: ${n} sementes, R$ ${(perPoint / 100).toFixed(2).replace(".", ",")} por ponto, âncora ${anchor}, recompra ${buyback}×, ${perBot * 4} bots${traders ? ` + ${traders} traders` : ""}${acerto.length ? ` (acerto ${acerto.join(", ")})` : ""}${values.captura !== "0" ? ` + ${values.captura} de captura` : ""}${values.extras ? ` + ${values.extras}` : ""}${cups.length ? `, copas: ${values.copas}` : ""}${values["torcida-copa"] ? ", torcida de copa" : ""}`);
+out.push(`# Lote: ${n} sementes, R$ ${(perPoint / 100).toFixed(2).replace(".", ",")} por ponto, âncora ${anchor}, recompra ${buyback}×, ${perBot * 4} bots${traders ? ` + ${traders} traders` : ""}${acerto.length ? ` (acerto ${acerto.join(", ")})` : ""}${values.captura !== "0" ? ` + ${values.captura} de captura` : ""}${values.extras ? ` + ${values.extras}` : ""}${cups.length ? `, copas: ${values.copas}` : ""}${values["torcida-copa"] ? ", torcida de copa" : ""}${values["ipo-copas"] ? ", IPO conta as copas" : ""}`);
 out.push("");
 out.push("| Medida | Média | Menor–maior |");
 out.push("|---|---|---|");
@@ -151,7 +153,7 @@ out.push(`Retorno médio por perfil: ${PROFILES.filter((p) => !Number.isNaN(medi
 const report = out.join("\n");
 
 mkdirSync(values.out!, { recursive: true });
-const tag = `${season.season}-sementes1a${n}-ponto${perPoint}-${anchor}-recompra${buyback}${traders ? `-traders${traders}` : ""}${acerto.length ? `-acerto${acerto.join("_")}` : ""}${values.captura !== "0" ? `-captura${values.captura}` : ""}${values.extras ? `-${values.extras.replace(/[=,]/g, "")}` : ""}${cups.length ? `-copas${values.copas!.replace(/,/g, "_")}` : ""}${values["torcida-copa"] ? "-torcidacopa" : ""}`;
+const tag = `${season.season}-sementes1a${n}-ponto${perPoint}-${anchor}-recompra${buyback}${traders ? `-traders${traders}` : ""}${acerto.length ? `-acerto${acerto.join("_")}` : ""}${values.captura !== "0" ? `-captura${values.captura}` : ""}${values.extras ? `-${values.extras.replace(/[=,]/g, "")}` : ""}${cups.length ? `-copas${values.copas!.replace(/,/g, "_")}` : ""}${values["torcida-copa"] ? "-torcidacopa" : ""}${values["ipo-copas"] ? "-ipocopas" : ""}`;
 writeFileSync(join(values.out!, `lote-${tag}.json`), JSON.stringify(linhas, null, 2));
 console.log(report);
 console.log(`\n(${((Date.now() - started) / 1000).toFixed(1)} s; linhas por semente em ${values.out}/lote-${tag}.json)`);

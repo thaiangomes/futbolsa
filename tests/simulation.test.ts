@@ -97,6 +97,14 @@ describe("simulação com o fixture de exemplo", () => {
     expect(comCopa.checkpoints[0]!.remainingDividends.FLA3).toBe(2 * (110 + 500 + 2550));
     const bots = comCopa.bots.reduce((s, b) => s + b.finalWorth, 0);
     expect(bots + comCopa.treasury.finalCash).toBe(10 * comCopa.config.initialCash + comCopa.totalDividends + comCopa.totalBuyback);
+
+    // Com o IPO que conta as copas, a faixa sobe o esperado na data do IPO vezes 1 + a recompra:
+    // 0,5 × 150 + 0,25 × 225 + 0,125 × 375 + 0,0625 × 600 + 0,03125 × 1200 = 253, × 2 = 506.
+    const ipoCopa = simulate(season, { ...small, buyback: 1, cups: [{ matches, rules: LIBERTADORES }], ipoCups: true });
+    const centro = (r: typeof comCopa, id: string) => r.clubs.find((c) => c.clubId === id)!.band.center;
+    expect(centro(ipoCopa, "FLA3") - centro(comCopa, "FLA3")).toBe(506);
+    expect(centro(ipoCopa, "PAL3") - centro(comCopa, "PAL3")).toBe(506);
+    for (const c of comCopa.clubs.filter((x) => !["FLA3", "PAL3"].includes(x.clubId))) expect(centro(ipoCopa, c.clubId)).toBe(c.band.center);
   });
 
   it("ninguém termina com patrimônio negativo e a tesouraria não recebe dividendos", () => {
