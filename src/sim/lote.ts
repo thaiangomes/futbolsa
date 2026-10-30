@@ -5,7 +5,7 @@
  * Uso:
  *   npm run sim:lote -- [--sementes 10] [--ponto 10] [--ancora lastTrade] [--recompra 0] [--bots 25] [--traders 0]
  *                       [--acerto 0.3,0.5,0.7] [--captura 0]
- *                       [--extras analista=25] [--copas libertadores] [--torcida-copa]
+ *                       [--extras analista=25] [--copas libertadores,copa-do-brasil,sul-americana] [--torcida-copa]
  *                       [--data data/brasileirao-2025.json] [--out sim-output]
  *
  * --sementes  quantas sementes, de 1 até esse número (padrão 10)
@@ -15,7 +15,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { loadSeason } from "../data/season.js";
-import { BRASILEIRAO_A, LIBERTADORES } from "../engine/dividends.js";
+import { BRASILEIRAO_A, COPA_DO_BRASIL, LIBERTADORES, SULAMERICANA, type CupRules } from "../engine/dividends.js";
 import type { Match } from "../engine/types.js";
 import { DEFAULT_MARKET_MAKER } from "../engine/marketMaker.js";
 import { PROFILES, type BotProfile } from "./bots.js";
@@ -43,11 +43,17 @@ const { values } = parseArgs({
 const season = loadSeason(values.data!);
 const perBot = Number(values.bots);
 const traders = Number(values.traders);
-// Copas: hoje só a Libertadores, com os jogos de data/libertadores-<ano>.json.
+// Copas: os jogos ficam em data/<copa>-<ano>.json.
+const CUP_RULES: Record<string, CupRules> = {
+  libertadores: LIBERTADORES,
+  "copa-do-brasil": COPA_DO_BRASIL,
+  "sul-americana": SULAMERICANA,
+};
 const cups = (values.copas ?? "").split(",").filter(Boolean).map((c) => {
-  if (c !== "libertadores") throw new Error(`Copa desconhecida: ${c}`);
-  const file = JSON.parse(readFileSync(`data/libertadores-${season.season}.json`, "utf8")) as { matches: Match[] };
-  return { matches: file.matches, rules: LIBERTADORES };
+  const rules = CUP_RULES[c];
+  if (!rules) throw new Error(`Copa desconhecida: ${c}`);
+  const file = JSON.parse(readFileSync(`data/${c}-${season.season}.json`, "utf8")) as { matches: Match[] };
+  return { matches: file.matches, rules };
 });
 // Perfis fora da mistura padrão, como analista=25,concentrador=25.
 const extras = Object.fromEntries((values.extras ?? "").split(",").filter(Boolean).map((p) => {

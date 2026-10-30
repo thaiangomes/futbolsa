@@ -34,7 +34,26 @@ quando cada fase termina. O jogo Colo-Colo × Fortaleza dos grupos, interrompido
 e sem placar no arquivo, está como `cancelled`. Os horários são os do arquivo,
 tratados como de Brasília; nos jogos fora do Brasil podem estar no horário local.
 
-A Copa do Brasil 2025 não está no openfootball.
+## `copa-do-brasil-2025.json` e `sul-americana-2025.json`
+
+A Copa do Brasil 2025 (122 jogos, da 1ª fase à final) e a Sul-Americana 2025
+(157 jogos, da fase preliminar à final) vêm da API pública da ESPN, que não
+tem documentação nem termos publicados: serve para calibrar a simulação, não
+para o jogo. Baixadas e convertidas com:
+
+```bash
+npm run data:fetch-espn-copa -- copa-do-brasil 2025
+```
+
+Os horários vêm em UTC e ficam gravados no horário de Brasília. As fases da
+Copa do Brasil são `1a-fase`, `2a-fase`, `3a-fase`, `oitavas`, `quartas`,
+`semifinal` e `final`; as da Sul-Americana, `pre-1`, `grupos`, `playoffs`,
+`oitavas`, `quartas`, `semifinal` e `final`. Clubes de fora da Série A têm id
+próprio sem país (`EXT-LANUS`). Em 3 jogos da 1ª fase da Copa do Brasil
+decididos nos pênaltis, a ESPN registra vitória por 1 gol em vez do empate
+(quem passou está certo; conferido com o openfootball, que tem as três
+primeiras fases). O jogo Independiente × Universidad de Chile das oitavas da
+Sul-Americana está como `cancelled`.
 
 ## Formato
 

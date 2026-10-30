@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { BRASILEIRAO_A, LIBERTADORES } from "../src/engine/dividends.js";
+import { readFileSync } from "node:fs";
+import { BRASILEIRAO_A, COPA_DO_BRASIL, LIBERTADORES, scheduleCupPayouts, SULAMERICANA } from "../src/engine/dividends.js";
 import { Ledger } from "../src/engine/ledger.js";
 import { Exchange } from "../src/engine/orderbook.js";
 import type { Match } from "../src/engine/types.js";
@@ -47,5 +48,27 @@ describe("valor esperado das copas na visão dos bots", () => {
     at("2025-12-01T00:00:00-03:00");
     expect(view.cupExpected("FLA3")).toBe(0);
     expect(view.nextCupMatch("FLA3")).toBeUndefined();
+  });
+});
+
+describe("copas de 2025 nos dados", () => {
+  const load = (c: string) => (JSON.parse(readFileSync(`data/${c}-2025.json`, "utf8")) as { matches: Match[] }).matches;
+  const totais = (c: string, rules: typeof LIBERTADORES) => {
+    const t: Record<string, number> = {};
+    for (const p of scheduleCupPayouts(load(c), rules)) t[p.clubId] = (t[p.clubId] ?? 0) + p.perShare;
+    return t;
+  };
+
+  it("Copa do Brasil: Corinthians campeão, entrando na 3ª fase", () => {
+    const t = totais("copa-do-brasil", COPA_DO_BRASIL);
+    expect(t.COR3).toBe(100 + 150 + 250 + 400 + 800);
+    expect(t.VAS3).toBe(50 + 75 + 100 + 150 + 250 + 400);
+  });
+
+  it("Sul-Americana: o Fluminense, primeiro do grupo, recebe 0,60; o Atlético-MG, vice, veio pelos playoffs", () => {
+    const t = totais("sul-americana", SULAMERICANA);
+    expect(t.FLU3).toBe(60 + 90);
+    expect(t.CAM3).toBe(30 + 30 + 90 + 150 + 240);
+    expect(t.BAH3).toBeUndefined(); // veio da Libertadores e caiu nos playoffs
   });
 });
