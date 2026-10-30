@@ -225,6 +225,16 @@ export const LIBERTADORES: CupRules = {
   title: 1200,
 };
 
+/**
+ * Sul-Americana: 40% da Libertadores por fase; título R$ 4,80. Os playoffs
+ * (segundos dos grupos contra terceiros da Libertadores) pagam como os grupos.
+ */
+export const SULAMERICANA: CupRules = {
+  phases: ["grupos", "playoffs", "oitavas", "quartas", "semifinal", "final"],
+  advance: { grupos: 60, playoffs: 60, oitavas: 90, quartas: 150, semifinal: 240 },
+  title: 480,
+};
+
 export function scheduleCupPayouts(matches: readonly Match[], rules: CupRules): Payout[] {
   if (matches.length === 0) return [];
   const competition = matches[0]!.competition;
@@ -261,12 +271,14 @@ export function scheduleCupPayouts(matches: readonly Match[], rules: CupRules): 
       return;
     }
 
-    const next = byPhase.get(rules.phases[i + 1]!);
     const amount = rules.advance[phase] ?? 0;
-    if (!next || amount === 0) return;
+    if (amount === 0) return;
+    // Quem passou aparece numa fase seguinte; pode pular uma (o primeiro do grupo
+    // da Sul-Americana vai direto às oitavas, sem os playoffs).
+    const later = new Set(rules.phases.slice(i + 1).flatMap((p) => [...clubsIn(byPhase.get(p) ?? [])]));
     const here = clubsIn(list);
-    for (const clubId of clubsIn(next)) {
-      if (!here.has(clubId)) continue; // entrou direto na fase seguinte
+    for (const clubId of later) {
+      if (!here.has(clubId)) continue; // entrou direto numa fase seguinte
       payouts.push({
         at,
         clubId,

@@ -8,6 +8,7 @@ import {
   scheduleBuyback,
   scheduleCupPayouts,
   scheduleLeaguePayouts,
+  SULAMERICANA,
   type CupRules,
 } from "../src/engine/dividends.js";
 import { Ledger } from "../src/engine/ledger.js";
@@ -175,6 +176,22 @@ describe("scheduleCupPayouts", () => {
     ];
     const payouts = scheduleCupPayouts(matches, rules);
     expect(payouts.map((p) => p.clubId)).toEqual(["A"]);
+  });
+
+  it("Sul-Americana: o primeiro do grupo pula os playoffs e quem cai fica com as fases que venceu", () => {
+    // A ganha o grupo, B é segundo, C cai; L chega da Libertadores e elimina B nos playoffs.
+    const matches = [
+      cup("grupos", "2025-04-01T19:00:00-03:00", "A", "B", [2, 0]),
+      cup("grupos", "2025-04-08T19:00:00-03:00", "B", "C", [1, 0]),
+      cup("playoffs", "2025-07-15T19:00:00-03:00", "B", "L", [0, 1], "L"),
+      cup("oitavas", "2025-08-12T19:00:00-03:00", "A", "L", null),
+    ].map((m) => ({ ...m, competition: "sul-americana" }));
+    const payouts = scheduleCupPayouts(matches, SULAMERICANA);
+    expect(payouts.map((p) => [p.clubId, p.perShare, p.detail])).toEqual([
+      ["A", 60, "avançou da fase grupos"],
+      ["B", 60, "avançou da fase grupos"],
+      ["L", 60, "avançou da fase playoffs"],
+    ]);
   });
 });
 

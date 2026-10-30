@@ -80,8 +80,10 @@ export class MarketView {
     let i = cup.phases.findIndex(plays);
     if (i < 0) return -1;
     while (this.now >= cup.completeAt.get(cup.phases[i]!)!) {
-      if (i === cup.phases.length - 1 || !plays(cup.phases[i + 1]!)) return -1;
-      i++;
+      // Pode pular uma fase (o primeiro do grupo da Sul-Americana não joga os playoffs).
+      const next = cup.phases.findIndex((p, j) => j > i && plays(p));
+      if (next < 0) return -1;
+      i = next;
     }
     return i;
   }
