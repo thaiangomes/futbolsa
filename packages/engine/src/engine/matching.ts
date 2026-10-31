@@ -1,5 +1,5 @@
 import type { Cents } from "./money.js";
-import type { OrderType, Side } from "./orderbook.js";
+import type { OrderStatus, OrderType, Side } from "./orderbook.js";
 
 /**
  * Núcleo de casamento puro: recebe o lado oposto do livro de um clube e a ordem
@@ -53,10 +53,8 @@ export interface Fill {
   sellOrderId: number;
 }
 
-export type MatchStatus = "filled" | "partial" | "resting" | "cancelled" | "rejected";
-
 export interface MatchResult {
-  status: MatchStatus;
+  status: OrderStatus;
   reason?: "self_trade";
   /** Na ordem em que saíram. */
   fills: Fill[];
@@ -143,7 +141,7 @@ export function matchOrder(opposite: readonly RestingOrder[], incoming: Incoming
   }
 
   const rests = remaining > 0 && incoming.type === "limit";
-  const status: MatchStatus =
+  const status: OrderStatus =
     remaining === 0 ? "filled" : fills.length ? "partial" : incoming.type === "limit" ? "resting" : "cancelled";
   return { status, fills, remaining, rests };
 }
