@@ -1,0 +1,22 @@
+{
+  "name": "@futbolsa/contracts",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Esquemas zod e tipos das rotas e dos eventos, usados pela API e pelo site",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  }
+}

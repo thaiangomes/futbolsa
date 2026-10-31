@@ -7,21 +7,25 @@
   "engines": {
     "node": ">=20"
   },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
-    "sim": "tsx src/sim/run.ts",
-    "sim:lote": "tsx src/sim/lote.ts",
-    "data:convert": "tsx scripts/convert-openfootball.ts",
-    "data:fetch": "tsx scripts/fetch-results.ts",
-    "data:convert-copa": "tsx scripts/convert-openfootball-copa.ts",
-    "data:fetch-espn-copa": "tsx scripts/fetch-espn-copa.ts"
+    "build:libs": "npm run build -w @futbolsa/engine -w @futbolsa/contracts",
+    "pretest": "npm run build:libs",
+    "pretypecheck": "npm run build:libs",
+    "test": "npm test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "sim": "npm run sim -w @futbolsa/engine --",
+    "sim:lote": "npm run sim:lote -w @futbolsa/engine --",
+    "data:convert": "npm run data:convert -w @futbolsa/engine --",
+    "data:fetch": "npm run data:fetch -w @futbolsa/engine --",
+    "data:convert-copa": "npm run data:convert-copa -w @futbolsa/engine --",
+    "data:fetch-espn-copa": "npm run data:fetch-espn-copa -w @futbolsa/engine --"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
-    "tsx": "^4.23.15",
-    "typescript": "^5.9.3",
-    "vitest": "^5.0.5"
+    "typescript": "^5.9.3"
   }
 }

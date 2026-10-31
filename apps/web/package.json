@@ -1,0 +1,22 @@
+{
+  "name": "@futbolsa/web",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Site do FutBolsa (Next.js em exportação estática)",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0"
+  },
+  "dependencies": {
+    "next": "^16.4.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "@futbolsa/contracts": "*"
+  }
+}
