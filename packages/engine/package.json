@@ -16,10 +16,23 @@
     "data:convert": "tsx scripts/convert-openfootball.ts",
     "data:fetch": "tsx scripts/fetch-results.ts",
     "data:convert-copa": "tsx scripts/convert-openfootball-copa.ts",
-    "data:fetch-espn-copa": "tsx scripts/fetch-espn-copa.ts"
+    "data:fetch-espn-copa": "tsx scripts/fetch-espn-copa.ts",
+    "build": "tsc -b tsconfig.build.json"
   },
   "devDependencies": {
     "tsx": "^4.23.15",
     "vitest": "^5.0.5"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
   }
 }

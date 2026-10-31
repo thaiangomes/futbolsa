@@ -12,6 +12,9 @@
     "apps/*"
   ],
   "scripts": {
+    "build:libs": "npm run build -w @futbolsa/engine -w @futbolsa/contracts",
+    "pretest": "npm run build:libs",
+    "pretypecheck": "npm run build:libs",
     "test": "npm test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "sim": "npm run sim -w @futbolsa/engine --",
