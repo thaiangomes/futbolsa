@@ -173,9 +173,20 @@ describe("MarketMaker", () => {
     const { ledger, exchange } = setup();
     ledger.open("casa", 1_000_000);
     ledger.adjustShares("casa", CLUB, 500);
-    const mm = new MarketMaker(exchange, ledger, "casa", DEFAULT_MARKET_MAKER, () => 2000);
+    // Sem a margem de "nunca melhor que o mercado", que aqui puxaria a compra para perto do preço de R$ 10,00.
+    const mm = new MarketMaker(exchange, ledger, "casa", { ...DEFAULT_MARKET_MAKER, marketMargin: undefined }, () => 2000);
     mm.refresh(CLUB, false);
     expect(exchange.bestBid(CLUB)?.limitPrice).toBe(1900);
+    expect(exchange.bestAsk(CLUB)?.limitPrice).toBe(2100);
+  });
+
+  it("com a âncora fair e a margem, a compra não passa de 5% acima do preço exibido", () => {
+    const { ledger, exchange } = setup();
+    ledger.open("casa", 1_000_000);
+    ledger.adjustShares("casa", CLUB, 500);
+    const mm = new MarketMaker(exchange, ledger, "casa", DEFAULT_MARKET_MAKER, () => 2000);
+    mm.refresh(CLUB, false);
+    expect(exchange.bestBid(CLUB)?.limitPrice).toBe(1050);
     expect(exchange.bestAsk(CLUB)?.limitPrice).toBe(2100);
   });
 });

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { computeQuote, DEFAULT_MARKET_MAKER, quoteSize } from "../src/engine/marketMaker.js";
+import { Ledger } from "../src/engine/ledger.js";
+import { computeQuote, DEFAULT_MARKET_MAKER, MarketMaker, quoteSize } from "../src/engine/marketMaker.js";
+import { Exchange } from "../src/engine/orderbook.js";
+import { tradingBand } from "../src/engine/orderRules.js";
+import { Rng } from "../src/sim/rng.js";
 
 // Cotação da casa: critérios 23, 24, 29 e 34 de "Livro de ofertas e formador de mercado".
 
@@ -80,5 +84,93 @@ describe("faixa da casa em conta inteira", () => {
     }
     expect(wrong.slice(0, 5)).toEqual([]);
     expect(wrong).toHaveLength(0);
+  });
+});
+
+describe("casa nunca melhor que o mercado", () => {
+  /** Tesouraria com caixa e ações e um livro com preço exibido; a casa cota em volta do valor justo `fair`. */
+  function market(displayed: number, fair: number) {
+    const ledger = new Ledger();
+    ledger.open("casa", RICH);
+    ledger.adjustShares("casa", "FLA3", 1000);
+    for (const id of ["ana", "bruno"]) {
+      ledger.open(id, 1_000_000);
+      ledger.adjustShares(id, "FLA3", 100);
+    }
+    const ex = new Exchange(ledger, { houseAccounts: ["casa"], selfTrade: "reject" });
+    ex.setReferencePrice("FLA3", displayed);
+    const mm = new MarketMaker(ex, ledger, "casa", FAIR, () => fair);
+    return { ledger, ex, mm };
+  }
+
+  it("livro 12: com preço de R$ 60,00 e valor justo de R$ 30,00, vende a R$ 57,00, compra a R$ 28,50 e a bolha desce aos poucos", () => {
+    expect(computeQuote(3000, false, RICH, 1000, FAIR, { quantity: 7, displayedPrice: 6000 })).toEqual({
+      bid: { price: 2850, quantity: 7 },
+      ask: { price: 5700, quantity: 7 },
+    });
+    const { ex, mm } = market(6000, 3000);
+    mm.refresh("FLA3", false);
+    expect(ex.bestAsk("FLA3")?.limitPrice).toBe(5700);
+    expect(ex.bestBid("FLA3")?.limitPrice).toBe(2850);
+    const r = ex.placeOrder({ accountId: "ana", clubId: "FLA3", side: "buy", type: "limit", quantity: 5, limitPrice: 5800 });
+    expect(r.trades.map((t) => [t.sellerId, t.price])).toEqual([["casa", 5700]]);
+    expect(ex.price("FLA3")).toBe(5700);
+    mm.refresh("FLA3", false);
+    expect(ex.bestAsk("FLA3")?.limitPrice).toBe(5415);
+  });
+
+  it("livro 36: com preço de R$ 20,00 e valor justo de R$ 40,00, compra a R$ 21,00 e vende a R$ 42,00", () => {
+    const { ex, mm } = market(2000, 4000);
+    mm.refresh("FLA3", false);
+    expect(ex.bestBid("FLA3")?.limitPrice).toBe(2100);
+    expect(ex.bestAsk("FLA3")?.limitPrice).toBe(4200);
+    const r = ex.placeOrder({ accountId: "bruno", clubId: "FLA3", side: "sell", type: "market", quantity: 10, marketPriceLimit: tradingBand(2000).min });
+    expect(r.trades.map((t) => [t.buyerId, t.quantity, t.price])).toEqual([["casa", 10, 2100]]);
+  });
+
+  it("livro 37: no modo de jogo, a mesma margem de 5%: vende a R$ 57,00 e compra a R$ 27,90", () => {
+    expect(computeQuote(3000, true, RICH, 1000, FAIR, { quantity: 1, displayedPrice: 6000 })).toMatchObject({
+      bid: { price: 2790 },
+      ask: { price: 5700 },
+    });
+  });
+
+  it("livro 25 e exemplo: perto do valor justo nada muda", () => {
+    // A casa vendeu as 7 a R$ 44,10 e o preço exibido foi a R$ 44,10; às 12h ela volta a vender a R$ 44,10.
+    expect(computeQuote(4200, false, RICH, 1000, FAIR, { quantity: 7, displayedPrice: 4410 })).toEqual(
+      computeQuote(4200, false, RICH, 1000, FAIR, { quantity: 7 }),
+    );
+    // Exemplo da especificação: preço a R$ 44,30, jogo começando, valor justo de R$ 42,00.
+    expect(computeQuote(4200, true, RICH, 1000, FAIR, { quantity: 1, displayedPrice: 4430 })).toMatchObject({ bid: { price: 3906 }, ask: { price: 4494 } });
+  });
+
+  it("M1 a M3: perto do valor justo a margem não age; a venda sempre acima da compra; a casa nunca do lado da vantagem fora da faixa de 20%", () => {
+    const rng = new Rng(9);
+    const wrong: unknown[] = [];
+    for (let i = 0; i < 20_000; i++) {
+      const fair = rng.int(50, 200_000);
+      const inMatch = rng.chance(0.3);
+      const near = Math.max(50, Math.round(fair * rng.uniform(0.91, 1.1)));
+      const far = Math.max(50, Math.round(fair * rng.uniform(0.2, 5)));
+      // M1 (fora de jogo, onde a faixa é de 10%).
+      if (!inMatch) {
+        const plain = computeQuote(fair, false, RICH, 1000, FAIR, { quantity: 1 });
+        const q = computeQuote(fair, false, RICH, 1000, FAIR, { quantity: 1, displayedPrice: near });
+        if (q.bid!.price !== plain.bid!.price || q.ask!.price !== plain.ask!.price) wrong.push({ m: "M1", fair, near, q, plain });
+      }
+      const q = computeQuote(fair, inMatch, RICH, 1000, FAIR, { quantity: 1, displayedPrice: far });
+      const band = tradingBand(far);
+      if (!(q.ask!.price > q.bid!.price && q.bid!.price >= 50)) wrong.push({ m: "M2", fair, far, q });
+      if (!(q.ask!.price >= band.min && q.bid!.price <= band.max)) wrong.push({ m: "M3", fair, far, q, band });
+    }
+    expect(wrong.slice(0, 5)).toEqual([]);
+  });
+
+  it("sem a margem na configuração (rodadas antigas), a cotação é só pelo valor justo", () => {
+    const { marketMargin: _, ...noMargin } = FAIR;
+    expect(computeQuote(3000, false, RICH, 1000, noMargin, { quantity: 7, displayedPrice: 6000 })).toEqual({
+      bid: { price: 2850, quantity: 7 },
+      ask: { price: 3150, quantity: 7 },
+    });
   });
 });

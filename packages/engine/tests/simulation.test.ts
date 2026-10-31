@@ -34,8 +34,11 @@ describe("simulação com o fixture de exemplo", () => {
 
   it("a âncora peer muda o resultado (só negócios entre bots formam o preço)", () => {
     // Com recompra: sem ela o valor justo fica abaixo do IPO no fixture e os bots, que olham o valor, nem negociam.
-    const last = simulate(season, { ...small, buyback: 1 });
-    const peer = simulate(season, { ...small, buyback: 1, marketMaker: { ...DEFAULT_MARKET_MAKER, anchor: "peer" } });
+    // Sem a margem de "nunca melhor que o mercado": neste fixture todo negócio é de bot comprando da casa
+    // abaixo do preço, justamente o que a margem impede, e aí as duas âncoras ficam sem negócios.
+    const noMargin = { ...DEFAULT_MARKET_MAKER, marketMargin: undefined };
+    const last = simulate(season, { ...small, buyback: 1, marketMaker: noMargin });
+    const peer = simulate(season, { ...small, buyback: 1, marketMaker: { ...noMargin, anchor: "peer" } });
     expect(peer.clubs.map((c) => c.finalPrice)).not.toEqual(last.clubs.map((c) => c.finalPrice));
   });
 
