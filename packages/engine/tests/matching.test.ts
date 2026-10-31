@@ -136,8 +136,8 @@ describe("núcleo de casamento", () => {
     expect(selfTradeConflict(marketBuy("ana", 1), mine)).toBe(true);
     expect(selfTradeConflict(marketBuy("ana", 1), [])).toBe(false);
     const myBid = [bid(1, "ana", 10, 4000)];
-    expect(selfTradeConflict({ id: 9, accountId: "ana", side: "sell", type: "limit", quantity: 1, limitPrice: 4000 }, myBid)).toBe(true);
-    expect(selfTradeConflict({ id: 9, accountId: "ana", side: "sell", type: "limit", quantity: 1, limitPrice: 4001 }, myBid)).toBe(false);
+    expect(selfTradeConflict({ side: "sell", type: "limit", limitPrice: 4000 }, myBid)).toBe(true);
+    expect(selfTradeConflict({ side: "sell", type: "limit", limitPrice: 4001 }, myBid)).toBe(false);
     expect(selfTradeConflict(marketSell("ana", 1), myBid)).toBe(true);
   });
 
