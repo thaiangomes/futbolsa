@@ -13,7 +13,7 @@ import { mulDivRound } from "./rounding.js";
  * O jogo não cobra taxas, então não há custo de corretagem.
  */
 
-export interface Position {
+export interface CostPosition {
   /** Ações totais, inclusive as presas em ordens de venda. */
   shares: number;
   /** Custo da posição, em centavos. */
@@ -24,7 +24,7 @@ export interface Position {
   dividends: Cents;
 }
 
-export const emptyPosition = (): Position => ({ shares: 0, cost: 0, realized: 0, dividends: 0 });
+export const emptyPosition = (): CostPosition => ({ shares: 0, cost: 0, realized: 0, dividends: 0 });
 
 function assertQuantity(quantity: number): void {
   if (!Number.isInteger(quantity) || quantity <= 0) {
@@ -38,12 +38,12 @@ function assertPrice(price: Cents, label = "preço"): void {
 }
 
 /** Preço médio em centavos (custo ÷ ações, meio centavo para cima); zero sem ações. */
-export function averagePrice(p: Position): Cents {
+export function averagePrice(p: CostPosition): Cents {
   return p.shares === 0 ? 0 : mulDivRound(p.cost, 1, p.shares);
 }
 
 /** Compra (negócio, IPO ou carteira índice): soma `quantidade × preço` ao custo. */
-export function buy(p: Position, quantity: number, price: Cents): Position {
+export function buy(p: CostPosition, quantity: number, price: Cents): CostPosition {
   assertQuantity(quantity);
   assertPrice(price);
   if (price === 0) throw new Error("Preço de compra deve ser positivo");
@@ -51,7 +51,7 @@ export function buy(p: Position, quantity: number, price: Cents): Position {
 }
 
 /** Custo que sai quando `quantity` das `shares` ações saem da posição. */
-function costRemoved(p: Position, quantity: number): Cents {
+function costRemoved(p: CostPosition, quantity: number): Cents {
   if (quantity > p.shares) {
     throw new Error(`Não há ${quantity} ações para tirar, a posição tem ${p.shares}`);
   }
@@ -61,10 +61,10 @@ function costRemoved(p: Position, quantity: number): Cents {
 
 /** Venda (negócio ou recompra): tira custo na proporção e realiza a diferença. */
 export function sell(
-  p: Position,
+  p: CostPosition,
   quantity: number,
   price: Cents,
-): { position: Position; realized: Cents } {
+): { position: CostPosition; realized: Cents } {
   assertQuantity(quantity);
   assertPrice(price);
   const removed = costRemoved(p, quantity);
@@ -81,19 +81,19 @@ export function sell(
 }
 
 /** Ações creditadas pelo admin: entram pelo preço exibido no momento do crédito. */
-export function creditShares(p: Position, quantity: number, displayedPrice: Cents): Position {
+export function creditShares(p: CostPosition, quantity: number, displayedPrice: Cents): CostPosition {
   return buy(p, quantity, displayedPrice);
 }
 
 /** Ações debitadas pelo admin: tiram custo na proporção, sem resultado realizado. */
-export function debitShares(p: Position, quantity: number): Position {
+export function debitShares(p: CostPosition, quantity: number): CostPosition {
   assertQuantity(quantity);
   const removed = costRemoved(p, quantity);
   return { ...p, shares: p.shares - quantity, cost: p.cost - removed };
 }
 
 /** Dividendo recebido (ou estornado, se negativo): só soma no total do clube. */
-export function addDividend(p: Position, amount: Cents): Position {
+export function addDividend(p: CostPosition, amount: Cents): CostPosition {
   assertCents(amount, "dividendo");
   return { ...p, dividends: p.dividends + amount };
 }
@@ -114,7 +114,7 @@ export interface PositionSummary {
  * antes do primeiro, o preço do IPO. `receivable` é o dividendo de evento já
  * fechado e ainda não aprovado.
  */
-export function summarize(p: Position, price: Cents, receivable: Cents = 0): PositionSummary {
+export function summarize(p: CostPosition, price: Cents, receivable: Cents = 0): PositionSummary {
   assertPrice(price);
   assertCents(receivable, "a receber");
   const marketValue = p.shares * price;

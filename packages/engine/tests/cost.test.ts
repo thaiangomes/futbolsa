@@ -8,7 +8,7 @@ import {
   emptyPosition,
   sell,
   summarize,
-  type Position,
+  type CostPosition,
 } from "../src/engine/cost.js";
 import { reais } from "../src/engine/money.js";
 
@@ -145,7 +145,7 @@ describe("preço médio e custo", () => {
 
     it("custo que força arredondamento: o meio centavo sobe e a soma do que saiu fecha o custo", () => {
       // 3 ações por R$ 10,00: cada ação custa R$ 3,333...
-      let p: Position = { shares: 3, cost: 1_000, realized: 0, dividends: 0 };
+      let p: CostPosition = { shares: 3, cost: 1_000, realized: 0, dividends: 0 };
       const saidas: number[] = [];
       for (let i = 0; i < 3; i++) {
         const antes = p.cost;
