@@ -20,6 +20,11 @@ import { finishTime, type Match } from "./types.js";
  *
  * A recompra não está aqui: é um evento por clube, calculado depois que todas as
  * competições fecham (`buyback.ts`).
+ *
+ * Os jogos chegam no formato do motor (`Match`): um jogo adiado e ainda não
+ * disputado é `status: "scheduled"` com `postponed: true`. Quem converte a tabela
+ * `matches` (onde o adiado tem status próprio) não pode mandá-lo com outro status,
+ * senão o campeonato fecharia antes de o jogo acontecer.
  */
 
 export type PayoutEventKind = "points" | "placement" | "promotion" | "cup_phase" | "cup_title" | "buyback";
@@ -168,6 +173,9 @@ function leagueEvents(
   }));
 
   if (closedAt !== undefined && official) {
+    if (new Set(official).size !== official.length) {
+      throw new Error(`A classificação oficial de ${competition} tem clube repetido`);
+    }
     const promotion = competition === "brasileirao-b";
     official.forEach((clubId, i) => {
       const perShare = rules.placement[i] ?? 0;
@@ -197,10 +205,27 @@ function cupEvents(
   if (matches.length === 0) return { events: [], closedAt: undefined };
 
   const lastPhase = rules.phases[rules.phases.length - 1]!;
+
+  // A copa fecha no apito final da decisão, mas só com o campeão definido: o
+  // vencedor registrado (pênaltis, informados pelo admin) ou, na final em jogo
+  // único, o placar. Numa final de ida e volta o placar da volta sozinho não diz
+  // quem venceu no agregado. Sem campeão a copa fica aberta, e com ela a recompra,
+  // em vez de fechar sem o título e depender de uma correção.
+  const finalGames = matches.filter((m) => m.phase === lastPhase && m.status !== "cancelled");
+  let closedAt: number | undefined;
+  let champion: string | undefined;
+  if (finalGames.length > 0 && finalGames.every((m) => m.status === "finished")) {
+    const decider = [...finalGames].sort((a, b) => finishTime(b) - finishTime(a))[0]!;
+    champion = decider.winner ?? (finalGames.length === 1 ? winnerByScore(decider) : undefined);
+    if (champion !== undefined) closedAt = finishTime(decider);
+  }
+
   const events: PayoutEvent[] = [];
   for (const p of scheduleCupPayouts(matches, rules)) {
     if (!listed.has(p.clubId)) continue;
     const isTitle = p.kind === "cup-title";
+    // O título só vale para o campeão definido acima (não pelo placar de um jogo da final de ida e volta).
+    if (isTitle && p.clubId !== champion) continue;
     const stage = isTitle ? lastPhase : PHASE_IN_DETAIL.exec(p.detail)?.[1];
     if (stage === undefined) throw new Error(`Não achei a fase no motivo do pagamento: "${p.detail}"`);
     const kind: PayoutEventKind = isTitle ? "cup_title" : "cup_phase";
@@ -216,13 +241,12 @@ function cupEvents(
     });
   }
 
-  // A copa fecha quando termina a última fase (a decisão), mesmo sem campeão registrado.
-  const decider = matches.filter((m) => m.phase === lastPhase && m.status !== "cancelled");
-  const closedAt =
-    decider.length > 0 && decider.every((m) => m.status === "finished")
-      ? Math.max(...decider.map(finishTime))
-      : undefined;
   return { events, closedAt };
+}
+
+function winnerByScore(m: Match): string | undefined {
+  if (m.homeGoals === null || m.awayGoals === null || m.homeGoals === m.awayGoals) return undefined;
+  return m.homeGoals > m.awayGoals ? m.home : m.away;
 }
 
 /** O motivo que `scheduleCupPayouts` escreve para a fase vencida: "avançou da fase oitavas". */

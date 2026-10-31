@@ -197,6 +197,10 @@ describe("eventsFor: colocação e acesso pela classificação oficial", () => {
     expect(events.filter((e) => e.clubId === "ZZZ9")).toEqual([]);
     expect(events.find((e) => e.kind === "placement")).toMatchObject({ clubId: "FLA3", perShare: 450 });
   });
+
+  it("recusa classificação oficial com um clube repetido, que pagaria a colocação duas vezes", () => {
+    expect(() => run(jogoUnico, { standings: { "brasileirao-a": ["BOT3", "CEA3", "BOT3"] } })).toThrow();
+  });
 });
 
 describe("eventsFor: chave estável entre versões", () => {
@@ -384,6 +388,44 @@ describe("eventsFor: copas", () => {
     expect(fechada.closes["copa-do-brasil"]).toBe(Date.parse("2027-12-19T23:30:00-03:00"));
     // Competição que nem começou também está aberta.
     expect(fechada.closes["libertadores"]).toBeUndefined();
+  });
+
+  it("dividendos 16: final empatada sem o vencedor registrado não paga o título e deixa a copa aberta até o admin informar", () => {
+    const cb = "copa-do-brasil";
+    const semVencedor = copaEventos([jogo(cb, "final", "2027-12-19", "VAS3", "COR3", [1, 1])], "VAS3", "COR3");
+    expect(semVencedor.events).toEqual([]);
+    // Sem campeão, a copa não fecha e a recompra não pode fechar sem o título.
+    expect(semVencedor.closes["copa-do-brasil"]).toBeUndefined();
+    const comVencedor = copaEventos(
+      [jogo(cb, "final", "2027-12-19", "VAS3", "COR3", [1, 1], { winner: "VAS3" })],
+      "VAS3",
+      "COR3",
+    );
+    expect(doClube(comVencedor.events, "VAS3")).toEqual([["final", "cup_title", 800]]);
+    expect(comVencedor.closes["copa-do-brasil"]).toBe(Date.parse("2027-12-19T23:30:00-03:00"));
+  });
+
+  it("final de ida e volta sem vencedor registrado não dá o título pelo placar só do jogo da volta", () => {
+    const cb = "copa-do-brasil";
+    // COR3 vence no agregado (3 × 1), mas perde a volta: o placar da volta sozinho daria o título ao VAS3.
+    const ida = jogo(cb, "final", "2027-12-12", "COR3", "VAS3", [3, 0]);
+    const voltaSemVencedor = jogo(cb, "final", "2027-12-19", "VAS3", "COR3", [1, 0]);
+    const aberta = copaEventos([ida, voltaSemVencedor], "VAS3", "COR3");
+    expect(aberta.events.filter((e) => e.kind === "cup_title")).toEqual([]);
+    expect(aberta.closes["copa-do-brasil"]).toBeUndefined();
+
+    const voltaComVencedor = { ...voltaSemVencedor, winner: "COR3" };
+    const fechada = copaEventos([ida, voltaComVencedor], "VAS3", "COR3");
+    expect(doClube(fechada.events, "COR3")).toEqual([["final", "cup_title", 800]]);
+    expect(doClube(fechada.events, "VAS3")).toEqual([]);
+    expect(fechada.closes["copa-do-brasil"]).toBe(Date.parse("2027-12-19T23:30:00-03:00"));
+  });
+
+  it("final em jogo único com vencedor no placar fecha a copa sem precisar do vencedor registrado", () => {
+    const cb = "copa-do-brasil";
+    const r = copaEventos([jogo(cb, "final", "2027-12-19", "VAS3", "COR3", [2, 1])], "VAS3");
+    expect(doClube(r.events, "VAS3")).toEqual([["final", "cup_title", 800]]);
+    expect(r.closes["copa-do-brasil"]).toBe(Date.parse("2027-12-19T23:30:00-03:00"));
   });
 });
 

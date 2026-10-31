@@ -102,7 +102,12 @@ export interface WalletAdjustment {
  * Valor a creditar (complemento) ou debitar (estorno) em cada carteira.
  * `holdings(mudança)` devolve as ações de cada carteira na foto do fechamento do
  * evento: a original, para evento que existia; a do fechamento dele, para evento
- * novo. Carteiras ordenadas por id.
+ * novo. Carteiras ordenadas por id. A foto não inclui a tesouraria, que não recebe.
+ *
+ * Só se liquida o que já foi pago: evento ainda `pending` não gera estorno nem
+ * complemento, só uma prévia nova. Por isso quem chama passa aqui apenas as
+ * mudanças de eventos aprovados e, entre os eventos novos, só os de um fechamento
+ * já pago (o BOT3 que passa a pontuar na rodada 10 já paga, por exemplo).
  */
 export function settle(
   changes: readonly PayoutChange[],
