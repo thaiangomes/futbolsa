@@ -27,7 +27,9 @@ RUN npm ci --omit=dev --ignore-scripts -w @futbolsa/api --include-workspace-root
 COPY --from=build /app/packages/engine/dist packages/engine/dist
 COPY --from=build /app/packages/contracts/dist packages/contracts/dist
 COPY --from=build /app/apps/api/dist apps/api/dist
+COPY apps/api/drizzle apps/api/drizzle
 USER node
 EXPOSE 3000
 WORKDIR /app/apps/api
-CMD ["node", "dist/main.js"]
+# aplica as migrações que faltam antes de subir (rodar de novo não faz nada)
+CMD ["sh", "-c", "node dist/infra/db/migrate.js && node dist/main.js"]
