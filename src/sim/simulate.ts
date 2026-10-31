@@ -1,12 +1,24 @@
 import { priceBand, runBookbuilding, suggestedPrice, type Bid, type PriceBand } from "../engine/bookbuilding.js";
-import { applyPayout, BRASILEIRAO_A, computeStandings, roundCloseTimes, scheduleLeaguePayouts, type LeagueRules, type Payout } from "../engine/dividends.js";
+import {
+  applyBuyback,
+  applyPayout,
+  BRASILEIRAO_A,
+  computeStandings,
+  roundCloseTimes,
+  scheduleBuyback,
+  scheduleCupPayouts,
+  type CupRules,
+  scheduleLeaguePayouts,
+  type LeagueRules,
+  type Payout,
+} from "../engine/dividends.js";
 import { Ledger } from "../engine/ledger.js";
 import { DEFAULT_MARKET_MAKER, MarketMaker, type MarketMakerConfig } from "../engine/marketMaker.js";
 import type { Cents } from "../engine/money.js";
 import { Exchange } from "../engine/orderbook.js";
-import { finishTime, kickoffTime } from "../engine/types.js";
+import { finishTime, kickoffTime, type Match } from "../engine/types.js";
 import type { SeasonFile } from "../data/season.js";
-import { DividendBot, FanBot, MomentumBot, PROFILES, RandomBot, type Bot, type BotProfile } from "./bots.js";
+import { AnalystBot, AnticipatorBot, CaptureBot, ConcentratorBot, DividendBot, FanBot, MomentumBot, PROFILES, RandomBot, TraderBot, type Bot, type BotProfile } from "./bots.js";
 import { MarketView } from "./market.js";
 import { Rng } from "./rng.js";
 
@@ -28,11 +40,29 @@ export interface SimConfig {
   rules: LeagueRules;
   bandWidth: number;
   marketMaker: MarketMakerConfig;
+  /** Recompra no fim da temporada, em múltiplos dos dividendos dela (0 = sem recompra). */
+  buyback: number;
+  /**
+   * Taxas de acerto dos traders, distribuídas em rodízio (o 1º trader recebe a
+   * 1ª, o 2º a 2ª...). Vazio: todos palpitam pela campanha dos times.
+   */
+  traderHitRates: number[];
+  /** Copas que pagam dividendos, com todos os jogos de cada uma (vazio: só o Brasileirão). */
+  cups: Array<{ matches: Match[]; rules: CupRules }>;
+  /** Torcedores compram o próprio time antes dos mata-matas de copa. */
+  fanCupHype: boolean;
+  /**
+   * O centro da faixa do IPO soma, ao preço da colocação do ano anterior, os
+   * dividendos de copa esperados na data do IPO (metade de chance por fase)
+   * vezes 1 + o múltiplo da recompra.
+   */
+  ipoCups: boolean;
 }
 
 export const DEFAULT_SIM: SimConfig = {
-  seed: 2025,
-  bots: { dividendos: 25, momentum: 25, torcedor: 25, aleatorio: 25 },
+  seed: 1, // Só um número para os sorteios dos bots; não tem relação com o ano dos dados.
+  // Todos os perfis em toda simulação (decisão do Thaian em 2026-10-30).
+  bots: { dividendos: 25, momentum: 25, torcedor: 25, aleatorio: 25, trader: 50, captura: 25, analista: 25, concentrador: 25, antecipador: 25 },
   initialCash: 10_000_000, // R$ 100 mil
   sharesPerPlayer: 150,
   stepHours: 3,
@@ -40,6 +70,11 @@ export const DEFAULT_SIM: SimConfig = {
   rules: BRASILEIRAO_A,
   bandWidth: 0.4,
   marketMaker: DEFAULT_MARKET_MAKER,
+  buyback: 1.5, // Recompra de 1,5× (decisão do Thaian em 2026-10-30, rodada U).
+  traderHitRates: [0.3, 0.5, 0.7],
+  cups: [],
+  fanCupHype: false,
+  ipoCups: true, // O IPO conta as copas esperadas (decisão do Thaian em 2026-10-30, rodada U).
 };
 
 export const TREASURY = "tesouraria";
@@ -67,7 +102,7 @@ export interface Checkpoint {
   label: string;
   at: number;
   prices: Record<string, Cents>;
-  /** Dividendos que ainda seriam pagos depois deste momento (com o resultado real). */
+  /** Dividendos (e recompra) que ainda seriam pagos depois deste momento, com o resultado real. */
   remainingDividends: Record<string, Cents>;
 }
 
@@ -75,6 +110,8 @@ export interface BotResult {
   id: string;
   profile: BotProfile;
   club?: string;
+  /** Taxa de acerto do trader, quando definida. */
+  hitRate?: number;
   finalWorth: Cents;
   dividendsReceived: Cents;
 }
@@ -89,6 +126,8 @@ export interface SimResult {
   treasury: { startCash: Cents; finalCash: Cents; finalSharesValue: Cents };
   dailyPrices: Record<string, Cents[]>;
   totalDividends: Cents;
+  /** Total pago na recompra de fim de temporada. */
+  totalBuyback: Cents;
 }
 
 export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): SimResult {
@@ -104,12 +143,16 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
   // mesmo preço do "lastTrade" e a opção não teria efeito.
   const exchange = new Exchange(ledger, {
     houseAccounts: [TREASURY],
-    houseTradesSetPrice: config.marketMaker.anchor === "lastTrade",
+    houseTradesSetPrice: config.marketMaker.anchor !== "peer",
   });
   const view = new MarketView(exchange, ledger, clubIds, config.rules, matches);
-  const maker = new MarketMaker(exchange, ledger, TREASURY, config.marketMaker);
+  view.buybackMultiple = config.buyback;
+  view.setCups(config.cups);
+  view.cupHype = config.fanCupHype;
+  const maker = new MarketMaker(exchange, ledger, TREASURY, config.marketMaker, (id) => view.fairValue(id));
 
   // Bots: torcedores distribuídos pelos clubes em ordem.
+  const lastYear = new Map(season.clubs.map((c) => [c.id, c.ipoPosition]));
   const bots: Bot[] = [];
   let fanIndex = 0;
   for (const profile of PROFILES) {
@@ -120,6 +163,11 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
         profile === "dividendos" ? new DividendBot(id, botRng)
         : profile === "momentum" ? new MomentumBot(id, botRng)
         : profile === "torcedor" ? new FanBot(id, botRng, clubIds[fanIndex++ % clubIds.length]!)
+        : profile === "captura" ? new CaptureBot(id, botRng)
+        : profile === "analista" ? new AnalystBot(id, botRng, lastYear)
+        : profile === "concentrador" ? new ConcentratorBot(id, botRng)
+        : profile === "antecipador" ? new AnticipatorBot(id, botRng)
+        : profile === "trader" ? new TraderBot(id, botRng, config.traderHitRates.length ? config.traderHitRates[i % config.traderHitRates.length] : undefined)
         : new RandomBot(id, botRng),
       );
       ledger.open(id, config.initialCash);
@@ -133,7 +181,10 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
   view.now = ipoAt;
 
   const bands = new Map<string, PriceBand>(
-    season.clubs.map((c) => [c.id, priceBand(suggestedPrice(c.ipoPosition), config.bandWidth)]),
+    season.clubs.map((c) => {
+      const cups = config.ipoCups ? Math.round(view.cupExpected(c.id) * (1 + config.buyback)) : 0;
+      return [c.id, priceBand(suggestedPrice(c.ipoPosition) + cups, config.bandWidth)];
+    }),
   );
   const bidsByClub = new Map<string, Bid[]>(clubIds.map((id) => [id, []]));
   for (const bot of bots) {
@@ -155,7 +206,11 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
   const treasuryStartCash = ledger.get(TREASURY).cash;
 
   // ---- Temporada -------------------------------------------------------------
-  const payouts: Payout[] = scheduleLeaguePayouts(matches, config.rules);
+  const league = scheduleLeaguePayouts(matches, config.rules);
+  // Só os clubes com ações recebem; os de fora da Série A só decidem quando cada fase termina.
+  const cupPayouts = config.cups.flatMap((c) => scheduleCupPayouts(c.matches, c.rules)).filter((p) => clubIds.includes(p.clubId));
+  const dividends = [...league, ...cupPayouts].sort((a, b) => a.at - b.at || a.clubId.localeCompare(b.clubId));
+  const payouts: Payout[] = [...dividends, ...scheduleBuyback(dividends, config.buyback)];
   const closes = [...roundCloseTimes(matches)].sort((a, b) => a[1] - b[1]);
   const lastPayoutAt = Math.max(...payouts.map((p) => p.at));
   const finalPayoutAt = Math.max(...payouts.filter((p) => p.kind === "placement").map((p) => p.at), lastPayoutAt);
@@ -178,6 +233,7 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
   const priceBeforeFinal = new Map<string, Cents>();
   const exclude = new Set([TREASURY]);
   let totalDividends = 0;
+  let totalBuyback = 0;
 
   let trades = 0;
   let peerTrades = 0;
@@ -200,6 +256,11 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
     // Dividendos com data até agora, pagos a quem tem a ação neste momento.
     while (payoutIdx < payouts.length && payouts[payoutIdx]!.at <= t) {
       const p = payouts[payoutIdx++]!;
+      if (p.kind === "buyback") {
+        for (const account of ledger.all()) exchange.cancelAll(account.id, p.clubId);
+        totalBuyback += applyBuyback(ledger, p, exclude);
+        continue;
+      }
       if (p.at === finalPayoutAt && p.kind === "placement" && !priceBeforeFinal.size) {
         for (const id of clubIds) priceBeforeFinal.set(id, view.price(id));
       }
@@ -213,6 +274,8 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
         view.paidPoints.set(p.clubId, view.paidPoints.get(p.clubId)! + p.perShare / config.rules.perPoint);
       } else if (p.kind === "placement") {
         view.placementPaid = true;
+      } else {
+        view.cupPaid.set(p.clubId, (view.cupPaid.get(p.clubId) ?? 0) + p.perShare);
       }
     }
 
@@ -292,6 +355,7 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
       id: b.id,
       profile: b.profile,
       club: b instanceof FanBot ? b.club : undefined,
+      hitRate: b instanceof TraderBot ? b.hitRate : undefined,
       finalWorth: view.netWorth(b.id),
       dividendsReceived: botDividends.get(b.id)!,
     })),
@@ -299,5 +363,6 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
     treasury: { startCash: treasuryStartCash, finalCash: treasury.cash, finalSharesValue: treasurySharesValue },
     dailyPrices: Object.fromEntries(view.history),
     totalDividends,
+    totalBuyback,
   };
 }

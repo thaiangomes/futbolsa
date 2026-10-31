@@ -24,17 +24,24 @@ export interface MarketMakerConfig {
    *   para a casa empurra a próxima cotação para baixo (e quem compra, para cima).
    * - "peer": último negócio entre pessoas. Na Fase 0 isso criou um piso: a casa
    *   recomprava sempre no mesmo preço enquanto só ela comprava.
+   * - "fair": o valor que a casa considera justo para o clube (dividendos que
+   *   faltam e recompra esperados). Negócios, com a casa ou entre pessoas, não
+   *   mexem na cotação; ela só muda quando um jogo termina ou um dividendo é pago.
    */
-  anchor: "lastTrade" | "peer";
+  anchor: "lastTrade" | "peer" | "fair";
 }
 
+// Valor justo com faixa de 10% (14% durante os jogos): decisão do Thaian em 2026-10-30, rodada T.
 export const DEFAULT_MARKET_MAKER: MarketMakerConfig = {
-  spread: 0.02,
+  spread: 0.1,
   quantity: 100,
-  matchSpread: 0.06,
+  matchSpread: 0.14,
   matchQuantity: 25,
-  anchor: "lastTrade",
+  anchor: "fair",
 };
+
+/** Formador das rodadas antigas da calibração: último negócio com spread de 2% (6% nos jogos). */
+export const LAST_TRADE_MARKET_MAKER: MarketMakerConfig = { ...DEFAULT_MARKET_MAKER, spread: 0.02, matchSpread: 0.06, anchor: "lastTrade" };
 
 export interface Quote {
   bid?: { price: Cents; quantity: number };
@@ -73,6 +80,8 @@ export class MarketMaker {
     private readonly ledger: Ledger,
     readonly accountId: string,
     private readonly config: MarketMakerConfig = DEFAULT_MARKET_MAKER,
+    /** Valor justo de cada clube, usado com a âncora "fair". */
+    private readonly fairValue?: (clubId: string) => Cents,
   ) {}
 
   /**
@@ -82,9 +91,11 @@ export class MarketMaker {
   refresh(clubId: string, inMatch: boolean): Quote {
     this.exchange.cancelAll(this.accountId, clubId);
     const reference =
-      this.config.anchor === "lastTrade"
-        ? (this.exchange.lastTradePrice(clubId) ?? this.exchange.price(clubId))
-        : this.exchange.price(clubId);
+      this.config.anchor === "fair" && this.fairValue
+        ? Math.max(MIN_PRICE, this.fairValue(clubId))
+        : this.config.anchor === "lastTrade"
+          ? (this.exchange.lastTradePrice(clubId) ?? this.exchange.price(clubId))
+          : this.exchange.price(clubId);
     if (reference === undefined) return {};
     const quote = computeQuote(
       reference,

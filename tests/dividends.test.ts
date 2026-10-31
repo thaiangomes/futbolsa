@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyBuyback,
   applyPayout,
   BRASILEIRAO_A,
   BRASILEIRAO_B,
   computeStandings,
+  scheduleBuyback,
   scheduleCupPayouts,
   scheduleLeaguePayouts,
+  SULAMERICANA,
   type CupRules,
 } from "../src/engine/dividends.js";
 import { Ledger } from "../src/engine/ledger.js";
@@ -174,6 +177,27 @@ describe("scheduleCupPayouts", () => {
     const payouts = scheduleCupPayouts(matches, rules);
     expect(payouts.map((p) => p.clubId)).toEqual(["A"]);
   });
+
+  it("Sul-Americana: chegar às oitavas vale R$ 0,60 pelos dois caminhos e quem cai fica com o que venceu", () => {
+    // A ganha o grupo e vai direto às oitavas; B é segundo e passa dos playoffs;
+    // D é segundo do outro grupo e cai nos playoffs para L, que veio da Libertadores.
+    const matches = [
+      cup("grupos", "2025-04-01T19:00:00-03:00", "A", "B", [2, 0]),
+      cup("grupos", "2025-04-02T19:00:00-03:00", "D", "E", [1, 1]),
+      cup("playoffs", "2025-07-15T19:00:00-03:00", "B", "X", [1, 0], "B"),
+      cup("playoffs", "2025-07-16T19:00:00-03:00", "D", "L", [0, 1], "L"),
+      cup("oitavas", "2025-08-12T19:00:00-03:00", "A", "L", null),
+      cup("oitavas", "2025-08-13T19:00:00-03:00", "B", "Y", null),
+    ].map((m) => ({ ...m, competition: "sul-americana" }));
+    const payouts = scheduleCupPayouts(matches, SULAMERICANA);
+    expect(payouts.map((p) => [p.clubId, p.perShare, p.detail])).toEqual([
+      ["A", 60, "avançou da fase grupos"],
+      ["B", 30, "avançou da fase grupos"],
+      ["D", 30, "avançou da fase grupos"],
+      ["B", 30, "avançou da fase playoffs"],
+      ["L", 30, "avançou da fase playoffs"],
+    ]);
+  });
 });
 
 describe("applyPayout", () => {
@@ -195,5 +219,37 @@ describe("applyPayout", () => {
     expect(ledger.get("ana").cash).toBe(3000);
     expect(ledger.get("bia").cash).toBe(1500);
     expect(ledger.get("tesouraria").cash).toBe(0);
+  });
+});
+
+describe("recompra de fim de temporada", () => {
+  const p = (at: number, clubId: string, perShare: number, competition = "brasileirao-a") => ({
+    at, clubId, perShare, kind: "points" as const, competition, detail: "",
+  });
+
+  it("paga o múltiplo da soma dos dividendos de todas as competições, depois do último", () => {
+    const payouts = [p(10, "FLA3", 30), p(20, "FLA3", 500), p(15, "FLA3", 800, "copa-do-brasil"), p(20, "PAL3", 40)];
+    expect(scheduleBuyback(payouts, 2)).toEqual([
+      expect.objectContaining({ clubId: "FLA3", perShare: 2 * 1330, at: 21, kind: "buyback" }),
+      expect.objectContaining({ clubId: "PAL3", perShare: 80, at: 21, kind: "buyback" }),
+    ]);
+    expect(scheduleBuyback(payouts, 0)).toEqual([]);
+  });
+
+  it("paga os acionistas, menos a tesouraria, e zera as ações de todos", () => {
+    const ledger = new Ledger();
+    ledger.open("ana", 0);
+    ledger.open("tesouraria", 0);
+    ledger.adjustShares("ana", "FLA3", 100);
+    ledger.adjustShares("tesouraria", "FLA3", 1000);
+    const total = applyBuyback(
+      ledger,
+      { at: 0, clubId: "FLA3", perShare: 600, kind: "buyback", competition: "temporada", detail: "" },
+      new Set(["tesouraria"]),
+    );
+    expect(total).toBe(60000);
+    expect(ledger.get("ana").cash).toBe(60000);
+    expect(ledger.get("tesouraria").cash).toBe(0);
+    expect(ledger.totalShares("FLA3")).toBe(0);
   });
 });
