@@ -22,7 +22,10 @@
     "data:convert": "npm run data:convert -w @futbolsa/engine --",
     "data:fetch": "npm run data:fetch -w @futbolsa/engine --",
     "data:convert-copa": "npm run data:convert-copa -w @futbolsa/engine --",
-    "data:fetch-espn-copa": "npm run data:fetch-espn-copa -w @futbolsa/engine --"
+    "data:fetch-espn-copa": "npm run data:fetch-espn-copa -w @futbolsa/engine --",
+    "db:generate": "npm run db:generate -w @futbolsa/api --",
+    "db:migrate": "npm run db:migrate -w @futbolsa/api --",
+    "db:seed": "npm run db:seed -w @futbolsa/api --"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
