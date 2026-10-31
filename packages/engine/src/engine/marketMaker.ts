@@ -48,6 +48,21 @@ export interface Quote {
   ask?: { price: Cents; quantity: number };
 }
 
+/**
+ * Quantidade da casa por lado: uma fração das ações do clube (oferta do IPO,
+ * lote do formador e emitidas para novatos), em pontos-base (25 = 0,25%),
+ * arredondada para baixo, com o mínimo por lado quando houver e pelo menos 1.
+ */
+export function quoteSize(clubShares: number, basisPoints: number, minimum = 0): number {
+  if (!Number.isSafeInteger(clubShares) || clubShares < 0) throw new Error("Ações do clube inválidas");
+  return Math.max(Math.floor((clubShares * basisPoints) / 10_000), minimum, 1);
+}
+
+export interface QuoteOptions {
+  /** Quantidade por lado vinda de `quoteSize`; sem ela, vale a da configuração (100 e 25 da simulação). */
+  quantity?: number;
+}
+
 /** Calcula a cotação sem tocar no livro (função pura, fácil de testar). */
 export function computeQuote(
   reference: Cents,
@@ -55,9 +70,10 @@ export function computeQuote(
   availableCash: Cents,
   availableShares: number,
   config: MarketMakerConfig = DEFAULT_MARKET_MAKER,
+  options: QuoteOptions = {},
 ): Quote {
   const spread = inMatch ? config.matchSpread : config.spread;
-  const size = inMatch ? config.matchQuantity : config.quantity;
+  const size = options.quantity ?? (inMatch ? config.matchQuantity : config.quantity);
   const half = spread / 2;
 
   let bidPrice = Math.max(MIN_PRICE, Math.floor(reference * (1 - half)));
