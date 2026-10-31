@@ -17,7 +17,8 @@
     "data:fetch": "tsx scripts/fetch-results.ts",
     "data:convert-copa": "tsx scripts/convert-openfootball-copa.ts",
     "data:fetch-espn-copa": "tsx scripts/fetch-espn-copa.ts",
-    "build": "tsc -b tsconfig.build.json"
+    "build": "tsc -b tsconfig.build.json",
+    "sim:regressao": "tsx scripts/regressao.ts"
   },
   "devDependencies": {
     "tsx": "^4.23.15",
