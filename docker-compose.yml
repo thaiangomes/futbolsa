@@ -1,0 +1,29 @@
+# Desenvolvimento e testes: a API e um Postgres 17 comum, só para os testes.
+# O banco do jogo é o do Supabase hospedado (veja .env.example).
+services:
+  postgres-test:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: futbolsa
+      POSTGRES_PASSWORD: futbolsa
+      POSTGRES_DB: futbolsa_test
+    ports:
+      - "5433:5432" # porta própria, para não brigar com um Postgres local
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U futbolsa -d futbolsa_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      PORT: "3000"
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3001}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres-test:
+        condition: service_healthy
