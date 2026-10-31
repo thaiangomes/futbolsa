@@ -8,3 +8,4 @@ export * from "./engine/marketMaker.js";
 export * from "./engine/dividends.js";
 export * from "./engine/matching.js";
 export * from "./engine/orderRules.js";
+export * from "./engine/fairValue.js";
