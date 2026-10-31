@@ -6,3 +6,4 @@ export * from "./engine/orderbook.js";
 export * from "./engine/bookbuilding.js";
 export * from "./engine/marketMaker.js";
 export * from "./engine/dividends.js";
+export * from "./engine/matching.js";

@@ -1,16 +1,28 @@
 import type { Ledger } from "./ledger.js";
+import {
+  entryReservation,
+  matchOrder,
+  remainderRelease,
+  selfTradeConflict,
+  settlement,
+  type BalanceDelta,
+  type SelfTradeMode,
+} from "./matching.js";
 import { assertCents, MIN_PRICE, type Cents } from "./money.js";
 
 /**
- * Livro de ofertas por clube com ordens a mercado e limitadas.
+ * Livro de ofertas por clube em memória, com ordens a mercado e limitadas. O
+ * casamento é o do núcleo puro (`matching.ts`); aqui ficam o livro, as
+ * reservas no `Ledger` e o preço exibido.
  *
  * - Prioridade preço-tempo: melhor preço primeiro; no mesmo preço, a ordem
  *   mais antiga primeiro.
  * - O negócio sai pelo preço da ordem que já estava no livro.
  * - Ordem limitada de compra reserva quantidade × preço limite; de venda
  *   reserva as ações. Ordem a mercado executa o que der e o resto é cancelado
- *   (não fica no livro). Assim saldo e posição nunca ficam negativos.
- * - Uma conta não negocia com ela mesma: as próprias ordens são puladas.
+ *   (não fica no livro).
+ * - Ordem contra si mesmo: por padrão as próprias ordens são puladas, como na
+ *   simulação calibrada; com `selfTrade: "reject"`, a ordem é recusada.
  */
 
 export type Side = "buy" | "sell";
@@ -24,6 +36,8 @@ export interface OrderRequest {
   quantity: number;
   /** Obrigatório em ordem limitada, em centavos. */
   limitPrice?: Cents;
+  /** Só na ordem a mercado: teto da compra ou piso da venda (os 20% do envio). */
+  marketPriceLimit?: Cents;
 }
 
 export interface Order extends OrderRequest {
@@ -73,6 +87,8 @@ export interface ExchangeOptions {
    * Padrão: true.
    */
   houseTradesSetPrice?: boolean;
+  /** Ordem contra si mesmo: "skip" pula as próprias ordens (padrão, simulação); "reject" recusa. */
+  selfTrade?: SelfTradeMode;
 }
 
 export class Exchange {
@@ -83,6 +99,7 @@ export class Exchange {
   private readonly reference = new Map<string, Cents>();
   private readonly house: Set<string>;
   private readonly houseTradesSetPrice: boolean;
+  private readonly selfTrade: SelfTradeMode;
   private nextId = 1;
   private seq = 0;
   private listeners: Array<(t: Trade) => void> = [];
@@ -95,6 +112,7 @@ export class Exchange {
   ) {
     this.house = new Set(options.houseAccounts ?? []);
     this.houseTradesSetPrice = options.houseTradesSetPrice ?? true;
+    this.selfTrade = options.selfTrade ?? "skip";
   }
 
   setTime(t: number): void {
@@ -158,21 +176,57 @@ export class Exchange {
 
     // Reserva antes de casar: na limitada de compra reserva pelo limite;
     // na venda (limitada ou a mercado) reserva as ações.
-    if (req.side === "buy" && req.type === "limit") {
-      this.ledger.reserveCash(req.accountId, req.quantity * req.limitPrice!);
-    } else if (req.side === "sell") {
-      this.ledger.reserveShares(req.accountId, req.clubId, req.quantity);
-    }
+    this.apply(order.accountId, order.clubId, entryReservation(order));
 
-    const trades = this.match(order);
+    const book = this.book(order.clubId);
+    // O livro só guarda ordens limitadas, então todas têm preço.
+    const opposite = (order.side === "buy" ? book.asks : book.bids) as Array<Order & { limitPrice: Cents }>;
+    const result = matchOrder(opposite, order, {
+      selfTrade: this.selfTrade,
+      availableCash: order.side === "buy" && order.type === "market" ? this.ledger.availableCash(order.accountId) : undefined,
+      marketPriceLimit: order.type === "market" ? order.marketPriceLimit : undefined,
+    });
+
+    const trades: Trade[] = [];
+    for (const fill of result.fills) {
+      const resting = this.orders.get(fill.restingId)!;
+      const buy = order.side === "buy" ? order : resting;
+      const { buyer, seller } = settlement(fill, buy);
+      this.apply(fill.buyerId, order.clubId, buyer);
+      this.apply(fill.sellerId, order.clubId, seller);
+
+      order.remaining -= fill.quantity;
+      resting.remaining -= fill.quantity;
+      if (resting.remaining === 0) {
+        opposite.splice(opposite.indexOf(resting as Order & { limitPrice: Cents }), 1);
+        this.orders.delete(resting.id);
+      }
+
+      const trade: Trade = {
+        clubId: order.clubId,
+        price: fill.price,
+        quantity: fill.quantity,
+        buyerId: fill.buyerId,
+        sellerId: fill.sellerId,
+        buyOrderId: fill.buyOrderId,
+        sellOrderId: fill.sellOrderId,
+        aggressor: order.side,
+        at: this.now,
+      };
+      trades.push(trade);
+      this.lastTrade.set(trade.clubId, trade.price);
+      const withHouse = this.house.has(trade.buyerId) || this.house.has(trade.sellerId);
+      if (this.houseTradesSetPrice || !withHouse) {
+        this.lastPeerTrade.set(trade.clubId, trade.price);
+      }
+      for (const l of this.listeners) l(trade);
+    }
 
     if (order.remaining === 0) return { status: "filled", order, trades };
 
-    if (req.type === "market") {
+    if (!result.rests) {
       // Sobra de ordem a mercado não fica no livro.
-      if (req.side === "sell") {
-        this.ledger.releaseShares(req.accountId, req.clubId, order.remaining);
-      }
+      this.apply(order.accountId, order.clubId, remainderRelease(order, order.remaining));
       return {
         status: trades.length ? "partial" : "cancelled",
         order,
@@ -193,7 +247,7 @@ export class Exchange {
     const idx = list.indexOf(order);
     if (idx >= 0) list.splice(idx, 1);
     this.orders.delete(id);
-    this.releaseRemaining(order);
+    this.apply(order.accountId, order.clubId, remainderRelease(order, order.remaining));
     return true;
   }
 
@@ -218,77 +272,20 @@ export class Exchange {
     if (req.side === "sell" && req.quantity > this.ledger.availableShares(req.accountId, req.clubId)) {
       return "ações insuficientes";
     }
+    if (this.selfTrade === "reject" && selfTradeConflict(req, this.openOrders(req.accountId, req.clubId) as Array<Order & { limitPrice: Cents }>)) {
+      return "ordem contra si mesmo";
+    }
     return undefined;
   }
 
-  private match(incoming: Order): Trade[] {
-    const book = this.book(incoming.clubId);
-    const opposite = incoming.side === "buy" ? book.asks : book.bids;
-    const trades: Trade[] = [];
-
-    let i = 0;
-    while (incoming.remaining > 0 && i < opposite.length) {
-      const resting = opposite[i]!;
-      if (resting.accountId === incoming.accountId) {
-        i++;
-        continue;
-      }
-      const price = resting.limitPrice!;
-      if (incoming.type === "limit") {
-        const crosses =
-          incoming.side === "buy" ? price <= incoming.limitPrice! : price >= incoming.limitPrice!;
-        if (!crosses) break;
-      }
-
-      let quantity = Math.min(incoming.remaining, resting.remaining);
-      if (incoming.side === "buy" && incoming.type === "market") {
-        // Compra a mercado não tem reserva: limita ao dinheiro livre.
-        quantity = Math.min(quantity, Math.floor(this.ledger.availableCash(incoming.accountId) / price));
-        if (quantity === 0) break;
-      }
-
-      const buy = incoming.side === "buy" ? incoming : resting;
-      const sell = incoming.side === "sell" ? incoming : resting;
-      this.settle(buy, sell, price, quantity);
-
-      incoming.remaining -= quantity;
-      resting.remaining -= quantity;
-      if (resting.remaining === 0) {
-        opposite.splice(i, 1);
-        this.orders.delete(resting.id);
-      }
-
-      const trade: Trade = {
-        clubId: incoming.clubId,
-        price,
-        quantity,
-        buyerId: buy.accountId,
-        sellerId: sell.accountId,
-        buyOrderId: buy.id,
-        sellOrderId: sell.id,
-        aggressor: incoming.side,
-        at: this.now,
-      };
-      trades.push(trade);
-      this.lastTrade.set(trade.clubId, price);
-      const withHouse = this.house.has(trade.buyerId) || this.house.has(trade.sellerId);
-      if (this.houseTradesSetPrice || !withHouse) {
-        this.lastPeerTrade.set(trade.clubId, price);
-      }
-      for (const l of this.listeners) l(trade);
-    }
-    return trades;
-  }
-
-  private settle(buy: Order, sell: Order, price: Cents, quantity: number): void {
-    const value = price * quantity;
-    if (buy.type === "limit") this.ledger.releaseCash(buy.accountId, quantity * buy.limitPrice!);
-    this.ledger.adjustCash(buy.accountId, -value);
-    this.ledger.adjustShares(buy.accountId, buy.clubId, quantity);
-
-    this.ledger.releaseShares(sell.accountId, sell.clubId, quantity);
-    this.ledger.adjustShares(sell.accountId, sell.clubId, -quantity);
-    this.ledger.adjustCash(sell.accountId, value);
+  /** Aplica no `Ledger` uma variação de saldos: primeiro solta reservas, depois move, depois prende. */
+  private apply(accountId: string, clubId: string, d: BalanceDelta): void {
+    if (d.reservedCash < 0) this.ledger.releaseCash(accountId, -d.reservedCash);
+    if (d.reservedShares < 0) this.ledger.releaseShares(accountId, clubId, -d.reservedShares);
+    if (d.cash !== 0) this.ledger.adjustCash(accountId, d.cash);
+    if (d.shares !== 0) this.ledger.adjustShares(accountId, clubId, d.shares);
+    if (d.reservedCash > 0) this.ledger.reserveCash(accountId, d.reservedCash);
+    if (d.reservedShares > 0) this.ledger.reserveShares(accountId, clubId, d.reservedShares);
   }
 
   private rest(order: Order): void {
@@ -303,15 +300,6 @@ export class Exchange {
     if (idx === -1) list.push(order);
     else list.splice(idx, 0, order);
     this.orders.set(order.id, order);
-  }
-
-  private releaseRemaining(order: Order): void {
-    if (order.remaining === 0) return;
-    if (order.side === "buy" && order.type === "limit") {
-      this.ledger.releaseCash(order.accountId, order.remaining * order.limitPrice!);
-    } else if (order.side === "sell") {
-      this.ledger.releaseShares(order.accountId, order.clubId, order.remaining);
-    }
   }
 
   private book(clubId: string): Book {
