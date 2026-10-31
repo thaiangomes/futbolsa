@@ -1,0 +1,25 @@
+{
+  "name": "@futbolsa/engine",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Motor do mercado do FutBolsa (regras puras) e simulação com bots",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "sim": "tsx src/sim/run.ts",
+    "sim:lote": "tsx src/sim/lote.ts",
+    "data:convert": "tsx scripts/convert-openfootball.ts",
+    "data:fetch": "tsx scripts/fetch-results.ts",
+    "data:convert-copa": "tsx scripts/convert-openfootball-copa.ts",
+    "data:fetch-espn-copa": "tsx scripts/fetch-espn-copa.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15",
+    "vitest": "^5.0.5"
+  }
+}
