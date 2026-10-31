@@ -50,3 +50,35 @@ describe("quantidade da casa", () => {
     expect(computeQuote(4200, false, 0, 1000, FAIR, { quantity: 7 })).toEqual({ ask: { price: 4410, quantity: 7 } });
   });
 });
+
+describe("faixa da casa em conta inteira", () => {
+  it("livro 24: no modo de jogo, com valor justo de R$ 42,00, a casa compra a R$ 39,06 e vende a R$ 44,94", () => {
+    expect(computeQuote(4200, true, RICH, 1000, FAIR, { quantity: 24 })).toEqual({
+      bid: { price: 3906, quantity: 24 },
+      ask: { price: 4494, quantity: 24 },
+    });
+  });
+
+  it("livro 26: faixa de 14% no jogo e de 10% depois do placar, com o valor justo novo de R$ 43,20", () => {
+    expect(computeQuote(4200, true, RICH, 1000, FAIR, { quantity: 1 })).toMatchObject({ bid: { price: 3906 }, ask: { price: 4494 } });
+    expect(computeQuote(4320, false, RICH, 1000, FAIR, { quantity: 7 })).toMatchObject({ bid: { price: 4104 }, ask: { price: 4536 } });
+  });
+
+  it("Q1: de R$ 0,50 a R$ 2.000,00, dentro e fora de jogo, compra e venda iguais à conta exata", () => {
+    const wrong: unknown[] = [];
+    for (let ref = 50; ref <= 200_000; ref++) {
+      for (const inMatch of [false, true]) {
+        const bp = BigInt(inMatch ? 1400 : 1000);
+        const r = BigInt(ref);
+        let bid = Math.max(50, Number((r * (20_000n - bp)) / 20_000n));
+        let ask = Math.max(50, Number((r * (20_000n + bp) + 19_999n) / 20_000n));
+        if (ask <= bid) ask = bid + 1;
+        if (bid >= ref && ref > 50) bid = ref - 1;
+        const q = computeQuote(ref, inMatch, RICH, 1000, FAIR, { quantity: 1 });
+        if (q.bid!.price !== bid || q.ask!.price !== ask) wrong.push({ ref, inMatch, got: [q.bid!.price, q.ask!.price], want: [bid, ask] });
+      }
+    }
+    expect(wrong.slice(0, 5)).toEqual([]);
+    expect(wrong).toHaveLength(0);
+  });
+});

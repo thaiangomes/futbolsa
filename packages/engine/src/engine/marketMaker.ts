@@ -74,10 +74,12 @@ export function computeQuote(
 ): Quote {
   const spread = inMatch ? config.matchSpread : config.spread;
   const size = options.quantity ?? (inMatch ? config.matchQuantity : config.quantity);
-  const half = spread / 2;
+  // Em pontos-base e conta inteira: com número decimal, 0,93 não é exato e
+  // R$ 42,00 × 0,93 sairia R$ 39,05 em vez de R$ 39,06.
+  const bp = Math.round(spread * 10_000);
 
-  let bidPrice = Math.max(MIN_PRICE, Math.floor(reference * (1 - half)));
-  let askPrice = Math.max(MIN_PRICE, Math.ceil(reference * (1 + half)));
+  let bidPrice = Math.max(MIN_PRICE, Math.floor((reference * (20_000 - bp)) / 20_000));
+  let askPrice = Math.max(MIN_PRICE, Math.ceil((reference * (20_000 + bp)) / 20_000));
   // Em preços muito baixos o arredondamento pode colar os dois lados.
   if (askPrice <= bidPrice) askPrice = bidPrice + 1;
   if (bidPrice >= reference && reference > MIN_PRICE) bidPrice = reference - 1;
