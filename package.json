@@ -18,7 +18,11 @@
     "test": "npm test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "sim": "npm run sim -w @futbolsa/engine --",
-    "sim:lote": "npm run sim:lote -w @futbolsa/engine --"
+    "sim:lote": "npm run sim:lote -w @futbolsa/engine --",
+    "data:convert": "npm run data:convert -w @futbolsa/engine --",
+    "data:fetch": "npm run data:fetch -w @futbolsa/engine --",
+    "data:convert-copa": "npm run data:convert-copa -w @futbolsa/engine --",
+    "data:fetch-espn-copa": "npm run data:fetch-espn-copa -w @futbolsa/engine --"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

@@ -11,6 +11,22 @@ https://github.com/thaiangomes/FutBolsa---Brain (comece por `Plano.md`).
 
 Moeda só fictícia, sem dinheiro real, e sem escudos ou marcas oficiais dos clubes.
 
+## Estrutura (Fase 1)
+
+Monorepo com workspaces do npm:
+
+```
+packages/engine/      motor da Fase 0 (regras puras), dados, simulação e seus testes
+packages/contracts/   esquemas zod e tipos das rotas e eventos (API e site)
+apps/api/             API NestJS com Fastify (src/modules/<módulo>, src/infra/*)
+apps/web/             site Next.js em exportação estática (src/features/<módulo>)
+docker-compose.yml    Postgres 17 de teste (porta 5433) e a API
+```
+
+Regras de importação: o motor não importa nada do projeto; os contratos só importam o `zod`.
+API e site usam o motor e os contratos já compilados (`dist/`); `npm test` e `npm run typecheck`
+da raiz compilam os dois antes (`npm run build:libs`).
+
 ## Fase 0: motor e simulação
 
 Esta fase não tem interface. Ela traz o motor do mercado em TypeScript e uma
@@ -18,26 +34,32 @@ simulação da temporada 2025 com bots para calibrar IPO, dividendos e spread.
 
 | Módulo | O que faz |
 |---|---|
-| `src/engine/bookbuilding.ts` | IPO por leilão de preço único. Centro da faixa = preço pela colocação do ano anterior (1º R$ 50, 2º 45, 3º 40, 4º 35, depois −R$ 2 por posição até R$ 3 no 20º), faixa de ±40%. Preço justo = maior preço em que a demanda acumulada cobre a oferta; rateio proporcional na quantidade; sobra para a tesouraria. |
-| `src/engine/orderbook.ts` | Livro de ofertas com ordens a mercado e limitadas, prioridade preço-tempo, preço mínimo de R$ 0,50. Reserva dinheiro e ações das ordens abertas, então saldo e posição nunca ficam negativos. |
-| `src/engine/ledger.ts` | Saldos e posições de cada conta, com reservas. |
-| `src/engine/marketMaker.ts` | Formador de mercado da casa: compra e vende perto do último preço (spread de 2%, quantidade limitada) com o caixa e as ações da tesouraria; durante os jogos do clube amplia o spread para 6% e reduz a quantidade. |
-| `src/engine/dividends.ts` | R$ 0,10 por ponto por ação no fechamento de cada rodada (Série B paga metade); jogo adiado paga no fechamento da rodada em que for disputado; colocação final de R$ 5,00 (1º) a zero (17º a 20º) no fechamento da última rodada; fases de copa quando terminam todos os jogos da fase; título de copa no apito final. |
-| `src/sim/` | Simulação com bots de quatro perfis: dividendos, momentum, torcedor e aleatório. Cada um começa com R$ 100 mil, e cada clube emite 150 ações por jogador. |
-| `src/data/`, `scripts/` | Formato dos dados de partidas, conversor do openfootball e coletor da football-data.org. Veja [data/README.md](data/README.md). |
+| `packages/engine/src/engine/bookbuilding.ts` | IPO por leilão de preço único. Centro da faixa = preço pela colocação do ano anterior (1º R$ 50, 2º 45, 3º 40, 4º 35, depois −R$ 2 por posição até R$ 3 no 20º), faixa de ±40%. Preço justo = maior preço em que a demanda acumulada cobre a oferta; rateio proporcional na quantidade; sobra para a tesouraria. |
+| `packages/engine/src/engine/orderbook.ts` | Livro de ofertas com ordens a mercado e limitadas, prioridade preço-tempo, preço mínimo de R$ 0,50. Reserva dinheiro e ações das ordens abertas, então saldo e posição nunca ficam negativos. |
+| `packages/engine/src/engine/ledger.ts` | Saldos e posições de cada conta, com reservas. |
+| `packages/engine/src/engine/marketMaker.ts` | Formador de mercado da casa: compra e vende perto do último preço (spread de 2%, quantidade limitada) com o caixa e as ações da tesouraria; durante os jogos do clube amplia o spread para 6% e reduz a quantidade. |
+| `packages/engine/src/engine/dividends.ts` | R$ 0,10 por ponto por ação no fechamento de cada rodada (Série B paga metade); jogo adiado paga no fechamento da rodada em que for disputado; colocação final de R$ 5,00 (1º) a zero (17º a 20º) no fechamento da última rodada; fases de copa quando terminam todos os jogos da fase; título de copa no apito final. |
+| `packages/engine/src/sim/` | Simulação com bots de quatro perfis: dividendos, momentum, torcedor e aleatório. Cada um começa com R$ 100 mil, e cada clube emite 150 ações por jogador. |
+| `packages/engine/src/data/`, `scripts/` | Formato dos dados de partidas, conversor do openfootball e coletor da football-data.org. Veja [packages/engine/data/README.md](packages/engine/data/README.md). |
 
 Todo valor em dinheiro é um inteiro em centavos.
 
 ## Como rodar
 
-Requer Node 20 ou mais novo.
+Requer Node 20 ou mais novo (a API usa Node 24 no Docker). Os comandos rodam da raiz.
 
 ```bash
 npm install
 npm test            # testes unitários (vitest)
 npm run typecheck   # checagem de tipos
-npm run sim         # simula a temporada 2025 e grava sim-output/
+npm run sim         # simula a temporada 2025 e grava packages/engine/sim-output/
+
+npm run build -w @futbolsa/api   # compila a API (depois: node apps/api/dist/main.js)
+npm run build -w @futbolsa/web   # gera o site estático em apps/web/out/
+docker compose up --build        # Postgres de teste e a API; GET localhost:3000/health
 ```
+
+Copie `.env.example` para `.env` e preencha o que precisar (nunca commite valores reais).
 
 Opções da simulação:
 
@@ -50,8 +72,8 @@ npm run sim -- --seed 7 --bots 25 --ponto 30 --ancora peer
 - `--ponto`: dividendo por ponto em centavos (padrão 10 = R$ 0,10). O dividendo da colocação final acompanha a mesma escala.
 - `--ancora`: preço em volta do qual o formador de mercado cota: `lastTrade` (padrão, último negócio inclusive com a casa) ou `peer` (só negócios entre jogadores).
 
-O resumo sai no terminal e em `sim-output/resumo-*.md`; os dados completos, com
-o preço diário de cada clube, em `sim-output/resultado-*.json`.
+O resumo sai no terminal e em `packages/engine/sim-output/resumo-*.md`; os dados completos, com
+o preço diário de cada clube, em `packages/engine/sim-output/resultado-*.json`.
 
 Para atualizar os resultados pela API football-data.org, crie uma chave grátis e
 rode `FOOTBALL_DATA_KEY=sua-chave npm run data:fetch -- 2025`. A chave fica só na
