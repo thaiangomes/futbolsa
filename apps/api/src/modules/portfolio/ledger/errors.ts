@@ -5,6 +5,7 @@ export type LedgerErrorCode =
   | "invalid_quantity"
   | "club_required"
   | "cost_basis_required"
+  | "cost_basis_mismatch"
   | "price_required"
   | "reason_required"
   | "negative_cash"
