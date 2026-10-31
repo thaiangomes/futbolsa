@@ -19,6 +19,9 @@ export const DEFAULT_POOL_SIZE = 20;
  */
 export function connect(url: string, poolSize = Number(process.env.DB_POOL_SIZE ?? DEFAULT_POOL_SIZE)): DbConnection {
   const pool = new pg.Pool({ connectionString: url, max: poolSize });
+  // Uma conexão ociosa que cai (banco reiniciado, rede) emite "error" no pool; sem quem
+  // escute, o Node derruba o processo. O pool descarta a conexão e abre outra na próxima consulta.
+  pool.on("error", (error) => console.error(`conexão ociosa do banco caiu: ${error.message}`));
   const db = drizzle(pool, { schema });
   return { db, pool, close: () => pool.end() };
 }
