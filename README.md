@@ -57,6 +57,7 @@ npm run sim         # simula a temporada 2025 e grava packages/engine/sim-output
 npm run build -w @futbolsa/api   # compila a API (depois: node apps/api/dist/main.js)
 npm run build -w @futbolsa/web   # gera o site estático em apps/web/out/
 docker compose up --build        # Postgres de teste e a API; GET localhost:3000/health
+npm run db:migrate               # aplica as migrações no DATABASE_URL (veja apps/api/README.md)
 ```
 
 Copie `.env.example` para `.env` e preencha o que precisar (nunca commite valores reais).
