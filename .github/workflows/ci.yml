@@ -42,3 +42,46 @@ jobs:
         run: npm run build -w @futbolsa/api
       - name: Build do site
         run: npm run build -w @futbolsa/web
+
+  # T10 do Plano do banco: a imagem da API aplica as migrações antes de subir, e subir
+  # de novo não aplica nada. Roda aqui porque o Docker fica desligado no computador do Thaian.
+  conteiner:
+    runs-on: ubuntu-latest
+    env:
+      PSQL: docker compose exec -T postgres-test psql -U futbolsa -d futbolsa_test -tAc
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sobe o Postgres vazio e a API
+        run: docker compose up --build -d
+      - name: Espera o /health
+        run: |
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:3000/health && exit 0
+            sleep 2
+          done
+          docker compose logs api
+          exit 1
+      - name: As migrações criaram as 32 tabelas
+        run: |
+          tabelas=$($PSQL "select count(*) from information_schema.tables where table_schema = 'futbolsa'")
+          aplicadas=$($PSQL "select count(*) from drizzle.__drizzle_migrations")
+          echo "tabelas: $tabelas, migrações aplicadas: $aplicadas"
+          test "$tabelas" = "32"
+          test "$aplicadas" = "$(ls apps/api/drizzle/*.sql | wc -l)"
+          echo "$aplicadas" > aplicadas.txt
+      - name: Subir de novo não aplica nada
+        run: |
+          docker compose up -d --force-recreate api
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:3000/health && break
+            sleep 2
+          done
+          curl -fsS http://localhost:3000/health
+          aplicadas=$($PSQL "select count(*) from drizzle.__drizzle_migrations")
+          echo "migrações aplicadas depois de subir de novo: $aplicadas"
+          test "$aplicadas" = "$(cat aplicadas.txt)"
+          # o contêiner novo rodou o migrate de novo, sem nada para aplicar
+          docker compose logs api | grep -q "Migrações aplicadas."
+      - name: Derruba tudo
+        if: always()
+        run: docker compose down -v
