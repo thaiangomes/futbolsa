@@ -1,7 +1,7 @@
 {
   "scenario": "C-brasileirao-2025-semente1",
-  "trades": 49091,
-  "volume": 11527517544,
-  "tradesSha256": "f5b36c881036e89c6365310e0a04422230c3d0d14f75b192e3558e0761b4e882",
-  "resultSha256": "b2b91da7975067f74a90f9d2615aa08b35ff80edaf2ee1e83a5906826fb9eaed"
+  "trades": 48610,
+  "volume": 11442340466,
+  "tradesSha256": "679d1e943f6a0617a4430e1e4726b29e310d2d9bce4cfe7fb6b1161729bd2e5b",
+  "resultSha256": "1dd1c39734ff41a99ccdf347cc2ecaf8da4662f857d9d9cb31b0f2591d4ebe6b"
 }

@@ -1,7 +1,7 @@
 {
   "scenario": "A-mini-fair",
-  "trades": 159,
-  "volume": 16719979,
-  "tradesSha256": "182a6999221f17370a92d8c62252b2ca5420bb1789489aa169fa63ec0b5185f0",
-  "resultSha256": "2fbdcb282b87b1373c38175f2ddeb1762917e3047d775f89f0e090df4cf45ee0"
+  "trades": 138,
+  "volume": 12605583,
+  "tradesSha256": "6d07ce64715c3cecb892768009c888a486b6659470c4cfc5294b325c5c635f14",
+  "resultSha256": "7862d09b9f6df11585fbc98306f5fc93c910d3c41e53336f21547ae91bc6046d"
 }
