@@ -129,8 +129,9 @@ CREATE TABLE "futbolsa"."seasons" (
 	"trading_ended_at" timestamp with time zone,
 	"mm_quantity_bp" integer DEFAULT 25 NOT NULL,
 	"mm_match_quantity_bp" integer DEFAULT 6 NOT NULL,
-	"mm_min_side_qty" integer,
-	"mm_lot_bp" integer DEFAULT 1000 NOT NULL,
+	"mm_min_side_qty" integer DEFAULT 10 NOT NULL,
+	"mm_match_min_side_qty" integer DEFAULT 3 NOT NULL,
+	"mm_lot_bp" integer DEFAULT 2000 NOT NULL,
 	"bots_in_rankings" boolean DEFAULT false NOT NULL,
 	"suspended_reason" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -139,7 +140,7 @@ CREATE TABLE "futbolsa"."seasons" (
 	CONSTRAINT "seasons_status_check" CHECK ("futbolsa"."seasons"."status" in ('preparing', 'ipo_open', 'ipo_closed', 'trading', 'trading_ended', 'closed')),
 	CONSTRAINT "seasons_offer_size_check" CHECK ("futbolsa"."seasons"."offer_size" is null or "futbolsa"."seasons"."offer_size" > 0),
 	CONSTRAINT "seasons_mm_bp_check" CHECK ("futbolsa"."seasons"."mm_quantity_bp" between 0 and 10000 and "futbolsa"."seasons"."mm_match_quantity_bp" between 0 and 10000 and "futbolsa"."seasons"."mm_lot_bp" between 0 and 10000),
-	CONSTRAINT "seasons_mm_min_side_qty_check" CHECK ("futbolsa"."seasons"."mm_min_side_qty" is null or "futbolsa"."seasons"."mm_min_side_qty" >= 1)
+	CONSTRAINT "seasons_mm_min_side_qty_check" CHECK ("futbolsa"."seasons"."mm_min_side_qty" >= 1 and "futbolsa"."seasons"."mm_match_min_side_qty" >= 1)
 );
 --> statement-breakpoint
 CREATE TABLE "futbolsa"."standings" (

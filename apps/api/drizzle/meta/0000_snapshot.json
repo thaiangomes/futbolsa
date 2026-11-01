@@ -1,5 +1,5 @@
 {
-  "id": "dd7c34bb-1995-4b36-9bba-241b63f73b0e",
+  "id": "418d950a-584d-44d8-b65e-f5e7c2103861",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1030,14 +1030,22 @@
           "name": "mm_min_side_qty",
           "type": "integer",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": 10
+        },
+        "mm_match_min_side_qty": {
+          "name": "mm_match_min_side_qty",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 3
         },
         "mm_lot_bp": {
           "name": "mm_lot_bp",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": 1000
+          "default": 2000
         },
         "bots_in_rankings": {
           "name": "bots_in_rankings",
@@ -1094,7 +1102,7 @@
         },
         "seasons_mm_min_side_qty_check": {
           "name": "seasons_mm_min_side_qty_check",
-          "value": "\"futbolsa\".\"seasons\".\"mm_min_side_qty\" is null or \"futbolsa\".\"seasons\".\"mm_min_side_qty\" >= 1"
+          "value": "\"futbolsa\".\"seasons\".\"mm_min_side_qty\" >= 1 and \"futbolsa\".\"seasons\".\"mm_match_min_side_qty\" >= 1"
         }
       },
       "isRLSEnabled": false

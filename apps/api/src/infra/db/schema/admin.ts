@@ -58,10 +58,11 @@ export const seasons = futbolsa.table(
     /** Quantidade da casa por lado: 25 pontos-base (0,25%) fora de jogo e 6 no modo de jogo. */
     mmQuantityBp: integer("mm_quantity_bp").notNull().default(25),
     mmMatchQuantityBp: integer("mm_match_quantity_bp").notNull().default(6),
-    /** Mínimo por lado; vazio até a simulação dizer o número. */
-    mmMinSideQty: integer("mm_min_side_qty"),
-    /** Lote do formador: 1.000 pontos-base (10% da oferta), fixado na abertura do IPO. */
-    mmLotBp: integer("mm_lot_bp").notNull().default(1000),
+    /** Mínimo de ações por lado: 10 fora de jogo e 3 no modo de jogo (rodada W da Calibração). */
+    mmMinSideQty: integer("mm_min_side_qty").notNull().default(10),
+    mmMatchMinSideQty: integer("mm_match_min_side_qty").notNull().default(3),
+    /** Lote do formador: 2.000 pontos-base (20% da oferta), fixado na abertura do IPO. */
+    mmLotBp: integer("mm_lot_bp").notNull().default(2000),
     botsInRankings: boolean("bots_in_rankings").notNull().default(false),
     suspendedReason: text("suspended_reason"),
     createdAt: instant("created_at").notNull().defaultNow(),
@@ -74,7 +75,7 @@ export const seasons = futbolsa.table(
       "seasons_mm_bp_check",
       sql`${t.mmQuantityBp} between 0 and 10000 and ${t.mmMatchQuantityBp} between 0 and 10000 and ${t.mmLotBp} between 0 and 10000`,
     ),
-    check("seasons_mm_min_side_qty_check", sql`${t.mmMinSideQty} is null or ${t.mmMinSideQty} >= 1`),
+    check("seasons_mm_min_side_qty_check", sql`${t.mmMinSideQty} >= 1 and ${t.mmMatchMinSideQty} >= 1`),
   ],
 );
 

@@ -19,8 +19,9 @@ describe("T4: dados iniciais", () => {
       status: "preparing",
       mmQuantityBp: 25,
       mmMatchQuantityBp: 6,
-      mmLotBp: 1000,
-      mmMinSideQty: null,
+      mmLotBp: 2000,
+      mmMinSideQty: 10,
+      mmMatchMinSideQty: 3,
       botsInRankings: false,
     });
   });
