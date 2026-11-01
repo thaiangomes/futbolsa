@@ -8,6 +8,23 @@ on:
 jobs:
   verificar:
     runs-on: ubuntu-latest
+    # Postgres de teste, como o do docker compose: os testes da API rodam contra ele
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: futbolsa
+          POSTGRES_PASSWORD: futbolsa
+          POSTGRES_DB: futbolsa_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U futbolsa -d futbolsa_test"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://futbolsa:futbolsa@localhost:5433/futbolsa_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
