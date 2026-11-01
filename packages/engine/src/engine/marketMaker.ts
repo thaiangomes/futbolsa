@@ -3,10 +3,11 @@ import { MIN_PRICE, type Cents } from "./money.js";
 import type { Exchange } from "./orderbook.js";
 
 /**
- * Formador de mercado da casa: mantém uma oferta de compra e uma de venda perto
- * do último preço entre pessoas, com spread pequeno e quantidade limitada,
- * usando o caixa e as ações da tesouraria. Ele não sabe o placar, então durante
- * os jogos de um clube amplia o spread e reduz a quantidade daquele clube.
+ * Formador de mercado da casa: mantém uma oferta de compra e uma de venda em
+ * volta de uma âncora (o valor justo, por padrão), com faixa e quantidade
+ * limitadas, usando o caixa e as ações da tesouraria, e nunca melhor que o
+ * preço do mercado. Ele não sabe o placar, então durante os jogos de um clube
+ * amplia a faixa e reduz a quantidade daquele clube.
  */
 
 export interface MarketMakerConfig {
@@ -29,23 +30,54 @@ export interface MarketMakerConfig {
    *   mexem na cotação; ela só muda quando um jogo termina ou um dividendo é pago.
    */
   anchor: "lastTrade" | "peer" | "fair";
+  /**
+   * A casa nunca é melhor que o mercado: não vende mais que esta fração abaixo
+   * do preço exibido nem compra mais que ela acima (0,05 = 5%), dentro e fora
+   * de jogo. Sem ela, a cotação é só pela âncora (rodadas antigas).
+   */
+  marketMargin?: number;
 }
 
 // Valor justo com faixa de 10% (14% durante os jogos): decisão do Thaian em 2026-10-30, rodada T.
+// Nunca melhor que o mercado, com margem de 5%: decisão do Thaian em 2026-10-31.
 export const DEFAULT_MARKET_MAKER: MarketMakerConfig = {
   spread: 0.1,
   quantity: 100,
   matchSpread: 0.14,
   matchQuantity: 25,
   anchor: "fair",
+  marketMargin: 0.05,
 };
 
 /** Formador das rodadas antigas da calibração: último negócio com spread de 2% (6% nos jogos). */
-export const LAST_TRADE_MARKET_MAKER: MarketMakerConfig = { ...DEFAULT_MARKET_MAKER, spread: 0.02, matchSpread: 0.06, anchor: "lastTrade" };
+export const LAST_TRADE_MARKET_MAKER: MarketMakerConfig = {
+  ...DEFAULT_MARKET_MAKER,
+  spread: 0.02,
+  matchSpread: 0.06,
+  anchor: "lastTrade",
+  marketMargin: undefined,
+};
 
 export interface Quote {
   bid?: { price: Cents; quantity: number };
   ask?: { price: Cents; quantity: number };
+}
+
+/**
+ * Quantidade da casa por lado: uma fração das ações do clube (oferta do IPO,
+ * lote do formador e emitidas para novatos), em pontos-base (25 = 0,25%),
+ * arredondada para baixo, com o mínimo por lado quando houver e pelo menos 1.
+ */
+export function quoteSize(clubShares: number, basisPoints: number, minimum = 0): number {
+  if (!Number.isSafeInteger(clubShares) || clubShares < 0) throw new Error("Ações do clube inválidas");
+  return Math.max(Math.floor((clubShares * basisPoints) / 10_000), minimum, 1);
+}
+
+export interface QuoteOptions {
+  /** Quantidade por lado vinda de `quoteSize`; sem ela, vale a da configuração (100 e 25 da simulação). */
+  quantity?: number;
+  /** Preço exibido do clube, para a regra de nunca ser melhor que o mercado (`marketMargin`). */
+  displayedPrice?: Cents;
 }
 
 /** Calcula a cotação sem tocar no livro (função pura, fácil de testar). */
@@ -55,16 +87,28 @@ export function computeQuote(
   availableCash: Cents,
   availableShares: number,
   config: MarketMakerConfig = DEFAULT_MARKET_MAKER,
+  options: QuoteOptions = {},
 ): Quote {
   const spread = inMatch ? config.matchSpread : config.spread;
-  const size = inMatch ? config.matchQuantity : config.quantity;
-  const half = spread / 2;
+  const size = options.quantity ?? (inMatch ? config.matchQuantity : config.quantity);
+  // Em pontos-base e conta inteira: com número decimal, 0,93 não é exato e
+  // R$ 42,00 × 0,93 sairia R$ 39,05 em vez de R$ 39,06.
+  const bp = Math.round(spread * 10_000);
 
-  let bidPrice = Math.max(MIN_PRICE, Math.floor(reference * (1 - half)));
-  let askPrice = Math.max(MIN_PRICE, Math.ceil(reference * (1 + half)));
+  let bidPrice = Math.max(MIN_PRICE, Math.floor((reference * (20_000 - bp)) / 20_000));
+  let askPrice = Math.max(MIN_PRICE, Math.ceil((reference * (20_000 + bp)) / 20_000));
   // Em preços muito baixos o arredondamento pode colar os dois lados.
   if (askPrice <= bidPrice) askPrice = bidPrice + 1;
   if (bidPrice >= reference && reference > MIN_PRICE) bidPrice = reference - 1;
+
+  // Nunca melhor que o mercado: a venda fica em pelo menos ⌈preço × 0,95⌉ e a
+  // compra em no máximo ⌊preço × 1,05⌋. Perto da âncora nada muda; longe dela,
+  // ninguém compra barato da casa para revender caro (ou o contrário).
+  if (config.marketMargin !== undefined && options.displayedPrice !== undefined) {
+    const m = Math.round(config.marketMargin * 10_000);
+    askPrice = Math.max(askPrice, Math.ceil((options.displayedPrice * (10_000 - m)) / 10_000));
+    bidPrice = Math.min(bidPrice, Math.floor((options.displayedPrice * (10_000 + m)) / 10_000));
+  }
 
   const quote: Quote = {};
   const bidQty = Math.min(size, Math.floor(availableCash / bidPrice));
@@ -103,6 +147,7 @@ export class MarketMaker {
       this.ledger.availableCash(this.accountId),
       this.ledger.availableShares(this.accountId, clubId),
       this.config,
+      { displayedPrice: this.exchange.price(clubId) },
     );
     if (quote.bid) {
       this.exchange.placeOrder({

@@ -19,6 +19,8 @@ jobs:
         run: npm run typecheck
       - name: Testes (motor e API)
         run: npm test
+      - name: Regressão da simulação (mesmos negócios com a mesma semente)
+        run: npm run sim:regressao
       - name: Build da API
         run: npm run build -w @futbolsa/api
       - name: Build do site

@@ -19,3 +19,6 @@ export * from "./engine/payoutEvents.js";
 export * from "./engine/buyback.js";
 export * from "./engine/cupTable.js";
 export * from "./engine/payoutDiff.js";
+export * from "./engine/matching.js";
+export * from "./engine/orderRules.js";
+export * from "./engine/fairValue.js";

@@ -15,7 +15,7 @@ import {
 import { Ledger } from "../engine/ledger.js";
 import { DEFAULT_MARKET_MAKER, MarketMaker, type MarketMakerConfig } from "../engine/marketMaker.js";
 import type { Cents } from "../engine/money.js";
-import { Exchange } from "../engine/orderbook.js";
+import { Exchange, type Trade } from "../engine/orderbook.js";
 import { finishTime, kickoffTime, type Match } from "../engine/types.js";
 import type { SeasonFile } from "../data/season.js";
 import { AnalystBot, AnticipatorBot, CaptureBot, ConcentratorBot, DividendBot, FanBot, MomentumBot, PROFILES, RandomBot, TraderBot, type Bot, type BotProfile } from "./bots.js";
@@ -130,7 +130,13 @@ export interface SimResult {
   totalBuyback: Cents;
 }
 
-export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): SimResult {
+/** Ganchos para observar a simulação sem mudar o que ela faz (usados pelo teste de regressão). */
+export interface SimHooks {
+  /** Chamado a cada negócio, na ordem em que sai. */
+  onTrade?: (trade: Trade) => void;
+}
+
+export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, hooks: SimHooks = {}): SimResult {
   const config: SimConfig = { ...DEFAULT_SIM, ...partial };
   const rng = new Rng(config.seed);
   const clubIds = season.clubs.map((c) => c.id);
@@ -145,6 +151,7 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}): 
     houseAccounts: [TREASURY],
     houseTradesSetPrice: config.marketMaker.anchor !== "peer",
   });
+  if (hooks.onTrade) exchange.onTrade(hooks.onTrade);
   const view = new MarketView(exchange, ledger, clubIds, config.rules, matches);
   view.buybackMultiple = config.buyback;
   view.setCups(config.cups);

@@ -2,7 +2,10 @@ import { assertCents, type Cents } from "./money.js";
 
 /**
  * Saldos de dinheiro e ações de cada conta. O que está preso em ordens abertas
- * fica "reservado", e nenhuma operação deixa saldo ou posição negativos.
+ * fica "reservado", e nenhuma operação deixa saldo ou posição negativos, com
+ * uma exceção: o estorno de um pagamento corrigido pode deixar o caixa
+ * negativo, desde que nada esteja reservado (as compras abertas são
+ * canceladas antes; regra do Admin, critério 15).
  */
 
 export interface Position {
@@ -69,14 +72,33 @@ export class Ledger {
     return p;
   }
 
-  /** Movimenta dinheiro livre (crédito > 0, débito < 0). */
+  /**
+   * Movimenta dinheiro livre (crédito > 0, débito < 0). O crédito sempre passa,
+   * para a venda e o dividendo abaterem um caixa negativo; o débito não deixa o
+   * caixa abaixo do reservado.
+   */
   adjustCash(id: string, delta: Cents): void {
     assertCents(delta, "movimento de caixa");
     const a = this.get(id);
-    if (a.cash + delta < a.reservedCash) {
+    if (delta < 0 && a.cash + delta < a.reservedCash) {
       throw new Error(`Saldo insuficiente em ${id}`);
     }
     a.cash += delta;
+  }
+
+  /**
+   * Estorno de um pagamento corrigido: tira o valor do caixa mesmo que ele fique
+   * negativo, desde que não haja caixa reservado. Se o caixa livre não cobre o
+   * estorno e há reserva, quem chama cancela antes as ordens de compra da conta.
+   */
+  reverseCash(id: string, amount: Cents): void {
+    assertCents(amount, "estorno");
+    if (amount <= 0) throw new Error("Estorno precisa ser positivo");
+    const a = this.get(id);
+    if (amount > a.cash - a.reservedCash && a.reservedCash > 0) {
+      throw new Error(`Estorno maior que o caixa livre de ${id}: cancele as compras abertas antes`);
+    }
+    a.cash -= amount;
   }
 
   /** Movimenta ações livres (crédito > 0, débito < 0). */
@@ -125,4 +147,21 @@ export class Ledger {
     for (const a of this.accounts.values()) total += a.cash;
     return total;
   }
+}
+
+/**
+ * Invariantes de uma carteira, para os testes e para as restrições do banco:
+ * nada reservado negativo, ações reservadas no máximo o total e caixa no
+ * mínimo o reservado, exceto o caixa negativo por estorno (aí sem reserva).
+ * Devolve a lista do que está quebrado (vazia se tudo certo).
+ */
+export function walletViolations(a: Pick<Account, "cash" | "reservedCash" | "positions">): string[] {
+  const out: string[] = [];
+  if (a.reservedCash < 0) out.push("caixa reservado negativo");
+  if (a.cash < a.reservedCash && !(a.reservedCash === 0 && a.cash < 0)) out.push("caixa abaixo do reservado");
+  for (const [clubId, p] of a.positions) {
+    if (p.reserved < 0) out.push(`ações reservadas negativas de ${clubId}`);
+    if (p.shares < p.reserved) out.push(`ações reservadas acima do total de ${clubId}`);
+  }
+  return out;
 }
