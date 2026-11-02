@@ -1,6 +1,8 @@
 import "reflect-metadata";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { EventBus } from "../../src/infra/realtime/bus.js";
 import { RealtimeGateway } from "../../src/infra/realtime/gateway.js";
+import { MemoryEventBus } from "../../src/infra/realtime/memory-bus.js";
 import { startApp, TestClient, WEB_ORIGIN, type RunningApp } from "../support/ws-client.js";
 
 describe("conexão em /ws (T1)", () => {
@@ -36,6 +38,10 @@ describe("conexão em /ws (T1)", () => {
 
   it("outro caminho no mesmo servidor não vira WebSocket", async () => {
     expect(await TestClient.tryOpen(`${running.wsUrl}/outro`, { origin: WEB_ORIGIN })).not.toBeNull();
+  });
+
+  it("o módulo entrega o barramento em memória para os módulos de negócio injetarem", () => {
+    expect(running.app.get(EventBus)).toBeInstanceOf(MemoryEventBus);
   });
 
   it("a conexão sai do registro quando fecha", async () => {
