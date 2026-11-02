@@ -8,7 +8,8 @@ const START = new Date("2026-11-02T15:00:00.000Z");
 
 function setup(options?: ConstructorParameters<typeof MemoryEventBus>[1]) {
   const clock = new FixedClock(START);
-  const bus = new MemoryEventBus(clock, options);
+  // a limitação por tipo tem teste próprio (throttle.test.ts); aqui cada publicação sai
+  const bus = new MemoryEventBus(clock, { throttle: {}, ...options });
   return { clock, bus };
 }
 
@@ -54,7 +55,7 @@ describe("barramento em memória (T3)", () => {
       const ultimo = antes.bus.currentSeq("club:FLA3");
       // a API reinicia um segundo depois: o relógio andou mais do que os eventos publicados
       const clock = new FixedClock(new Date(START.getTime() + 1000));
-      const depois = new MemoryEventBus(clock);
+      const depois = new MemoryEventBus(clock, { throttle: {} });
       expect(depois.currentSeq("club:FLA3")).toBeGreaterThan(ultimo);
     });
   });

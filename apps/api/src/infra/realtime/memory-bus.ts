@@ -1,7 +1,8 @@
-import { Injectable, Logger, Optional } from "@nestjs/common";
+import { Injectable, Logger, Optional, type OnModuleDestroy } from "@nestjs/common";
 import { channelAcceptsEvent, type Channel, type EventType } from "@futbolsa/contracts";
 import type { ZodType } from "zod";
 import { Clock } from "../clock/index.js";
+import { Throttler, THROTTLE_RULES, type ThrottleRules } from "./throttle.js";
 import { EventBus, type BusEvent, type BusListener, type BusSubscription, type Stream } from "./bus.js";
 
 /** Quanto do passado cada canal guarda para a retomada (o que sobrar passa para a REST). */
@@ -15,11 +16,14 @@ export interface MemoryBusOptions {
   publicHistory: HistoryLimits;
   /** O `me` de cada pessoa: os últimos 50 eventos ou 5 minutos. */
   meHistory: HistoryLimits;
+  /** Os tipos de evento limitados a um por intervalo (T4). */
+  throttle: ThrottleRules;
 }
 
 export const DEFAULT_BUS_OPTIONS: MemoryBusOptions = {
   publicHistory: { maxEvents: 200, maxAgeMs: 60_000 },
   meHistory: { maxEvents: 50, maxAgeMs: 300_000 },
+  throttle: THROTTLE_RULES,
 };
 
 interface HistoryEntry extends BusEvent {
@@ -41,11 +45,12 @@ interface StreamState {
  * reinício ele é sempre maior que o de antes, e o cliente percebe o salto como buraco.
  */
 @Injectable()
-export class MemoryEventBus extends EventBus {
+export class MemoryEventBus extends EventBus implements OnModuleDestroy {
   private readonly logger = new Logger(MemoryEventBus.name);
   private readonly streams = new Map<string, StreamState>();
   private readonly schemas = new Map<EventType, ZodType>();
   private readonly options: MemoryBusOptions;
+  private readonly throttler: Throttler;
 
   constructor(
     private readonly clock: Clock,
@@ -53,6 +58,7 @@ export class MemoryEventBus extends EventBus {
   ) {
     super();
     this.options = { ...DEFAULT_BUS_OPTIONS, ...options };
+    this.throttler = new Throttler(this.options.throttle);
   }
 
   registerSchema(type: EventType, schema: ZodType): void {
@@ -70,6 +76,20 @@ export class MemoryEventBus extends EventBus {
       if (!parsed.success) throw new Error(`conteúdo inválido para o evento "${type}": ${parsed.error.message}`);
     }
 
+    const rule = this.throttler.rule(type, data);
+    if (rule) {
+      // o seq é dado na saída: o que a limitação descarta não deixa buraco
+      this.throttler.submit(key, rule.windowKey, rule.intervalMs, () => this.emit(key, stream, channel, type, data));
+    } else {
+      this.emit(key, stream, channel, type, data);
+    }
+  }
+
+  onModuleDestroy(): void {
+    this.throttler.dispose();
+  }
+
+  private emit(key: string, stream: Stream, channel: Channel, type: EventType, data: unknown): void {
     const state = this.state(key, stream);
     const now = this.clock.now();
     state.seq += 1;
