@@ -106,20 +106,28 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   /** Fecha todas as conexões da pessoa (conta excluída ou papel mudou) com 4403; o cliente reabre com o login atual. Devolve quantas fechou. */
   disconnectUser(userId: string): number {
     const sessions = [...(this.byUser.get(userId) ?? [])];
+    // sai da lista já: o `close` do socket só chega depois, e uma segunda chamada não pode contar de novo
+    this.byUser.delete(userId);
     for (const session of sessions) session.close(CLOSE_CODES.accountChanged, "conta alterada");
     return sessions.length;
+  }
+
+  /** As sessões que ainda não foram fechadas (a que o servidor está fechando já não conta). */
+  private openSessions(): RealtimeSession[] {
+    return [...this.sessions.values()].filter((session) => !session.isClosed);
   }
 
   /** O retrato do tempo real agora: conexões, assinaturas por canal, envio parado, clientes lentos e atraso dos eventos. */
   stats(): RealtimeStats {
     const subscriptions: Record<string, number> = {};
     let bufferedBytes = 0;
-    for (const session of this.sessions.values()) {
+    const open = this.openSessions();
+    for (const session of open) {
       bufferedBytes += session.bufferedBytes;
       for (const channel of session.channels()) subscriptions[channel] = (subscriptions[channel] ?? 0) + 1;
     }
     return {
-      connections: this.sessions.size,
+      connections: open.length,
       subscriptions,
       bufferedBytes,
       slowClientsDropped: this.slowClientsDropped,
@@ -129,7 +137,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   /** As conexões abertas agora, sem o socket. Serve aos testes e, depois, às estatísticas. */
   snapshot(): ConnectionInfo[] {
-    return [...this.sessions.values()].map((session) => ({ userId: session.userId, role: session.role }));
+    return this.openSessions().map((session) => ({ userId: session.userId, role: session.role }));
   }
 
   /** Guarda a sessão na lista da pessoa e, passando do limite, derruba a mais antiga. */

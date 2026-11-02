@@ -75,6 +75,11 @@ export class RealtimeSession {
     return this.identity?.userId ?? null;
   }
 
+  /** A sessão já foi fechada (pelo servidor ou pelo cliente); o `close` do socket pode ainda não ter chegado. */
+  get isClosed(): boolean {
+    return this.closed;
+  }
+
   /** Instante (ms) do login, ou `null` para o visitante. */
   get loggedInAt(): number | null {
     return this.loginAt;
