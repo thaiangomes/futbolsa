@@ -14,12 +14,19 @@ import type { RawData, WebSocket } from "ws";
 import type { Clock } from "../clock/index.js";
 import type { RealtimeAuthenticator, RealtimeIdentity } from "./authenticator.js";
 import { meChannel, type BusSubscription, type EventBus, type Stream } from "./bus.js";
-import { realtimeLimits } from "./limits.js";
+import { realtimeLimits, type RealtimeLimits } from "./limits.js";
 
 export interface SessionDeps {
   bus: EventBus;
   authenticator: RealtimeAuthenticator;
   clock: Clock;
+  /** Avisos que a sessão dá ao gateway, dono do registro de conexões. */
+  hooks: {
+    /** O login deu certo: a sessão agora tem dono. */
+    onLogin(session: RealtimeSession): void;
+    /** O cliente não escoa o envio e foi derrubado. */
+    onSlowClient(session: RealtimeSession): void;
+  };
 }
 
 /** Quem pode assinar cada tipo de canal. O `me` é sempre o do próprio usuário (a chave vem da identidade, nunca do cliente). */
@@ -46,6 +53,9 @@ export class RealtimeSession {
   private queue: Promise<void> = Promise.resolve();
   private firstMessageTimer: ReturnType<typeof setTimeout> | undefined;
   private closed = false;
+  private readonly limits: RealtimeLimits = realtimeLimits();
+  /** Instantes (ms) das mensagens do último segundo, para limitar o ritmo. */
+  private readonly recent: number[] = [];
 
   constructor(
     private readonly socket: WebSocket,
@@ -64,14 +74,25 @@ export class RealtimeSession {
   start(): void {
     this.firstMessageTimer = setTimeout(
       () => this.socket.close(CLOSE_CODES.authTimeout, "sem mensagem a tempo"),
-      realtimeLimits().firstMessageTimeoutMs,
+      this.limits.firstMessageTimeoutMs,
     );
     this.firstMessageTimer.unref?.();
   }
 
   /** Uma mensagem chegou do cliente. */
   receive(data: RawData, isBinary: boolean): void {
+    if (this.closed) return;
+    if (this.overRate()) {
+      this.close(CLOSE_CODES.rateLimited, "mensagens demais");
+      return;
+    }
     this.queue = this.queue.then(() => this.handle(data, isBinary)).catch(() => this.socket.terminate());
+  }
+
+  /** Fecha a conexão por decisão do servidor e solta tudo. */
+  close(code: number, reason: string): void {
+    this.dispose();
+    this.socket.close(code, reason);
   }
 
   /** A conexão fechou: solta as assinaturas e o temporizador. */
@@ -108,6 +129,7 @@ export class RealtimeSession {
     if (this.closed) return;
     if (result.ok) {
       this.identity = result.identity;
+      this.deps.hooks.onLogin(this);
       this.send("auth.ok", { role: result.identity.role });
       return;
     }
@@ -122,7 +144,11 @@ export class RealtimeSession {
     if (denied) return this.sendError(denied, channel);
 
     // assinar de novo o mesmo canal troca a assinatura (com o `since` novo)
-    this.subscriptions.get(channel)?.unsubscribe();
+    const previous = this.subscriptions.get(channel);
+    if (!previous && this.subscriptions.size >= this.limits.maxSubscriptions) {
+      return this.sendError("too_many_subscriptions", channel);
+    }
+    previous?.unsubscribe();
     const subscription = this.deps.bus.subscribe(this.streamOf(channel), (event) => this.sendFrame(event.frame), since);
     this.subscriptions.set(channel, subscription);
 
@@ -166,6 +192,22 @@ export class RealtimeSession {
   }
 
   private sendFrame(frame: string): void {
-    if (this.socket.readyState === this.socket.OPEN) this.socket.send(frame);
+    if (this.closed || this.socket.readyState !== this.socket.OPEN) return;
+    this.socket.send(frame);
+    // Cliente que não lê: o envio fica parado na memória do servidor. Derruba, e os outros nem sentem.
+    // (Um quadro de fechamento não chegaria a quem não lê, então o socket é cortado de vez.)
+    if (this.socket.bufferedAmount > this.limits.slowClientBytes) {
+      this.dispose();
+      this.socket.terminate();
+      this.deps.hooks.onSlowClient(this);
+    }
+  }
+
+  /** Passou de `maxMessagesPerSecond` mensagens no último segundo? */
+  private overRate(): boolean {
+    const now = this.deps.clock.now().getTime();
+    this.recent.push(now);
+    while (this.recent.length > 0 && now - this.recent[0]! >= 1_000) this.recent.shift();
+    return this.recent.length > this.limits.maxMessagesPerSecond;
   }
 }
