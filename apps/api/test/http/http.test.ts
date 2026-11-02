@@ -5,10 +5,12 @@ import { z } from "zod";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { errorResponseSchema } from "@futbolsa/contracts";
 import { DomainError, RateLimit, ZodValidationPipe } from "../../src/infra/http/index.js";
+import { Public } from "../../src/infra/auth-adapter/index.js";
 import { createTestApp } from "../support/app.js";
 
 const echoSchema = z.strictObject({ quantity: z.number().int().positive() });
 
+@Public()
 @Controller("probe-http")
 class HttpProbeController {
   @Get("boom")
