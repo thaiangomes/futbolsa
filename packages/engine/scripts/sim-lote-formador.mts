@@ -99,6 +99,13 @@ function run(cfg: RunCfg) {
   // jogadores no passo seguinte (3 horas). As ordens desse período, inclusive as da casa,
   // e as que já estavam no livro casam num preço só, o de maior volume.
   const STEP_MS = 3 * 60 * 60 * 1000;
+  // Negócios entre jogadores, para medir o alerta de reciprocidade (preço exibido antes de cada um).
+  const tradeLog: Array<{ t: number; club: string; b: string; s: string; q: number; p: number; prev: number }> = [];
+  const shown = new Map<string, number>();
+  const logTrade = (club: string, b: string, s: string, q: number, p: number) => {
+    if (b !== TREASURY && s !== TREASURY) tradeLog.push({ t: exchange.now, club, b, s, q, p, prev: shown.get(club)! });
+    shown.set(club, p);
+  };
   const tunnelRef = new Map<string, number>();
   const auctionUntil = new Map<string, number>();
   type AuctionOrder = { id: number; accountId: string; clubId: string; side: "buy" | "sell"; limitPrice: number; quantity: number; seq: number };
@@ -216,6 +223,7 @@ function run(cfg: RunCfg) {
         vol -= q;
         trades++;
         auctionTrades++;
+        logTrade(club, b.accountId, s.accountId, q, P);
         if (b.accountId === TREASURY || s.accountId === TREASURY) houseTrades++;
         if (left.get(b) === 0) i++;
         if (left.get(s) === 0) j++;
@@ -336,6 +344,7 @@ function run(cfg: RunCfg) {
     ledger.adjustShares(TREASURY, clubId, result.treasuryShares + lotShares);
     exchange.setReferencePrice(clubId, result.price);
     tunnelRef.set(clubId, result.price);
+    shown.set(clubId, result.price);
   }
   const treasuryStartCash = ledger.get(TREASURY).cash;
   const treasuryStartShares = new Map(clubIds.map((id) => [id, ledger.shares(TREASURY, id)]));
@@ -413,6 +422,7 @@ function run(cfg: RunCfg) {
   exchange.onTrade((t: any) => {
     trades++;
     if (t.buyerId === TREASURY || t.sellerId === TREASURY) houseTrades++;
+    logTrade(t.clubId, t.buyerId, t.sellerId, t.quantity, t.price);
   });
   const pumps: any[] = [];
   let slowAcc: any;
@@ -611,6 +621,31 @@ function run(cfg: RunCfg) {
     retorno[p] = sum(g.map((b) => view.netWorth(b.id))) / g.length / CASH - 1;
   }
   const days = (ms: number) => ms / DAY_MS;
+  // Alerta de reciprocidade: por par de contas e clube, o maior número de negócios entre
+  // os dois em 7 dias seguidos, de todos e só dos suspeitos (até `maxQ` ações e mexendo o
+  // preço exibido `move` ou mais). Separa a dupla dos pares de jogadores normais.
+  const pairs = new Map<string, typeof tradeLog>();
+  for (const tr of tradeLog) {
+    const k = `${[tr.b, tr.s].sort().join("|")}|${tr.club}`;
+    if (!pairs.has(k)) pairs.set(k, []);
+    pairs.get(k)!.push(tr);
+  }
+  const max7d = (xs: typeof tradeLog) => {
+    let best = 0;
+    for (let i = 0, j = 0; i < xs.length; i++) {
+      while (xs[i]!.t - xs[j]!.t > 7 * DAY_MS) j++;
+      best = Math.max(best, i - j + 1);
+    }
+    return best;
+  };
+  const suspicious = (maxQ: number, move: number) => (tr: (typeof tradeLog)[number]) => tr.q <= maxQ && Math.abs(tr.p / tr.prev - 1) >= move;
+  const pairStats = [...pairs].map(([k, xs]) => ({
+    dupla: k.startsWith(`${A}|${B}|`),
+    all: max7d(xs),
+    s10_5: max7d(xs.filter(suspicious(10, 0.05))),
+    s10_3: max7d(xs.filter(suspicious(10, 0.03))),
+    s50_5: max7d(xs.filter(suspicious(50, 0.05))),
+  }));
   const club = (id: string) => ({
     id,
     fill: ipo.get(id).fillRatio,
@@ -636,6 +671,7 @@ function run(cfg: RunCfg) {
     auctions,
     auctionSteps,
     auctionTrades,
+    pairStats,
     pumps,
     colluders: cfg.pump ? (view.netWorth(A) + view.netWorth(B)) / (2 * CASH) - 1 : null,
     fan: cfg.fan
