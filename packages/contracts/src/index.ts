@@ -7,3 +7,4 @@ export * from "./entry/index.js";
 export * from "./portfolio/index.js";
 export * from "./rankings/index.js";
 export * from "./admin/index.js";
+export * from "./realtime/index.js";
