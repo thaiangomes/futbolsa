@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Test } from "@nestjs/testing";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { AppModule } from "../src/app.module.js";
+import { configureApp } from "../src/app.js";
 import { Clock, FixedClock } from "../src/infra/clock/index.js";
 
 describe("aplicação com todos os módulos", () => {
@@ -15,6 +16,7 @@ describe("aplicação com todos os módulos", () => {
       .useValue(fixo)
       .compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    configureApp(app);
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
   });
