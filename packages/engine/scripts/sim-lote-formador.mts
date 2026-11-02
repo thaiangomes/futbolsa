@@ -1,6 +1,6 @@
 /**
- * Rodada V da calibração: lote do formador e quantidade mínima por lado da casa,
- * num jogo pequeno (20 jogadores, 3.000 ações por clube na oferta).
+ * Rodadas W e X da calibração: lote do formador e quantidade mínima por lado da casa (W)
+ * e túnel de preço com leilão (X), num jogo pequeno (20 jogadores, 3.000 ações por clube na oferta).
  *
  * Usa o motor da `main` (commit 539f662) sem mudá-lo. O que este script faz por
  * conta própria, seguindo as especificações aprovadas:
@@ -10,7 +10,9 @@
  * - limite de 20% em volta do preço exibido para as ordens dos jogadores;
  * - opcional: dois infladores combinados que, no fim de cada mês, sobem o preço
  *   de um clube com negócios de 1 ação a +20% entre eles (modo "pump");
- * - opcional: um fanático que compra o mesmo clube a cada 3 horas, até 3× o valor justo (modo "fan").
+ * - opcional: um fanático que compra o mesmo clube a cada 3 horas, até 3× o valor justo (modo "fan");
+ * - opcional: a dupla paciente, que sobe só até a beira do túnel na última semana do mês (modo "slow");
+ * - opcional: túnel de preço com leilão, como o da B3 (--tuneis 0.1,0.2).
  *
  * Uso (em packages/engine): npx tsx scripts/sim-lote-formador.mts --lotes 0,0.05,0.1,0.2 --minimos 0 --sementes 10 --modos base,pump,fan --out resultados.json
  * Tabelas: node scripts/sim-lote-formador-tabelas.cjs resultados.json
@@ -47,6 +49,7 @@ const { values } = parseArgs({
     oferta: { type: "string", default: "3000" },
     margem: { type: "string", default: "0.05" },
     modos: { type: "string", default: "base,pump,fan" },
+    tuneis: { type: "string", default: "0" },
     out: { type: "string", default: "resultados.json" },
   },
 });
@@ -72,6 +75,10 @@ interface RunCfg {
   pump: boolean;
   /** Um comprador fanático (sem combinar com ninguém) que paga até 3× o valor justo pelo clube-alvo. */
   fan: boolean;
+  /** Dupla paciente: sobe o preço só até a beira do túnel, a cada passo da última semana do mês. */
+  slow: boolean;
+  /** Largura do túnel de preço (0 = sem túnel). */
+  tunnel: number;
   offer: number;
   margin: number;
 }
@@ -85,6 +92,147 @@ function run(cfg: RunCfg) {
   const ledger = new Ledger();
   ledger.open(TREASURY, 0);
   const exchange = new Exchange(ledger, { houseAccounts: [TREASURY], houseTradesSetPrice: true });
+
+  // ---- Túnel de preço com leilão (como o túnel de negociação da B3) ----
+  // Um negócio que sairia a mais de `cfg.tunnel` da referência (preço exibido às 0h de
+  // Brasília ou o do último leilão) não executa: o clube entra em leilão até a ação dos
+  // jogadores no passo seguinte (3 horas). As ordens desse período, inclusive as da casa,
+  // e as que já estavam no livro casam num preço só, o de maior volume.
+  const STEP_MS = 3 * 60 * 60 * 1000;
+  const tunnelRef = new Map<string, number>();
+  const auctionUntil = new Map<string, number>();
+  type AuctionOrder = { id: number; accountId: string; clubId: string; side: "buy" | "sell"; limitPrice: number; quantity: number; seq: number };
+  const auctionOrders: AuctionOrder[] = [];
+  let auctionSeq = 0;
+  let auctions = 0;
+  let auctionSteps = 0;
+  let auctionTrades = 0;
+  const rawPlace = exchange.placeOrder.bind(exchange);
+  const rawCancelAll = exchange.cancelAll.bind(exchange);
+  const releaseAuction = (o: AuctionOrder) => {
+    if (o.side === "buy") ledger.releaseCash(o.accountId, o.quantity * o.limitPrice);
+    else ledger.releaseShares(o.accountId, o.clubId, o.quantity);
+  };
+  const addAuction = (req: any) => {
+    if (req.side === "buy") {
+      if (req.quantity * req.limitPrice > ledger.availableCash(req.accountId)) return { status: "rejected", trades: [], reason: "saldo insuficiente" };
+      ledger.reserveCash(req.accountId, req.quantity * req.limitPrice);
+    } else {
+      if (req.quantity > ledger.availableShares(req.accountId, req.clubId)) return { status: "rejected", trades: [], reason: "ações insuficientes" };
+      ledger.reserveShares(req.accountId, req.clubId, req.quantity);
+    }
+    const o: AuctionOrder = { id: -++auctionSeq, accountId: req.accountId, clubId: req.clubId, side: req.side, limitPrice: req.limitPrice, quantity: req.quantity, seq: auctionSeq };
+    auctionOrders.push(o);
+    return { status: "resting", trades: [], order: { ...o, remaining: o.quantity } };
+  };
+  // A ordem casaria a mais de `cfg.tunnel` da referência?
+  const wouldBreak = (req: any, ref: number) => {
+    const lo = ref * (1 - cfg.tunnel);
+    const hi = ref * (1 + cfg.tunnel);
+    const book = exchange.depth(req.clubId);
+    let left = req.quantity;
+    for (const o of req.side === "buy" ? book.asks : book.bids) {
+      if (left <= 0) break;
+      if (o.accountId === req.accountId) continue;
+      const crosses = req.side === "buy" ? o.limitPrice! <= req.limitPrice : o.limitPrice! >= req.limitPrice;
+      if (!crosses) break;
+      if (o.limitPrice! < lo || o.limitPrice! > hi) return true;
+      left -= o.remaining;
+    }
+    return false;
+  };
+  if (cfg.tunnel > 0) {
+    (exchange as any).placeOrder = (req: any) => {
+      if (auctionUntil.has(req.clubId)) return addAuction(req);
+      const ref = tunnelRef.get(req.clubId);
+      if (ref !== undefined && req.type === "limit" && wouldBreak(req, ref)) {
+        auctionUntil.set(req.clubId, exchange.now + STEP_MS);
+        auctions++;
+        return addAuction(req);
+      }
+      return rawPlace(req);
+    };
+    (exchange as any).cancelAll = (accountId: string, clubId?: string) => {
+      let n = rawCancelAll(accountId, clubId);
+      for (let i = auctionOrders.length - 1; i >= 0; i--) {
+        const o = auctionOrders[i]!;
+        if (o.accountId === accountId && (clubId === undefined || o.clubId === clubId)) {
+          releaseAuction(o);
+          auctionOrders.splice(i, 1);
+          n++;
+        }
+      }
+      return n;
+    };
+  }
+  // Fim do leilão: preço único de maior volume (no empate, menor sobra e depois o mais perto da referência).
+  function uncross(club: string) {
+    auctionUntil.delete(club);
+    const book = exchange.depth(club);
+    type Row = { kind: "book" | "auction"; id: number; accountId: string; side: "buy" | "sell"; price: number; qty: number; seq: number };
+    const rows: Row[] = [
+      ...book.bids.map((o: any) => ({ kind: "book" as const, id: o.id, accountId: o.accountId, side: "buy" as const, price: o.limitPrice, qty: o.remaining, seq: o.seq })),
+      ...book.asks.map((o: any) => ({ kind: "book" as const, id: o.id, accountId: o.accountId, side: "sell" as const, price: o.limitPrice, qty: o.remaining, seq: o.seq })),
+      ...auctionOrders.filter((o) => o.clubId === club).map((o) => ({ kind: "auction" as const, id: o.id, accountId: o.accountId, side: o.side, price: o.limitPrice, qty: o.quantity, seq: 1e9 + o.seq })),
+    ];
+    const mine = auctionOrders.filter((o) => o.clubId === club);
+    for (const o of mine) {
+      releaseAuction(o);
+      auctionOrders.splice(auctionOrders.indexOf(o), 1);
+    }
+    const ref = tunnelRef.get(club)!;
+    let best: { p: number; vol: number; imb: number } | undefined;
+    for (const p of [...new Set(rows.map((r) => r.price))]) {
+      const dem = rows.filter((r) => r.side === "buy" && r.price >= p).reduce((s, r) => s + r.qty, 0);
+      const sup = rows.filter((r) => r.side === "sell" && r.price <= p).reduce((s, r) => s + r.qty, 0);
+      const vol = Math.min(dem, sup);
+      const imb = Math.abs(dem - sup);
+      if (vol > 0 && (!best || vol > best.vol || (vol === best.vol && (imb < best.imb || (imb === best.imb && Math.abs(p - ref) < Math.abs(best.p - ref)))))) best = { p, vol, imb };
+    }
+    const left = new Map<Row, number>(rows.map((r) => [r, r.qty]));
+    if (best) {
+      const P = best.p;
+      const buys = rows.filter((r) => r.side === "buy" && r.price >= P).sort((a, b) => b.price - a.price || a.seq - b.seq);
+      const sells = rows.filter((r) => r.side === "sell" && r.price <= P).sort((a, b) => a.price - b.price || a.seq - b.seq);
+      // Tira do livro as ordens que entram no casamento (devolve as reservas); a sobra volta depois.
+      for (const r of [...buys, ...sells]) if (r.kind === "book") exchange.cancelOrder(r.id);
+      let i = 0;
+      let j = 0;
+      let vol = best.vol;
+      while (vol > 0 && i < buys.length && j < sells.length) {
+        const b = buys[i]!;
+        const s = sells[j]!;
+        if (b.accountId === s.accountId) {
+          j++;
+          continue;
+        }
+        const q = Math.min(left.get(b)!, left.get(s)!, vol);
+        ledger.adjustCash(b.accountId, -P * q);
+        ledger.adjustShares(b.accountId, club, q);
+        ledger.adjustShares(s.accountId, club, -q);
+        ledger.adjustCash(s.accountId, P * q);
+        left.set(b, left.get(b)! - q);
+        left.set(s, left.get(s)! - q);
+        vol -= q;
+        trades++;
+        auctionTrades++;
+        if (b.accountId === TREASURY || s.accountId === TREASURY) houseTrades++;
+        if (left.get(b) === 0) i++;
+        if (left.get(s) === 0) j++;
+      }
+      (exchange as any).lastTrade.set(club, P);
+      (exchange as any).lastPeerTrade.set(club, P);
+      tunnelRef.set(club, P);
+      // Sobras das ordens do livro que entraram no casamento.
+      for (const r of [...buys, ...sells]) {
+        if (r.kind === "book" && left.get(r)! > 0) rawPlace({ accountId: r.accountId, clubId: club, side: r.side, type: "limit", quantity: left.get(r)!, limitPrice: r.price });
+      }
+    }
+    // Ordens do leilão que sobraram vão para o livro.
+    for (const r of rows) {
+      if (r.kind === "auction" && left.get(r)! > 0) rawPlace({ accountId: r.accountId, clubId: club, side: r.side, type: "limit", quantity: left.get(r)!, limitPrice: r.price });
+    }
+  }
 
   // Limite de 20% em volta do preço exibido para jogadores (a casa não passa por ele).
   let rejected = 0;
@@ -187,6 +335,7 @@ function run(cfg: RunCfg) {
     }
     ledger.adjustShares(TREASURY, clubId, result.treasuryShares + lotShares);
     exchange.setReferencePrice(clubId, result.price);
+    tunnelRef.set(clubId, result.price);
   }
   const treasuryStartCash = ledger.get(TREASURY).cash;
   const treasuryStartShares = new Map(clubIds.map((id) => [id, ledger.shares(TREASURY, id)]));
@@ -266,6 +415,7 @@ function run(cfg: RunCfg) {
     if (t.buyerId === TREASURY || t.sellerId === TREASURY) houseTrades++;
   });
   const pumps: any[] = [];
+  let slowAcc: any;
   let fanFromHouse = 0;
   let fanMax = 0;
   let fanSum = 0;
@@ -280,12 +430,20 @@ function run(cfg: RunCfg) {
   let lastDay = Math.floor(ipoAt / DAY_MS);
   const pendingAfter: Array<{ at: number; rec: any }> = [];
 
+  let lastDayBRT = Math.floor((openAt - 3 * 60 * 60 * 1000) / DAY_MS);
   for (let t = openAt; t <= end; t += step) {
     exchange.setTime(t);
     view.now = t;
+    // Referência do túnel: o preço exibido às 0h de Brasília (o clube em leilão mantém a dele).
+    const dayBRT = Math.floor((t - 3 * 60 * 60 * 1000) / DAY_MS);
+    if (dayBRT !== lastDayBRT) {
+      lastDayBRT = dayBRT;
+      for (const id of clubIds) if (!auctionUntil.has(id)) tunnelRef.set(id, exchange.price(id)!);
+    }
     while (payoutIdx < payouts.length && payouts[payoutIdx].at <= t) {
       const p = payouts[payoutIdx++];
       if (p.kind === "buyback") {
+        auctionUntil.delete(p.clubId);
         for (const account of ledger.all()) exchange.cancelAll(account.id, p.clubId);
         applyBuyback(ledger, p, exclude);
         continue;
@@ -315,11 +473,28 @@ function run(cfg: RunCfg) {
     if (payoutIdx < payouts.length) for (const clubId of clubIds) refresh(clubId, inMatch.has(clubId));
     for (const p of rng.shuffle([...players])) if (rng.chance(0.25)) p.act(view);
 
-    // Infladores: no último passo antes do fim do mês, depois de todos.
-    if (cfg.pump && monthIdx < monthEnds.length && t + step > monthEnds[monthIdx]!) {
-      pumps.push(pump(target, t));
-      pendingAfter.push({ at: t + DAY_MS, rec: pumps[pumps.length - 1] });
-      monthIdx++;
+    // Infladores. A dupla apressada age só no último passo antes do fim do mês, depois de
+    // todos. A paciente age a cada passo da última semana do mês, sem passar da beira do túnel.
+    if (cfg.pump && monthIdx < monthEnds.length) {
+      const monthEnd = monthEnds[monthIdx]!;
+      if (cfg.slow && t >= monthEnd - 7 * DAY_MS) {
+        const r = pump(target, t, 0.1);
+        if (!slowAcc) slowAcc = { ...r, steps: 0, premium: 0, fromHouse: 0, auctionHit: false };
+        slowAcc.steps += r.steps;
+        slowAcc.premium += r.premium;
+        slowAcc.fromHouse += r.fromHouse;
+        slowAcc.auctionHit ||= r.auctionHit;
+      }
+      if (t + step > monthEnd) {
+        // A foto do fim do mês sai antes do fim de qualquer leilão aberto agora.
+        const rec = cfg.slow
+          ? { ...slowAcc, t, after: view.price(target), paperGain: view.netWorth(A) + view.netWorth(B) - slowAcc.worthBefore }
+          : pump(target, t, 0.5);
+        pumps.push(rec);
+        pendingAfter.push({ at: t + DAY_MS, rec });
+        slowAcc = undefined;
+        monthIdx++;
+      }
     }
     // Fanático: a cada passo, compra até R$ 3 mil do alvo no maior preço que o limite deixa,
     // até 3× o valor justo e até ter 80% do patrimônio inicial investido nele.
@@ -348,6 +523,10 @@ function run(cfg: RunCfg) {
     }
     for (const pa of pendingAfter.filter((x) => x.at <= t && x.rec.priceAfterDay === undefined)) pa.rec.priceAfterDay = view.price(target);
 
+    // Leilões que terminam neste passo, depois de todos agirem.
+    auctionSteps += auctionUntil.size;
+    for (const [club, until] of [...auctionUntil]) if (until <= t) uncross(club);
+
     // Medidas por passo (até a recompra).
     if (payoutIdx < payouts.length) {
       stepsTotal++;
@@ -370,20 +549,24 @@ function run(cfg: RunCfg) {
     }
   }
 
-  function pump(club: string, t: number) {
+  function pump(club: string, t: number, budgetFraction: number) {
     const worth = () => view.netWorth(A) + view.netWorth(B);
     const before = view.price(club);
     const worthBefore = worth();
     const fair = view.fairValue(club);
-    let budget = ledger.availableCash(A) * 0.5;
+    let budget = ledger.availableCash(A) * budgetFraction;
     let steps = 0;
     let premium = 0; // quanto A pagou acima do valor justo a terceiros (casa e jogadores)
     let fromHouse = 0;
+    let auctionHit = false;
     exchange.cancelAll(A);
     exchange.cancelAll(B);
     for (let i = 0; i < 40; i++) {
+      if (auctionUntil.has(club)) break;
       const P = exchange.price(club)!;
-      const hi = Math.floor(P * 1.2);
+      let hi = Math.floor(P * 1.2);
+      // A dupla paciente não passa da beira do túnel, para não abrir leilão.
+      if (cfg.slow && cfg.tunnel > 0) hi = Math.min(hi, Math.floor(tunnelRef.get(club)! * (1 + cfg.tunnel)));
       if (hi <= P || ledger.availableShares(B, club) < 1) break;
       const others = exchange.depth(club).asks.filter((o: any) => o.accountId !== B && o.limitPrice <= hi);
       const qtyBelow = others.reduce((s: number, o: any) => s + o.remaining, 0);
@@ -395,6 +578,11 @@ function run(cfg: RunCfg) {
         budget -= tr.price * tr.quantity;
         if (tr.sellerId !== B) premium += (tr.price - fair) * tr.quantity;
         if (tr.sellerId === TREASURY) fromHouse += tr.quantity;
+      }
+      // Abriu leilão: as ordens da dupla ficam nele.
+      if (auctionUntil.has(club)) {
+        auctionHit = true;
+        break;
       }
       exchange.cancelAll(A);
       exchange.cancelAll(B);
@@ -411,6 +599,7 @@ function run(cfg: RunCfg) {
       worthBefore,
       premium,
       fromHouse,
+      auctionHit,
     };
   }
 
@@ -444,6 +633,9 @@ function run(cfg: RunCfg) {
     trades,
     houseTrades,
     rejected,
+    auctions,
+    auctionSteps,
+    auctionTrades,
     pumps,
     colluders: cfg.pump ? (view.netWorth(A) + view.netWorth(B)) / (2 * CASH) - 1 : null,
     fan: cfg.fan
@@ -464,12 +656,14 @@ const minimos = values.minimos!.split(",").map(Number);
 const n = Number(values.sementes);
 const out: any[] = [];
 const t0 = Date.now();
+const tuneis = values.tuneis!.split(",").map(Number);
 for (const lot of lotes)
   for (const minSide of minimos)
-    for (const mode of values.modos!.split(","))
-      for (let seed = 1; seed <= n; seed++) {
-        out.push(run({ seed, lot, minSide, pump: mode === "pump", fan: mode === "fan", offer: Number(values.oferta), margin: Number(values.margem) }));
-        process.stderr.write(".");
-      }
+    for (const tunnel of tuneis)
+      for (const mode of values.modos!.split(","))
+        for (let seed = 1; seed <= n; seed++) {
+          out.push(run({ seed, lot, minSide, tunnel, pump: mode === "pump" || mode === "slow", slow: mode === "slow", fan: mode === "fan", offer: Number(values.oferta), margin: Number(values.margem) }));
+          process.stderr.write(".");
+        }
 writeFileSync(values.out!, JSON.stringify(out));
 console.error(`\n${out.length} simulações em ${((Date.now() - t0) / 1000).toFixed(0)} s -> ${values.out}`);
