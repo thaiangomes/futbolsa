@@ -45,7 +45,7 @@ describe("cadastro: GET /me e POST /me", () => {
           .overrideProvider(AuthVerifier)
           .useValue(testVerifier(clock))
           .overrideProvider(AccountsConfig)
-          .useValue({ bootstrapAdminEmail: BOOTSTRAP }),
+          .useValue({ bootstrapAdminEmail: BOOTSTRAP, adminLogEmailKey: "chave-de-teste" }),
     });
   });
   afterAll(() => app?.close());

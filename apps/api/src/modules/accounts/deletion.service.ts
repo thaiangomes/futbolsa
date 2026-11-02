@@ -16,6 +16,7 @@ import {
 import { PortfolioLedger } from "../portfolio/index.js";
 import { AccountClosureHooks } from "./closure-hooks.js";
 import { accountError } from "./errors.js";
+import { lockAdminsAndCountOthers } from "./roles.service.js";
 
 /** Login feito há no máximo 15 minutos para excluir a conta (decisão do Thaian em 2026-10-31). */
 export const REAUTH_WINDOW_MS = 15 * 60_000;
@@ -131,24 +132,10 @@ export class AccountDeletionService {
    * vem antes da temporada), as duas esperariam uma pela outra (*deadlock*).
    */
   private async lockUser(tx: Tx, userId: string) {
-    const [peek] = await tx.db.select({ role: users.role }).from(users).where(eq(users.id, userId));
-    if (peek?.role === "admin") {
-      await tx.db
-        .select({ id: users.id })
-        .from(users)
-        .where(or(and(eq(users.role, "admin"), eq(users.status, "active")), eq(users.id, userId)))
-        .orderBy(asc(users.id))
-        .for("no key update");
-    }
-    const [user] = await tx.db.select().from(users).where(eq(users.id, userId)).for("no key update");
+    const othersActive = await lockAdminsAndCountOthers(tx, userId);
+    const [user] = await tx.db.select().from(users).where(eq(users.id, userId));
     if (!user || user.status === "deleted") throw accountError("account_deleted");
-    if (user.role === "admin" && user.status === "active") {
-      const [{ n }] = (await tx.db
-        .select({ n: sql<number>`count(*)::int` })
-        .from(users)
-        .where(and(eq(users.role, "admin"), eq(users.status, "active"), ne(users.id, userId)))) as [{ n: number }];
-      if (n === 0) throw accountError("last_admin");
-    }
+    if (user.role === "admin" && user.status === "active" && othersActive === 0) throw accountError("last_admin");
     return user;
   }
 

@@ -1,5 +1,6 @@
 import { Global, Module } from "@nestjs/common";
 import { UserResolver } from "../../infra/auth-adapter/index.js";
+import { AdminLogModule } from "../admin/log/index.js";
 import { PortfolioModule } from "../portfolio/index.js";
 import { AccountsConfig, accountsConfigFromEnv } from "./accounts.config.js";
 import { AccountsController } from "./accounts.controller.js";
@@ -7,7 +8,11 @@ import { AccountsService } from "./accounts.service.js";
 import { AccountClosureHooks } from "./closure-hooks.js";
 import { AccountDeletionService } from "./deletion.service.js";
 import { IdentityService } from "./identity.service.js";
+import { InvitesController } from "./invites.controller.js";
+import { InvitesService } from "./invites.service.js";
 import { PlayersController } from "./players.controller.js";
+import { RolesController } from "./roles.controller.js";
+import { RolesService } from "./roles.service.js";
 
 /**
  * Conta e login. Global porque o guard de login (de todas as rotas) e o WebSocket perguntam a
@@ -17,8 +22,8 @@ import { PlayersController } from "./players.controller.js";
  */
 @Global()
 @Module({
-  imports: [PortfolioModule],
-  controllers: [AccountsController, PlayersController],
+  imports: [PortfolioModule, AdminLogModule],
+  controllers: [AccountsController, PlayersController, InvitesController, RolesController],
   providers: [
     IdentityService,
     { provide: UserResolver, useExisting: IdentityService },
@@ -26,6 +31,8 @@ import { PlayersController } from "./players.controller.js";
     AccountsService,
     AccountClosureHooks,
     AccountDeletionService,
+    InvitesService,
+    RolesService,
   ],
   exports: [UserResolver, IdentityService, AccountsService, AccountClosureHooks, AccountDeletionService],
 })
