@@ -125,6 +125,10 @@ export class AccountDeletionService {
   /**
    * Trava a conta. Se ela é admin, trava todos os admins ativos em ordem de id (a mesma trava da
    * troca de papel), para dois admins não saírem ao mesmo tempo deixando o jogo sem nenhum.
+   *
+   * `FOR NO KEY UPDATE`, e não `FOR UPDATE`: a abertura do IPO trava a temporada e, ao criar a
+   * carteira, a chave estrangeira pede `KEY SHARE` na linha do usuário. Com `FOR UPDATE` aqui (que
+   * vem antes da temporada), as duas esperariam uma pela outra (*deadlock*).
    */
   private async lockUser(tx: Tx, userId: string) {
     const [peek] = await tx.db.select({ role: users.role }).from(users).where(eq(users.id, userId));
@@ -134,9 +138,9 @@ export class AccountDeletionService {
         .from(users)
         .where(or(and(eq(users.role, "admin"), eq(users.status, "active")), eq(users.id, userId)))
         .orderBy(asc(users.id))
-        .for("update");
+        .for("no key update");
     }
-    const [user] = await tx.db.select().from(users).where(eq(users.id, userId)).for("update");
+    const [user] = await tx.db.select().from(users).where(eq(users.id, userId)).for("no key update");
     if (!user || user.status === "deleted") throw accountError("account_deleted");
     if (user.role === "admin" && user.status === "active") {
       const [{ n }] = (await tx.db
