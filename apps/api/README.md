@@ -65,3 +65,22 @@ O login fica atrás de um adaptador (`src/infra/auth-adapter/`): a API só conhe
 - **Nos testes:** `createTestApp({ db, clock, override: withTestAuth(clock) })` (`test/support/app.ts`
   e `auth.ts`), `createAccount(db, { role: "admin" })` (`test/support/accounts.ts`) para ter um
   jogador ou admin com token, e `bearer(token)` no `app.inject`.
+
+## Conferir o login no Supabase
+
+Depois de configurar o login no painel do projeto (Authentication), com o `.env` preenchido
+(`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`):
+
+```bash
+npm run auth:check -w @futbolsa/api
+```
+
+Confere as chaves de assinatura assimétricas (a API recusa `HS256`), login por e-mail e pelo
+Google ligados, confirmação de e-mail ligada e login anônimo desligado. Com
+`SUPABASE_TEST_TOKEN=<token>` (de um usuário de teste que confirmou o e-mail), confere que o
+token passa pelo verificador da API e traz `user_metadata.email_verified`. Com
+`SUPABASE_CHECK_DELETE_SUBJECT=<id>`, apaga esse usuário pela API de administração.
+
+No painel, à mão: senha mínima de 8 caracteres, endereços do site (Site URL e Redirect URLs),
+um SMTP próprio para os e-mails chegarem aos jogadores e a troca de senha segura (Secure
+password change) ligada.

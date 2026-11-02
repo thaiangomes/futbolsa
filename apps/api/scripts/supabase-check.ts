@@ -1,0 +1,78 @@
+/**
+ * Conferência do login no projeto do Supabase (tarefa A11 do Plano de login e contas). Só lê,
+ * a não ser que `SUPABASE_CHECK_DELETE_SUBJECT` seja dado. Rodar da raiz, com o `.env` preenchido:
+ *
+ *   npm run auth:check -w @futbolsa/api
+ *   SUPABASE_TEST_TOKEN=<token de um usuário de teste> npm run auth:check -w @futbolsa/api
+ *
+ * O token de teste sai do site depois de entrar com um usuário criado no painel (ou de
+ * `supabase.auth.getSession()` no console do navegador). Nada aqui imprime o token nem e-mail inteiro.
+ */
+import { SystemClock } from "../src/infra/clock/index.js";
+import { authVerifierFromEnv } from "../src/infra/auth-adapter/index.js";
+
+const url = process.env.SUPABASE_URL?.replace(/\/+$/, "");
+const publishable = process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+let failures = 0;
+
+function report(ok: boolean, label: string, detail = ""): void {
+  if (!ok) failures++;
+  console.log(`${ok ? "ok  " : "FALHA"} ${label}${detail ? `: ${detail}` : ""}`);
+}
+
+const mask = (email: string) => email.replace(/^(.).*(@.*)$/, "$1***$2");
+
+if (!url) {
+  console.error("SUPABASE_URL vazio: preencha o .env (veja o .env.example).");
+  process.exit(1);
+}
+
+// 1. Chaves públicas: precisam ser assimétricas, porque a API recusa o HS256.
+const jwks = (await fetch(`${url}/auth/v1/.well-known/jwks.json`).then((r) => r.json())) as { keys?: Array<{ alg?: string; kty?: string }> };
+const algs = (jwks.keys ?? []).map((k) => k.alg ?? k.kty ?? "?");
+report(algs.some((a) => a === "ES256" || a === "RS256"), "chaves de assinatura assimétricas (JWT Signing Keys)", algs.join(", ") || "nenhuma");
+
+// 2. Configuração pública do login.
+if (publishable) {
+  const settings = (await fetch(`${url}/auth/v1/settings`, { headers: { apikey: publishable } }).then((r) => r.json())) as {
+    external?: Record<string, boolean>;
+    mailer_autoconfirm?: boolean;
+    disable_signup?: boolean;
+  };
+  report(settings.external?.email === true, "login por e-mail e senha ligado");
+  report(settings.external?.google === true, "login pelo Google ligado");
+  report(settings.mailer_autoconfirm === false, "confirmação de e-mail ligada (Confirm email)");
+  report(settings.external?.anonymous_users !== true, "login anônimo desligado");
+  report(settings.disable_signup !== true, "cadastro no Supabase aberto (o convite é conferido pela API)");
+} else {
+  report(false, "configuração do login", "defina SUPABASE_PUBLISHABLE_KEY para conferir");
+}
+
+// 3. Um token de verdade passa pelo mesmo verificador da API.
+const token = process.env.SUPABASE_TEST_TOKEN;
+if (token) {
+  try {
+    const identity = await authVerifierFromEnv(new SystemClock()).verify(token);
+    report(true, "token de teste aceito pelo SupabaseAuthVerifier", mask(identity.email));
+    report(identity.emailVerified, "o token traz user_metadata.email_verified verdadeiro (sem ele, a API recusa com email_not_confirmed)");
+    console.log(`     último login: ${identity.authenticatedAt.toISOString()}; vence: ${identity.expiresAt.toISOString()}`);
+  } catch (error) {
+    report(false, "token de teste aceito pelo SupabaseAuthVerifier", (error as Error).message);
+  }
+} else {
+  console.log("     (sem SUPABASE_TEST_TOKEN: o token de um usuário de teste não foi conferido)");
+}
+
+// 4. Opcional: apagar o usuário de teste, conferindo a chave de serviço.
+const subject = process.env.SUPABASE_CHECK_DELETE_SUBJECT;
+if (subject) {
+  try {
+    await authVerifierFromEnv(new SystemClock()).deleteIdentity(subject);
+    report(true, "usuário de teste apagado pela API de administração");
+  } catch (error) {
+    report(false, "usuário de teste apagado pela API de administração", (error as Error).message);
+  }
+}
+
+console.log(failures === 0 ? "\nTudo certo." : `\n${failures} ponto(s) a acertar no painel do Supabase.`);
+process.exit(failures === 0 ? 0 : 1);
