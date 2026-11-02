@@ -91,6 +91,19 @@ export class TestClient {
     return this.messages.shift();
   }
 
+  /** Espera um tempo e diz se nenhuma mensagem chegou nele. */
+  async quiet(ms = 150): Promise<boolean> {
+    const before = this.messages.length;
+    await new Promise((resolve) => setTimeout(resolve, ms));
+    return this.messages.length === before;
+  }
+
+  /** Manda uma mensagem e espera a próxima resposta. */
+  async ask(message: unknown): Promise<any> {
+    this.send(message);
+    return this.next();
+  }
+
   close(): Promise<ClosedInfo> {
     this.socket.close();
     return this.closed;
