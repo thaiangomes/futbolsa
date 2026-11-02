@@ -26,9 +26,7 @@ export const DEFAULT_BUS_OPTIONS: MemoryBusOptions = {
   throttle: THROTTLE_RULES,
 };
 
-interface HistoryEntry extends BusEvent {
-  at: number;
-}
+type HistoryEntry = BusEvent;
 
 interface StreamState {
   limits: HistoryLimits;
@@ -121,7 +119,7 @@ export class MemoryEventBus extends EventBus implements OnModuleDestroy {
         mode = "resync";
       } else {
         mode = "resumed";
-        replay = state.history.filter((e) => e.seq > since).map(({ seq, frame }) => ({ seq, frame }));
+        replay = state.history.filter((e) => e.seq > since);
       }
     }
 

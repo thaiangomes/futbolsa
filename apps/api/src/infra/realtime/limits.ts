@@ -24,6 +24,12 @@ export function realtimeLimits() {
     maxConnectionsPerUser: numberFromEnv("WS_MAX_CONNECTIONS_PER_USER", 5),
     /** Conexões no total; acima disso a nova é recusada. */
     maxConnections: numberFromEnv("WS_MAX_CONNECTIONS", 20_000),
+    /** De quanto em quanto tempo o servidor manda `heartbeat` ao cliente. */
+    heartbeatMs: numberFromEnv("WS_HEARTBEAT_MS", 25_000),
+    /** De quanto em quanto tempo o servidor manda `ping`. */
+    pingMs: numberFromEnv("WS_PING_MS", 30_000),
+    /** Vida máxima de uma conexão autenticada (o token vale cerca de uma hora). */
+    maxAgeMs: numberFromEnv("WS_MAX_AGE_MS", 55 * 60_000),
     /** Bytes parados no envio de um cliente que não lê; acima disso ele é derrubado. */
     slowClientBytes: numberFromEnv("WS_SLOW_CLIENT_BYTES", 1_048_576),
   };

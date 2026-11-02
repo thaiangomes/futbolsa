@@ -1,4 +1,5 @@
 import type { IncomingMessage } from "node:http";
+import type { OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import {
   WebSocketGateway,
   type OnGatewayConnection,
@@ -9,8 +10,10 @@ import type { WebSocket } from "ws";
 import { Clock } from "../clock/index.js";
 import { RealtimeAuthenticator } from "./authenticator.js";
 import { EventBus } from "./bus.js";
+import { RealtimeLifecycle } from "./lifecycle.js";
 import { MAX_MESSAGE_BYTES, realtimeLimits } from "./limits.js";
 import { RealtimeSession } from "./protocol.js";
+import { DelayRecorder, type RealtimeStats } from "./stats.js";
 
 /** Quem está do outro lado de uma conexão. */
 export interface ConnectionInfo {
@@ -39,17 +42,36 @@ function verifyClient(info: { origin: string }, done: VerifyDone): void {
  * fecha com 1009 (`maxPayload` do `ws`).
  */
 @WebSocketGateway({ path: "/ws", verifyClient, maxPayload: MAX_MESSAGE_BYTES })
-export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy {
   private readonly sessions = new Map<WebSocket, RealtimeSession>();
   /** As sessões de cada pessoa, da mais antiga para a mais nova. */
   private readonly byUser = new Map<string, Set<RealtimeSession>>();
+  private readonly delays = new DelayRecorder();
   private slowClientsDropped = 0;
+  private lifecycle: RealtimeLifecycle | undefined;
 
   constructor(
     private readonly bus: EventBus,
     private readonly authenticator: RealtimeAuthenticator,
     private readonly clock: Clock,
   ) {}
+
+  onModuleInit(): void {
+    const { heartbeatMs, pingMs, maxAgeMs } = realtimeLimits();
+    this.lifecycle = new RealtimeLifecycle(() => this.sessions.values(), this.clock, { heartbeatMs, pingMs, maxAgeMs });
+    this.lifecycle.start();
+  }
+
+  /** Desligamento limpo: para os batimentos e fecha todas as conexões com 1001 (o cliente reconecta com recuo). */
+  async onModuleDestroy(): Promise<void> {
+    this.lifecycle?.stop();
+    const closing = [...this.sessions.keys()].map(
+      (socket) => new Promise<void>((resolve) => socket.once("close", () => resolve())),
+    );
+    for (const session of [...this.sessions.values()]) session.close(CLOSE_CODES.serverShutdown, "API desligando");
+    // dá um instante para os quadros de fechamento saírem antes de o servidor cortar os sockets
+    await Promise.race([Promise.all(closing), new Promise((resolve) => setTimeout(resolve, 1_000).unref?.())]);
+  }
 
   handleConnection(socket: WebSocket, _request: IncomingMessage): void {
     if (this.sessions.size >= realtimeLimits().maxConnections) {
@@ -65,6 +87,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
         onSlowClient: () => {
           this.slowClientsDropped += 1;
         },
+        onDelivered: (delayMs) => this.delays.record(delayMs),
       },
     });
     this.sessions.set(socket, session);
@@ -80,9 +103,28 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.forgetUser(session);
   }
 
-  /** Contadores da vida do tempo real (a T7 acrescenta o resto). */
-  stats() {
-    return { connections: this.sessions.size, slowClientsDropped: this.slowClientsDropped };
+  /** Fecha todas as conexões da pessoa (conta excluída ou papel mudou) com 4403; o cliente reabre com o login atual. Devolve quantas fechou. */
+  disconnectUser(userId: string): number {
+    const sessions = [...(this.byUser.get(userId) ?? [])];
+    for (const session of sessions) session.close(CLOSE_CODES.accountChanged, "conta alterada");
+    return sessions.length;
+  }
+
+  /** O retrato do tempo real agora: conexões, assinaturas por canal, envio parado, clientes lentos e atraso dos eventos. */
+  stats(): RealtimeStats {
+    const subscriptions: Record<string, number> = {};
+    let bufferedBytes = 0;
+    for (const session of this.sessions.values()) {
+      bufferedBytes += session.bufferedBytes;
+      for (const channel of session.channels()) subscriptions[channel] = (subscriptions[channel] ?? 0) + 1;
+    }
+    return {
+      connections: this.sessions.size,
+      subscriptions,
+      bufferedBytes,
+      slowClientsDropped: this.slowClientsDropped,
+      eventDelay: this.delays.snapshot(),
+    };
   }
 
   /** As conexões abertas agora, sem o socket. Serve aos testes e, depois, às estatísticas. */

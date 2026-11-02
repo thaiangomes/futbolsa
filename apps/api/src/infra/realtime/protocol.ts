@@ -13,7 +13,7 @@ import {
 import type { RawData, WebSocket } from "ws";
 import type { Clock } from "../clock/index.js";
 import type { RealtimeAuthenticator, RealtimeIdentity } from "./authenticator.js";
-import { meChannel, type BusSubscription, type EventBus, type Stream } from "./bus.js";
+import { meChannel, type BusEvent, type BusSubscription, type EventBus, type Stream } from "./bus.js";
 import { realtimeLimits, type RealtimeLimits } from "./limits.js";
 
 export interface SessionDeps {
@@ -26,6 +26,8 @@ export interface SessionDeps {
     onLogin(session: RealtimeSession): void;
     /** O cliente não escoa o envio e foi derrubado. */
     onSlowClient(session: RealtimeSession): void;
+    /** Um evento do jogo foi entregue ao socket, `delayMs` depois de publicado. */
+    onDelivered(delayMs: number): void;
   };
 }
 
@@ -53,6 +55,9 @@ export class RealtimeSession {
   private queue: Promise<void> = Promise.resolve();
   private firstMessageTimer: ReturnType<typeof setTimeout> | undefined;
   private closed = false;
+  /** O último `ping` foi respondido? */
+  private alive = true;
+  private loginAt: number | null = null;
   private readonly limits: RealtimeLimits = realtimeLimits();
   /** Instantes (ms) das mensagens do último segundo, para limitar o ritmo. */
   private readonly recent: number[] = [];
@@ -60,10 +65,45 @@ export class RealtimeSession {
   constructor(
     private readonly socket: WebSocket,
     private readonly deps: SessionDeps,
-  ) {}
+  ) {
+    socket.on("pong", () => {
+      this.alive = true;
+    });
+  }
 
   get userId(): string | null {
     return this.identity?.userId ?? null;
+  }
+
+  /** Instante (ms) do login, ou `null` para o visitante. */
+  get loggedInAt(): number | null {
+    return this.loginAt;
+  }
+
+  /** Bytes parados no envio deste cliente. */
+  get bufferedBytes(): number {
+    return this.socket.bufferedAmount;
+  }
+
+  /** Os canais que a conexão assina agora. */
+  channels(): Channel[] {
+    return [...this.subscriptions.keys()];
+  }
+
+  sendHeartbeat(): void {
+    this.send("heartbeat", {});
+  }
+
+  /** Manda `ping`; quem não respondeu ao anterior é cortado. */
+  ping(): void {
+    if (this.closed) return;
+    if (!this.alive) {
+      this.dispose();
+      this.socket.terminate();
+      return;
+    }
+    this.alive = false;
+    this.socket.ping();
   }
 
   get role(): RealtimeRole {
@@ -129,6 +169,7 @@ export class RealtimeSession {
     if (this.closed) return;
     if (result.ok) {
       this.identity = result.identity;
+      this.loginAt = this.deps.clock.now().getTime();
       this.deps.hooks.onLogin(this);
       this.send("auth.ok", { role: result.identity.role });
       return;
@@ -149,12 +190,18 @@ export class RealtimeSession {
       return this.sendError("too_many_subscriptions", channel);
     }
     previous?.unsubscribe();
-    const subscription = this.deps.bus.subscribe(this.streamOf(channel), (event) => this.sendFrame(event.frame), since);
+    const subscription = this.deps.bus.subscribe(this.streamOf(channel), (event) => this.sendEvent(event), since);
     this.subscriptions.set(channel, subscription);
 
     // O barramento já registrou a assinatura; nada roda entre aqui e o fim do reenvio.
     this.send("subscribed", { channel, seq: subscription.seq, mode: subscription.mode });
-    for (const event of subscription.replay) this.sendFrame(event.frame);
+    for (const event of subscription.replay) this.sendEvent(event);
+  }
+
+  private sendEvent(event: BusEvent): void {
+    if (this.closed) return;
+    this.sendFrame(event.frame);
+    this.deps.hooks.onDelivered(this.deps.clock.now().getTime() - event.at);
   }
 
   private unsubscribe(raw: string): void {

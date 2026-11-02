@@ -18,6 +18,8 @@ export type Stream = Channel | MeStream;
 export interface BusEvent {
   seq: number;
   frame: string;
+  /** O instante da publicação (ms), para medir o atraso da entrega. */
+  at: number;
 }
 
 export type BusListener = (event: BusEvent) => void;
