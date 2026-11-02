@@ -4,6 +4,7 @@ import type { Channel, EventEnvelope } from "@futbolsa/contracts";
 import {
   createContext,
   createElement,
+  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -70,7 +71,10 @@ const SERVER_STATE: ClientState = { status: "idle", retryInMs: null, role: "visi
 /** O estado da conexão (conectando, aberta, reconectando em X ms) e o papel confirmado pelo servidor. */
 export function useRealtimeState(): ClientState {
   const client = useRealtimeClient();
-  return useSyncExternalStore(client.onState, client.getState, () => SERVER_STATE);
+  // métodos de classe: chamados pelo cliente, e não soltos, para manterem o `this`
+  const subscribe = useCallback((onChange: () => void) => client.onState(onChange), [client]);
+  const getSnapshot = useCallback(() => client.getState(), [client]);
+  return useSyncExternalStore(subscribe, getSnapshot, () => SERVER_STATE);
 }
 
 /** Assina um canal enquanto o componente existe. Para estado que também vem da REST, use `useSyncedChannel`. */

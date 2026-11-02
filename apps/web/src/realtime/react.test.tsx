@@ -18,11 +18,14 @@ class FakeClient {
   disconnect = vi.fn(() => this.setState({ status: "idle" }));
   reconnect = vi.fn();
 
-  getState = () => this.state;
-  onState = (listener: (s: ClientState) => void) => {
+  // métodos de classe, como no cliente de verdade: quem os solta de `this` quebra
+  getState() {
+    return this.state;
+  }
+  onState(listener: (s: ClientState) => void) {
     this.stateListeners.add(listener);
     return () => this.stateListeners.delete(listener);
-  };
+  }
   subscribe = vi.fn((channel: Channel, handlers: ChannelHandlers) => {
     const set = this.subscriptions.get(channel) ?? new Set();
     set.add(handlers);
