@@ -25,6 +25,8 @@ export interface TestAppOptions {
  * `configureApp`), com o relógio fixo e o banco do arquivo de teste no lugar dos reais.
  */
 export async function createTestApp(options: TestAppOptions = {}): Promise<NestFastifyApplication> {
+  // As tarefas agendadas não rodam nos testes: eles chamam os serviços direto, com o relógio fixo.
+  process.env.JOBS_ENABLED = "false";
   const clock = options.clock ?? new FixedClock(new Date("2027-04-01T13:00:00Z"));
   let builder = Test.createTestingModule({
     imports: [AppModule, ...(options.imports ?? [])],
