@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { healthResponseSchema, type HealthResponse } from "@futbolsa/contracts";
+import { RealtimeStatusLine } from "../realtime/react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
@@ -22,6 +23,7 @@ export default function Home() {
       <p>
         API: {erro ? `fora do ar (${erro})` : health ? `${health.status} (preço mínimo ${health.minPrice} centavos)` : "consultando…"}
       </p>
+      <RealtimeStatusLine />
     </main>
   );
 }
