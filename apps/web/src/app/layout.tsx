@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { RealtimeProvider } from "../realtime/react";
+import { AppRealtimeProvider } from "../realtime/app-provider";
 
 export const metadata = {
   title: "FutBolsa",
@@ -10,7 +10,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-BR">
       <body>
-        <RealtimeProvider>{children}</RealtimeProvider>
+        <AppRealtimeProvider>{children}</AppRealtimeProvider>
       </body>
     </html>
   );
