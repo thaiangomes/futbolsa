@@ -1,4 +1,5 @@
 export * from "./health.js";
+export * from "./errors.js";
 export * from "./accounts/index.js";
 export * from "./ipo/index.js";
 export * from "./market/index.js";

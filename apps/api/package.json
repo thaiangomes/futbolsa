@@ -29,15 +29,19 @@
     "vitest": "^5.0.5"
   },
   "dependencies": {
+    "@fastify/helmet": "^13.2.0",
+    "@futbolsa/contracts": "*",
+    "@futbolsa/engine": "*",
     "@nestjs/common": "^12.3.2",
     "@nestjs/core": "^12.3.2",
     "@nestjs/platform-fastify": "^12.3.2",
+    "@nestjs/throttler": "^6.7.1",
     "drizzle-orm": "^0.45.4",
     "fastify": "^5.12.7",
+    "jose": "^6.2.15",
     "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "@futbolsa/contracts": "*",
-    "@futbolsa/engine": "*"
+    "zod": "^4.6.7"
   }
 }
