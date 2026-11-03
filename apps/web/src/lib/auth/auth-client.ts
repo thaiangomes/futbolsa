@@ -37,7 +37,7 @@ export type AuthErrorCode =
 
 /** Mensagens das falhas do login, em português. Nenhuma diz se um e-mail tem conta. */
 export const AUTH_ERROR_MESSAGES: Record<AuthErrorCode, string> = {
-  invalid_credentials: "E-mail ou senha incorretos.",
+  invalid_credentials: "E-mail ou senha incorretos. Confira e tente de novo.",
   email_not_confirmed: "Confirme o seu e-mail pelo link que enviamos antes de entrar.",
   weak_password: "A senha precisa ter pelo menos 8 caracteres.",
   same_password: "A senha nova precisa ser diferente da atual.",
