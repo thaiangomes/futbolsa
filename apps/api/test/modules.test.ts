@@ -16,7 +16,7 @@ describe("aplicação com todos os módulos", () => {
       .useValue(fixo)
       .compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
-    configureApp(app);
+    await configureApp(app);
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
   });

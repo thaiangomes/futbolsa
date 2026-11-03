@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { HealthController } from "./health.controller.js";
 import { ClockModule } from "./infra/clock/index.js";
 import { DbModule } from "./infra/db/index.js";
+import { HttpInfraModule } from "./infra/http/index.js";
 import { AuthAdapterModule } from "./infra/auth-adapter/index.js";
 import { RealtimeModule } from "./infra/realtime/index.js";
 import { JobsModule } from "./infra/jobs/index.js";
@@ -19,6 +20,7 @@ import { AdminModule } from "./modules/admin/index.js";
     // infraestrutura
     ClockModule,
     DbModule,
+    HttpInfraModule,
     AuthAdapterModule,
     RealtimeModule,
     JobsModule,
