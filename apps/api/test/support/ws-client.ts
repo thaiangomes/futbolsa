@@ -1,7 +1,12 @@
 import type { AddressInfo } from "node:net";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import WebSocket from "ws";
-import { createApp } from "../../src/app.js";
+import { Clock, FixedClock, SystemClock } from "../../src/infra/clock/index.js";
+import type { Database } from "../../src/infra/db/index.js";
+import { RealtimeAuthenticator } from "../../src/infra/realtime/authenticator.js";
+import { FakeRealtimeAuthenticator } from "../../src/infra/realtime/fake-authenticator.js";
+import { createTestApp } from "./app.js";
+import { withTestAuth } from "./auth.js";
 
 /** O endereço do site que os testes de tempo real usam como `WEB_ORIGIN`. */
 export const WEB_ORIGIN = "http://localhost:3001";
@@ -13,10 +18,30 @@ export interface RunningApp {
   close(): Promise<void>;
 }
 
-/** Sobe a API de verdade numa porta sorteada, para o `ws` conectar nela. */
-export async function startApp(): Promise<RunningApp> {
+export interface StartAppOptions {
+  /**
+   * Usa o login de verdade (`AuthFromAccounts`, com o banco e os tokens de teste da F5) em vez do
+   * autenticador falso. O relógio do verificador é o dado; o da aplicação é o real.
+   */
+  realAuth?: { db: Database; verifierClock: FixedClock };
+}
+
+/**
+ * Sobe a API inteira numa porta sorteada, para o `ws` conectar nela. O relógio é o real (os
+ * limites de tempo do tempo real contam em tempo de verdade) e o login é o falso, a não ser com `realAuth`.
+ */
+export async function startApp(options: StartAppOptions = {}): Promise<RunningApp> {
   process.env.WEB_ORIGIN = WEB_ORIGIN;
-  const app = await createApp();
+  const { realAuth } = options;
+  const app = await createTestApp({
+    db: realAuth?.db,
+    override: (builder) => {
+      const withClock = builder.overrideProvider(Clock).useClass(SystemClock);
+      return realAuth
+        ? withTestAuth(realAuth.verifierClock)(withClock)
+        : withClock.overrideProvider(RealtimeAuthenticator).useClass(FakeRealtimeAuthenticator);
+    },
+  });
   await app.listen(0, "127.0.0.1");
   const { port } = app.getHttpServer().address() as AddressInfo;
   return { app, wsUrl: `ws://127.0.0.1:${port}`, close: () => app.close() };

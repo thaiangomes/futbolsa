@@ -26,10 +26,16 @@ export type RealtimeClientLike = Pick<
 
 const RealtimeContext = createContext<RealtimeClientLike | null>(null);
 
+/** O pedaço do login do site que o tempo real usa (o `AuthClient` da F5 serve). */
+export interface RealtimeAuth {
+  getAccessToken(options?: { forceRefresh?: boolean }): Promise<string | null>;
+  onChange(listener: () => void): () => void;
+}
+
 export interface RealtimeProviderProps {
   children: ReactNode;
-  /** O token do login (T13). Sem ele, todos entram como visitantes. */
-  getToken?: RealtimeClientOptions["getToken"];
+  /** O login do site. Sem ele, todos entram como visitantes. */
+  auth?: RealtimeAuth;
   /** Troca o cliente (testes). */
   createClient?: (options: RealtimeClientOptions) => RealtimeClientLike;
 }
@@ -39,14 +45,14 @@ export interface RealtimeProviderProps {
  * socket: o `WebSocket` só é criado dentro do `connect`) e conecta num efeito, então a
  * exportação estática do Next não toca em `WebSocket`.
  */
-export function RealtimeProvider({ children, getToken, createClient }: RealtimeProviderProps) {
-  const getTokenRef = useRef(getToken);
-  getTokenRef.current = getToken;
+export function RealtimeProvider({ children, auth, createClient }: RealtimeProviderProps) {
+  const authRef = useRef(auth);
+  authRef.current = auth;
 
   const [client] = useState<RealtimeClientLike>(() => {
     const options: RealtimeClientOptions = {
       url: wsUrlFromApiUrl(API_URL),
-      getToken: (opts) => (getTokenRef.current ? getTokenRef.current(opts) : Promise.resolve(null)),
+      getToken: (opts) => (authRef.current ? authRef.current.getAccessToken(opts) : Promise.resolve(null)),
     };
     return createClient ? createClient(options) : new RealtimeClient(options);
   });
@@ -55,6 +61,27 @@ export function RealtimeProvider({ children, getToken, createClient }: RealtimeP
     client.connect();
     return () => client.disconnect();
   }, [client]);
+
+  // Entrar ou sair reabre a conexão com o login novo (e com retomada). Renovar o token, estando
+  // logado, não mexe: a conexão só confere o token ao abrir, e a de 55 minutos já se renova sozinha.
+  useEffect(() => {
+    if (!auth) return;
+    let cancelled = false;
+    let signedIn: boolean | null = null;
+    const check = async () => {
+      const token = await auth.getAccessToken().catch(() => null);
+      if (cancelled) return;
+      const now = token !== null;
+      if (signedIn !== null && now !== signedIn) client.reconnect();
+      signedIn = now;
+    };
+    void check();
+    const stop = auth.onChange(() => void check());
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, [auth, client]);
 
   return createElement(RealtimeContext.Provider, { value: client }, children);
 }

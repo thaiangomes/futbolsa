@@ -166,6 +166,87 @@ describe("provedor e ganchos do tempo real (T11)", () => {
     expect(client.subscriptions.has("club:FLA3")).toBe(false);
   });
 
+  describe("login (T13)", () => {
+    /** O login do site falso: o teste entra, sai e renova o token. */
+    function fakeAuth(initial: string | null) {
+      let token = initial;
+      const listeners = new Set<() => void>();
+      return {
+        getAccessToken: vi.fn(async (_options?: { forceRefresh?: boolean }) => token),
+        onChange: vi.fn((listener: () => void) => {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        }),
+        set(next: string | null) {
+          token = next;
+          listeners.forEach((l) => l());
+        },
+        listeners,
+      };
+    }
+    const settle = () => act(async () => {});
+
+    function renderWith(auth: ReturnType<typeof fakeAuth>) {
+      act(() => {
+        root.render(createElement(RealtimeProvider, { createClient: makeClient as never, auth, children: createElement("span") }));
+      });
+    }
+
+    it("C28: o cliente pega o token do login a cada conexão, repassando o forceRefresh", async () => {
+      const auth = fakeAuth("tok-1");
+      renderWith(auth);
+      await settle();
+      const options = makeClient.mock.calls[0]![0] as { getToken(o?: { forceRefresh?: boolean }): Promise<string | null> };
+      expect(await options.getToken()).toBe("tok-1");
+      expect(auth.getAccessToken).toHaveBeenLastCalledWith(undefined);
+      await options.getToken({ forceRefresh: true });
+      expect(auth.getAccessToken).toHaveBeenLastCalledWith({ forceRefresh: true });
+    });
+
+    it("C28: entrar reabre a conexão com o token certo, e sair reabre como visitante", async () => {
+      const auth = fakeAuth(null);
+      renderWith(auth);
+      await settle();
+      expect(client.reconnect).not.toHaveBeenCalled();
+
+      auth.set("tok-1"); // entrou
+      await settle();
+      expect(client.reconnect).toHaveBeenCalledTimes(1);
+
+      auth.set(null); // saiu
+      await settle();
+      expect(client.reconnect).toHaveBeenCalledTimes(2);
+    });
+
+    it("C28: a renovação do token (continua logado) não derruba a conexão", async () => {
+      const auth = fakeAuth("tok-1");
+      renderWith(auth);
+      await settle();
+      auth.set("tok-2");
+      await settle();
+      auth.set("tok-3");
+      await settle();
+      expect(client.reconnect).not.toHaveBeenCalled();
+    });
+
+    it("C28: ao sair da página o provedor para de ouvir o login", async () => {
+      const auth = fakeAuth("tok-1");
+      renderWith(auth);
+      await settle();
+      expect(auth.listeners.size).toBe(1);
+      act(() => root.unmount());
+      expect(auth.listeners.size).toBe(0);
+      root = createRoot(container);
+    });
+
+    it("sem login configurado, o provedor entra como visitante e não ouve nada", async () => {
+      render(createElement("span"));
+      await settle();
+      const options = makeClient.mock.calls[0]![0] as { getToken(): Promise<string | null> };
+      expect(await options.getToken()).toBeNull();
+    });
+  });
+
   it("sem provedor, os ganchos dizem o que faltou", () => {
     function Solta() {
       useRealtimeState();
