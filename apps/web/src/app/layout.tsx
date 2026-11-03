@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { SessionProvider } from "../features/accounts/session-provider";
+import { RealtimeProvider } from "../realtime/react";
 import "../styles/futbolsa.css";
 
 export const metadata = {
@@ -19,7 +20,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         />
       </head>
       <body className="fb" data-tema="escuro">
-        <SessionProvider>{children}</SessionProvider>
+        {/* A sessão do login por fora; o tempo real por dentro (a T13 da F6 liga o token dela ao WebSocket). */}
+        <SessionProvider>
+          <RealtimeProvider>{children}</RealtimeProvider>
+        </SessionProvider>
       </body>
     </html>
   );
