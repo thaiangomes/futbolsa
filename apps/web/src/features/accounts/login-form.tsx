@@ -2,6 +2,7 @@
 
 import { type FormEvent, useState } from "react";
 import { type AuthClient, AuthError, AUTH_ERROR_MESSAGES } from "../../lib/auth";
+import { googleLoginEnabled } from "./flags";
 
 export interface LoginFormProps {
   auth: AuthClient;
@@ -32,6 +33,7 @@ export function LoginForm({ auth, returnUrl, onSignedIn }: LoginFormProps) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const google = googleLoginEnabled();
 
   const run = async (action: () => Promise<void>, after?: () => void) => {
     setBusy(true);
@@ -57,16 +59,20 @@ export function LoginForm({ auth, returnUrl, onSignedIn }: LoginFormProps) {
         <h2 className="h2" id="t-entrar">Entrar no jogo</h2>
         <span className="small muted">Use o e-mail que o admin liberou para você.</span>
       </div>
-      <button type="button" className="btn btn-lg btn-full" style={{ background: "var(--panel2)" }} disabled={busy}
-        onClick={() => void run(() => auth.signInWithGoogle(returnUrl))}>
-        <GoogleIcon />
-        Entrar com o Google
-      </button>
-      <div className="row-s xs muted" style={{ gap: 12 }}>
-        <span className="grow" style={{ height: 1, background: "var(--line)" }} />
-        ou com e-mail e senha
-        <span className="grow" style={{ height: 1, background: "var(--line)" }} />
-      </div>
+      {google && (
+        <>
+          <button type="button" className="btn btn-lg btn-full" style={{ background: "var(--panel2)" }} disabled={busy}
+            onClick={() => void run(() => auth.signInWithGoogle(returnUrl))}>
+            <GoogleIcon />
+            Entrar com o Google
+          </button>
+          <div className="row-s xs muted" style={{ gap: 12 }}>
+            <span className="grow" style={{ height: 1, background: "var(--line)" }} />
+            ou com e-mail e senha
+            <span className="grow" style={{ height: 1, background: "var(--line)" }} />
+          </div>
+        </>
+      )}
       <div className="field">
         <label htmlFor="em">E-mail</label>
         <input id="em" className="input" type="email" autoComplete="email" value={email}
@@ -89,8 +95,8 @@ export function LoginForm({ auth, returnUrl, onSignedIn }: LoginFormProps) {
       </div>
       <hr className="hr" />
       <p className="xs muted m0">
-        Só entra quem tem o e-mail liberado pelo admin. Ainda não tem convite? Peça a quem te chamou para o jogo. Entrar
-        com o Google ou com e-mail e senha no mesmo endereço leva à mesma conta.
+        Só entra quem tem o e-mail liberado pelo admin. Ainda não tem convite? Peça a quem te chamou para o jogo.
+        {google && " Entrar com o Google ou com e-mail e senha no mesmo endereço leva à mesma conta."}
       </p>
     </form>
   );
