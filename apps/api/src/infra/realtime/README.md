@@ -10,7 +10,7 @@ O plano e as decisões estão no vault (`Técnica/Planos/Plano do WebSocket.md` 
 
 ## Como os módulos de negócio usam
 
-Para publicar, os módulos só falam com o `EventBus` (`bus.ts`). O gateway só entra para derrubar conexões (`disconnectUser`; hoje, a exclusão da conta).
+Para publicar, os módulos só falam com o `EventBus` (`bus.ts`). O gateway só entra para derrubar conexões (`disconnectUser`; hoje, a exclusão da conta e a troca de papel).
 
 ```ts
 // dentro da transação do serviço dono (F4): o evento só sai depois do COMMIT

@@ -7,6 +7,7 @@ import { users } from "../../src/infra/db/schema/index.js";
 import { EventBus, meChannel } from "../../src/infra/realtime/bus.js";
 import { RealtimeGateway } from "../../src/infra/realtime/gateway.js";
 import { AccountDeletionService } from "../../src/modules/accounts/index.js";
+import { RolesService } from "../../src/modules/accounts/roles.service.js";
 import { createAccount } from "../support/accounts.js";
 import { strangerKeys, TOKEN_T0, tokenFor } from "../support/auth.js";
 import { useTestDatabase } from "../support/db.js";
@@ -142,6 +143,52 @@ describe("login do tempo real com as contas da F5 (T12)", () => {
     await client.ask({ type: "auth", token: unica.token });
 
     await expect(running.app.get(AccountDeletionService).deleteAccount(unica.id)).rejects.toMatchObject({ code: "last_admin" });
+
+    expect(client.socket.readyState).toBe(client.socket.OPEN);
+    expect(await client.ask({ type: "subscribe", channel: "admin" })).toMatchObject({ type: "subscribed" });
+  });
+
+  it("tirar o papel de admin derruba as conexões da pessoa, e ela volta como jogador, sem o canal admin", async () => {
+    const chefe = await createAccount(database.db, { role: "admin" });
+    const adm = await createAccount(database.db, { role: "admin" });
+    const client = await open();
+    const doChefe = await open();
+    await client.ask({ type: "auth", token: adm.token });
+    await client.ask({ type: "subscribe", channel: "admin" });
+    await doChefe.ask({ type: "auth", token: chefe.token });
+
+    await running.app.get(RolesService).setRole(chefe.id, adm.id, "player", "saiu da equipe");
+
+    expect(await client.closed).toMatchObject({ code: 4403 });
+    expect(doChefe.socket.readyState).toBe(doChefe.socket.OPEN);
+    const nova = await open();
+    expect(await nova.ask({ type: "auth", token: adm.token })).toMatchObject({ type: "auth.ok", data: { role: "player" } });
+    expect(await nova.ask({ type: "subscribe", channel: "admin" })).toMatchObject({ data: { code: "forbidden" } });
+  });
+
+  it("ganhar o papel de admin derruba a conexão antiga, e a nova já assina o canal admin", async () => {
+    const chefe = await createAccount(database.db, { role: "admin" });
+    const ana = await createAccount(database.db);
+    const client = await open();
+    await client.ask({ type: "auth", token: ana.token });
+
+    await running.app.get(RolesService).setRole(chefe.id, ana.id, "admin", "entrou na equipe");
+
+    expect(await client.closed).toMatchObject({ code: 4403 });
+    const nova = await open();
+    expect(await nova.ask({ type: "auth", token: ana.token })).toMatchObject({ type: "auth.ok", data: { role: "admin" } });
+    expect(await nova.ask({ type: "subscribe", channel: "admin" })).toMatchObject({ type: "subscribed" });
+  });
+
+  it("troca de papel recusada, ou para o papel que a pessoa já tem, não derruba ninguém", async () => {
+    await database.db.update(users).set({ role: "player" }).where(eq(users.role, "admin"));
+    const unica = await createAccount(database.db, { role: "admin" });
+    const client = await open();
+    await client.ask({ type: "auth", token: unica.token });
+    const roles = running.app.get(RolesService);
+
+    await expect(roles.setRole(unica.id, unica.id, "player", "sem querer")).rejects.toMatchObject({ code: "last_admin" });
+    await roles.setRole(unica.id, unica.id, "admin", "já é");
 
     expect(client.socket.readyState).toBe(client.socket.OPEN);
     expect(await client.ask({ type: "subscribe", channel: "admin" })).toMatchObject({ type: "subscribed" });

@@ -4,6 +4,7 @@ import { COMMON_ERROR_MESSAGES, type UserRole } from "@futbolsa/contracts";
 import { DB, type Database, type Tx, withTransaction } from "../../infra/db/index.js";
 import { users } from "../../infra/db/schema/index.js";
 import { DomainError } from "../../infra/http/index.js";
+import { RealtimeGateway } from "../../infra/realtime/index.js";
 import { AdminLogService } from "../admin/log/index.js";
 import { accountError } from "./errors.js";
 
@@ -26,12 +27,17 @@ export async function lockAdminsAndCountOthers(tx: Tx, userId: string): Promise<
   return row!.n;
 }
 
-/** Papéis (Admin, critérios 31, 32 e 33): um admin dá ou tira o papel de admin, com motivo. */
+/**
+ * Papéis (Admin, critérios 31, 32 e 33): um admin dá ou tira o papel de admin, com motivo. Depois
+ * do `COMMIT`, as conexões do tempo real da pessoa caem e reabrem com o papel novo: o WebSocket
+ * só confere o papel no `auth`, e quem perdeu o papel não pode seguir no canal `admin`.
+ */
 @Injectable()
 export class RolesService {
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly log: AdminLogService,
+    private readonly realtime: RealtimeGateway,
   ) {}
 
   async setRole(actorId: string, userId: string, role: UserRole, reason: string): Promise<void> {
@@ -54,6 +60,9 @@ export class RolesService {
         before: { role: user.role },
         after: { role },
         reason,
+      });
+      tx.afterCommit(() => {
+        this.realtime.disconnectUser(userId);
       });
     });
   }
