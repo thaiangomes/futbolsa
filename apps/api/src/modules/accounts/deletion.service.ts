@@ -13,6 +13,7 @@ import {
   users,
   wallets,
 } from "../../infra/db/schema/index.js";
+import { RealtimeGateway } from "../../infra/realtime/index.js";
 import { PortfolioLedger } from "../portfolio/index.js";
 import { AccountClosureHooks } from "./closure-hooks.js";
 import { accountError } from "./errors.js";
@@ -28,7 +29,8 @@ type SeasonRow = typeof seasons.$inferSelect;
  * qualquer momento, por direito da LGPD, e nunca é recusada pelo momento da temporada (decisão
  * do Thaian em 2026-10-31). Duas partes:
  * - os dados somem na hora: conta marcada como excluída, e-mail e apelido apagados, convite
- *   retirado e, depois do `COMMIT`, a identidade apagada no sistema de login;
+ *   retirado e, depois do `COMMIT`, as conexões do tempo real derrubadas e a identidade apagada
+ *   no sistema de login;
  * - a carteira da temporada é encerrada na mesma transação (ordens e ofertas canceladas, ações
  *   para a tesouraria, caixa a zero), ou logo depois da liquidação do IPO, se o pedido cai entre
  *   o fechamento e a liquidação, quando as ofertas não podem mais sair sem mudar o rateio dos outros.
@@ -43,6 +45,7 @@ export class AccountDeletionService {
     private readonly ledger: PortfolioLedger,
     private readonly hooks: AccountClosureHooks,
     private readonly verifier: AuthVerifier,
+    private readonly realtime: RealtimeGateway,
   ) {}
 
   async deleteAccount(userId: string): Promise<DeleteMeResponse> {
@@ -62,6 +65,7 @@ export class AccountDeletionService {
         .where(eq(users.id, userId));
       if (user.email) await tx.db.delete(invites).where(eq(invites.email, user.email));
       tx.afterCommit(async () => {
+        this.realtime.disconnectUser(userId);
         await this.purgeIdentities(userId);
       });
       return result;
