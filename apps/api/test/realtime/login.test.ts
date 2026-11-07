@@ -1,10 +1,12 @@
 import "reflect-metadata";
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { AuthVerifier } from "../../src/infra/auth-adapter/index.js";
 import { FixedClock } from "../../src/infra/clock/index.js";
 import { users } from "../../src/infra/db/schema/index.js";
 import { EventBus, meChannel } from "../../src/infra/realtime/bus.js";
 import { RealtimeGateway } from "../../src/infra/realtime/gateway.js";
+import { AccountDeletionService } from "../../src/modules/accounts/index.js";
 import { createAccount } from "../support/accounts.js";
 import { strangerKeys, TOKEN_T0, tokenFor } from "../support/auth.js";
 import { useTestDatabase } from "../support/db.js";
@@ -97,7 +99,55 @@ describe("login do tempo real com as contas da F5 (T12)", () => {
     }
   });
 
-  it("C12: disconnectUser, como a exclusão e o bloqueio vão usar, derruba a pessoa com 4403", async () => {
+  it("excluir a conta derruba as conexões da pessoa com 4403, e as dos outros ficam", async () => {
+    const ana = await createAccount(database.db);
+    const bia = await createAccount(database.db);
+    const celular = await open();
+    const computador = await open();
+    const daBia = await open();
+    await celular.ask({ type: "auth", token: ana.token });
+    await computador.ask({ type: "auth", token: ana.token });
+    await daBia.ask({ type: "auth", token: bia.token });
+
+    await running.app.get(AccountDeletionService).deleteAccount(ana.id);
+
+    expect(await celular.closed).toMatchObject({ code: 4403 });
+    expect(await computador.closed).toMatchObject({ code: 4403 });
+    expect(daBia.socket.readyState).toBe(daBia.socket.OPEN);
+    expect(await daBia.ask({ type: "subscribe", channel: "me" })).toMatchObject({ type: "subscribed" });
+    // a identidade já foi apagada: o token antigo não acha mais conta nenhuma
+    const nova = await open();
+    expect(await nova.ask({ type: "auth", token: ana.token })).toMatchObject({ data: { code: "no_account" } });
+  });
+
+  it("com o sistema de login fora do ar, a exclusão derruba a conexão do mesmo jeito", async () => {
+    const ana = await createAccount(database.db);
+    const client = await open();
+    await client.ask({ type: "auth", token: ana.token });
+    const fora = vi.spyOn(running.app.get(AuthVerifier), "deleteIdentity").mockRejectedValueOnce(new Error("fora do ar"));
+
+    await running.app.get(AccountDeletionService).deleteAccount(ana.id);
+
+    expect(fora).toHaveBeenCalledOnce();
+    fora.mockRestore();
+    expect(await client.closed).toMatchObject({ code: 4403 });
+    const nova = await open();
+    expect(await nova.ask({ type: "auth", token: ana.token })).toMatchObject({ data: { code: "account_deleted" } });
+  });
+
+  it("exclusão recusada não derruba ninguém", async () => {
+    await database.db.update(users).set({ role: "player" }).where(eq(users.role, "admin"));
+    const unica = await createAccount(database.db, { role: "admin" });
+    const client = await open();
+    await client.ask({ type: "auth", token: unica.token });
+
+    await expect(running.app.get(AccountDeletionService).deleteAccount(unica.id)).rejects.toMatchObject({ code: "last_admin" });
+
+    expect(client.socket.readyState).toBe(client.socket.OPEN);
+    expect(await client.ask({ type: "subscribe", channel: "admin" })).toMatchObject({ type: "subscribed" });
+  });
+
+  it("C12: disconnectUser, como o bloqueio vai usar, derruba a pessoa com 4403", async () => {
     const ana = await createAccount(database.db);
     const client = await open();
     await client.ask({ type: "auth", token: ana.token });

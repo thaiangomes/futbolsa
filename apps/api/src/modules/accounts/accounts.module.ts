@@ -1,5 +1,6 @@
 import { Global, Module } from "@nestjs/common";
 import { UserResolver } from "../../infra/auth-adapter/index.js";
+import { RealtimeModule } from "../../infra/realtime/index.js";
 import { AdminLogModule } from "../admin/log/index.js";
 import { PortfolioModule } from "../portfolio/index.js";
 import { AccountsConfig, accountsConfigFromEnv } from "./accounts.config.js";
@@ -22,7 +23,7 @@ import { RolesService } from "./roles.service.js";
  */
 @Global()
 @Module({
-  imports: [PortfolioModule, AdminLogModule],
+  imports: [PortfolioModule, AdminLogModule, RealtimeModule],
   controllers: [AccountsController, PlayersController, InvitesController, RolesController],
   providers: [
     IdentityService,
