@@ -4,6 +4,7 @@
  *
  *   npm run auth:check -w @futbolsa/api
  *   SUPABASE_TEST_TOKEN=<token de um usuário de teste> npm run auth:check -w @futbolsa/api
+ *   (ou SUPABASE_TEST_EMAIL e SUPABASE_TEST_PASSWORD no .env: o script entra sozinho com o usuário de teste)
  *
  * O token de teste sai do site depois de entrar com um usuário criado no painel (ou de
  * `supabase.auth.getSession()` no console do navegador). Nada aqui imprime o token nem e-mail inteiro.
@@ -40,7 +41,9 @@ if (publishable) {
     disable_signup?: boolean;
   };
   report(settings.external?.email === true, "login por e-mail e senha ligado");
-  report(settings.external?.google === true, "login pelo Google ligado");
+  // O botão do Google fica escondido até NEXT_PUBLIC_GOOGLE_LOGIN=true; só então o Google precisa estar ligado.
+  if (process.env.NEXT_PUBLIC_GOOGLE_LOGIN === "true") report(settings.external?.google === true, "login pelo Google ligado");
+  else console.log("     (login pelo Google não conferido: o botão está escondido, NEXT_PUBLIC_GOOGLE_LOGIN != true)");
   report(settings.mailer_autoconfirm === false, "confirmação de e-mail ligada (Confirm email)");
   report(settings.external?.anonymous_users !== true, "login anônimo desligado");
   report(settings.disable_signup !== true, "cadastro no Supabase aberto (o convite é conferido pela API)");
@@ -49,7 +52,22 @@ if (publishable) {
 }
 
 // 3. Um token de verdade passa pelo mesmo verificador da API.
-const token = process.env.SUPABASE_TEST_TOKEN;
+// Sem token pronto, entra com o usuário de teste do painel (SUPABASE_TEST_EMAIL e SUPABASE_TEST_PASSWORD).
+async function tokenOfTestUser(): Promise<string | undefined> {
+  const email = process.env.SUPABASE_TEST_EMAIL;
+  const password = process.env.SUPABASE_TEST_PASSWORD;
+  if (!email || !password || !publishable) return undefined;
+  const res = await fetch(`${url}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: { apikey: publishable, "content-type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  const body = (await res.json()) as { access_token?: string };
+  report(res.ok && !!body.access_token, "login do usuário de teste por e-mail e senha", res.ok ? "" : `HTTP ${res.status}`);
+  return body.access_token;
+}
+
+const token = process.env.SUPABASE_TEST_TOKEN ?? (await tokenOfTestUser());
 if (token) {
   try {
     const identity = await authVerifierFromEnv(new SystemClock()).verify(token);
@@ -60,7 +78,7 @@ if (token) {
     report(false, "token de teste aceito pelo SupabaseAuthVerifier", (error as Error).message);
   }
 } else {
-  console.log("     (sem SUPABASE_TEST_TOKEN: o token de um usuário de teste não foi conferido)");
+  console.log("     (sem SUPABASE_TEST_TOKEN nem SUPABASE_TEST_EMAIL e SUPABASE_TEST_PASSWORD: o token de teste não foi conferido)");
 }
 
 // 4. Opcional: apagar o usuário de teste, conferindo a chave de serviço.
