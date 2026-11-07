@@ -5,6 +5,7 @@ import { deleteMeResponseSchema } from "@futbolsa/contracts";
 import { z } from "zod";
 import { ApiError, type ApiClient } from "../../lib/api";
 import { type AuthClient, AuthError, AUTH_ERROR_MESSAGES, needsReauth } from "../../lib/auth";
+import { googleLoginEnabled } from "./flags";
 import { formatDate, nicknameFeedback, passwordFeedback } from "./forms";
 import type { RegisteredMe } from "./session";
 
@@ -59,12 +60,14 @@ function ReauthPanel({ auth, email, hasPassword, verb, returnUrl, onDone, onCanc
           </div>
           {error && <div className="note note-err" role="alert"><div>{error}</div></div>}
           <button type="submit" className="btn btn-p btn-full" disabled={busy || !password}>Confirmar e continuar</button>
-          <span className="xs muted" style={{ textAlign: "center" }}>ou</span>
+          {googleLoginEnabled() && <span className="xs muted" style={{ textAlign: "center" }}>ou</span>}
         </form>
       )}
-      <button type="button" className="btn btn-full" onClick={() => void auth.signInWithGoogle(returnUrl).catch((e: unknown) => setError(messageOf(e)))}>
-        Entrar de novo com o Google
-      </button>
+      {googleLoginEnabled() && (
+        <button type="button" className="btn btn-full" onClick={() => void auth.signInWithGoogle(returnUrl).catch((e: unknown) => setError(messageOf(e)))}>
+          Entrar de novo com o Google
+        </button>
+      )}
       {!hasPassword && error && <div className="note note-err" role="alert"><div>{error}</div></div>}
       <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>Cancelar</button>
     </div>

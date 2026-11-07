@@ -107,7 +107,7 @@ describe("tela entrar (6a)", () => {
     expect(messages[1]).toBe(messages[0]);
   });
 
-  it("entrar com e-mail e senha chama o login com o que foi digitado; Google volta para /auth/retorno", async () => {
+  it("entrar com e-mail e senha chama o login com o que foi digitado", async () => {
     const auth = fakeAuth();
     const onSignedIn = vi.fn();
     await render(createElement(LoginForm, { auth, returnUrl: "http://site/auth/retorno", onSignedIn }));
@@ -116,8 +116,25 @@ describe("tela entrar (6a)", () => {
     await submit();
     expect(auth.signInWithPassword).toHaveBeenCalledWith("ana@exemplo.com", "segredo123");
     expect(onSignedIn).toHaveBeenCalled();
-    await click(button("Entrar com o Google"));
-    expect(auth.signInWithGoogle).toHaveBeenCalledWith("http://site/auth/retorno");
+  });
+
+  it("sem NEXT_PUBLIC_GOOGLE_LOGIN o botão do Google não aparece, nem na entrada nem na confirmação da conta", async () => {
+    const auth = fakeAuth();
+    await render(createElement(LoginForm, { auth, returnUrl: "http://site/auth/retorno", onSignedIn: () => undefined }));
+    expect(container.textContent).not.toContain("Google");
+    expect(container.querySelector("#em")).not.toBeNull();
+  });
+
+  it("com NEXT_PUBLIC_GOOGLE_LOGIN=true o botão volta e o Google volta para /auth/retorno", async () => {
+    vi.stubEnv("NEXT_PUBLIC_GOOGLE_LOGIN", "true");
+    try {
+      const auth = fakeAuth();
+      await render(createElement(LoginForm, { auth, returnUrl: "http://site/auth/retorno", onSignedIn: () => undefined }));
+      await click(button("Entrar com o Google"));
+      expect(auth.signInWithGoogle).toHaveBeenCalledWith("http://site/auth/retorno");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 
@@ -263,6 +280,7 @@ describe("conta (6c)", () => {
     await type("#conf", "anagol");
     await click(button("Excluir minha conta"));
     expect(text()).toContain("Por segurança, entre de novo antes de excluir a conta.");
+    expect(text()).not.toContain("Google");
     await type("#atual", "senha-atual");
     await submit('form:has(#atual)');
     expect(request).toHaveBeenCalledTimes(2);
