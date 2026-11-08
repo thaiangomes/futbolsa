@@ -7,7 +7,7 @@ import { DB, type Database, lockSeason, type Tx, withTransaction } from "../../.
 import { matches } from "../../../infra/db/schema/index.js";
 import { DomainError } from "../../../infra/http/index.js";
 import { resolveClub, type ResolvedClub } from "./club-resolver.js";
-import { MarketPort, MatchesEvents } from "./ports.js";
+import { MarketPort, MatchesEvents, notifyAfterCommit } from "./ports.js";
 import type { ResultSource, SourceMatch } from "./sources/types.js";
 import { type MatchRow, toEngineMatch } from "./to-engine.js";
 
@@ -127,7 +127,7 @@ export class ImportService {
           await tx.db
             .update(matches)
             .set(sameData ? { sourceSnapshot: snapshot } : { ...data, sourceSnapshot: snapshot, updatedAt: fetchedAt })
-            .where(eq(matches.id, known.id));
+            .where(and(eq(matches.id, known.id), eq(matches.manualOverride, false)));
           if (sameData) {
             report.unchanged++;
             continue;
@@ -179,13 +179,7 @@ export class ImportService {
           clubIds: [...changedClubs],
           scoreChanged: scoreClubs.size > 0,
         };
-        // Só depois do COMMIT: o evento e a reposição da casa (numa transação curta própria).
-        tx.afterCommit(async () => {
-          await this.events.publish(event);
-          if (tickers.length > 0) {
-            await withTransaction(this.db, (t) => this.market.requestRefresh(t, tickers, "score"));
-          }
-        });
+        notifyAfterCommit(tx, { db: this.db, events: this.events, market: this.market }, event, tickers);
       }
       return report;
     });

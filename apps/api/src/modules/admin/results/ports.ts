@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
+import { type Database, type Tx, withTransaction } from "../../../infra/db/index.js";
 import type { CompetitionCode } from "@futbolsa/contracts";
-import type { Tx } from "../../../infra/db/index.js";
 import type { RefreshReason } from "../../../infra/db/schema/values.js";
 
 export type { RefreshReason };
@@ -56,4 +56,23 @@ export class MatchesEvents {
       }
     }
   }
+}
+
+/**
+ * Depois do `COMMIT` de quem mudou os jogos: publica o `MatchesChangedEvent` e, quando um placar entrou ou
+ * mudou, pede à casa a reposição dos clubes numa transação curta própria. Some se a transação desfaz.
+ */
+export function notifyAfterCommit(
+  tx: Tx,
+  deps: { db: Database; events: MatchesEvents; market: MarketPort },
+  event: MatchesChangedEvent,
+  refreshTickers: readonly string[],
+  reason: RefreshReason = "score",
+): void {
+  tx.afterCommit(async () => {
+    await deps.events.publish(event);
+    if (refreshTickers.length > 0) {
+      await withTransaction(deps.db, (t) => deps.market.requestRefresh(t, refreshTickers, reason));
+    }
+  });
 }
