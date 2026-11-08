@@ -14,6 +14,7 @@ export * from "./engine/ranking.js";
 export * from "./engine/brasilia.js";
 export * from "./engine/ipoPlan.js";
 export * from "./engine/ipoBand.js";
+export * from "./engine/ipoSettlement.js";
 export * from "./engine/candles.js";
 export * from "./engine/seasonValues.js";
 export * from "./engine/payoutEvents.js";
