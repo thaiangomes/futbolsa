@@ -106,3 +106,10 @@ export const cupViewSchema = z.strictObject({
   confirmedAt: z.string().nullable(),
 });
 export type CupView = z.infer<typeof cupViewSchema>;
+
+/** `GET /admin/seasons/:id/rules`: os valores das ligas e a tabela de cada copa, com os avisos. */
+export const seasonRulesResponseSchema = z.strictObject({
+  rules: seasonRulesSchema,
+  cups: z.array(cupViewSchema),
+});
+export type SeasonRulesResponse = z.infer<typeof seasonRulesResponseSchema>;
