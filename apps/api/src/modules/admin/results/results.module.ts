@@ -1,4 +1,6 @@
 import { Module } from "@nestjs/common";
+import { RealtimeModule } from "../../../infra/realtime/index.js";
+import { AdminEvents } from "../events.js";
 import { AdminLogModule } from "../log/index.js";
 import { StandingsModule } from "../standings/standings.module.js";
 import { ImportRunner } from "./import-runner.js";
@@ -17,18 +19,19 @@ import { parseResultSources, ResultSourceRegistry } from "./sources/registry.js"
  * o `MarketPort` vazio pelo de verdade; a F12 assina o `MatchesEvents`.
  */
 @Module({
-  imports: [AdminLogModule, StandingsModule],
+  imports: [AdminLogModule, StandingsModule, RealtimeModule],
   controllers: [PendingController, MatchesController, ImportsController],
   providers: [
     ImportService,
     ImportRunner,
     ResultsJobs,
     PendingService,
+    AdminEvents,
     MatchesService,
     MatchesEvents,
     { provide: MarketPort, useClass: NoopMarketPort },
     { provide: ResultSourceRegistry, useFactory: () => parseResultSources(process.env) },
   ],
-  exports: [ImportService, ImportRunner, PendingService, MatchesService, MatchesEvents, MarketPort],
+  exports: [ImportService, ImportRunner, PendingService, AdminEvents, MatchesService, MatchesEvents, MarketPort],
 })
 export class ResultsModule {}

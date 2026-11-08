@@ -5,6 +5,7 @@ import { DB, type Database, type DrizzleTx, lockClubs, lockSeason, type Tx, with
 import { clubs, seasonClubs, seasons } from "../../../infra/db/schema/index.js";
 import { DomainError } from "../../../infra/http/index.js";
 import { currentSeason } from "../current-season.js";
+import { AdminEvents } from "../events.js";
 import { AdminLogService } from "../log/index.js";
 import { MarketPort } from "../results/ports.js";
 
@@ -26,6 +27,7 @@ export class SuspensionService {
     @Inject(DB) private readonly db: Database,
     private readonly log: AdminLogService,
     private readonly market: MarketPort,
+    private readonly events: AdminEvents,
   ) {}
 
   async state(): Promise<SuspensionState> {
@@ -53,6 +55,7 @@ export class SuspensionService {
           after: { reason: body.reason },
           reason: body.reason,
         });
+        this.events.marketSuspended(tx, { scope: "club", ticker: body.ticker, reason: body.reason });
       } else {
         const locked = await lockSeason(tx, season.id, "update");
         if (locked.suspendedReason !== null) throw new DomainError("already_suspended", 409, ADMIN_ERROR_MESSAGES.already_suspended);
@@ -69,6 +72,7 @@ export class SuspensionService {
           after: { reason: body.reason },
           reason: body.reason,
         });
+        this.events.marketSuspended(tx, { scope: "market", ticker: null, reason: body.reason });
       }
       return this.stateOf(tx.db, season.id);
     });
@@ -92,6 +96,7 @@ export class SuspensionService {
           before: { reason: club.suspendedReason },
           after: { reason: null },
         });
+        this.events.marketResumed(tx, { scope: "club", ticker });
       } else {
         const locked = await lockSeason(tx, season.id, "update");
         if (locked.suspendedReason === null) throw new DomainError("not_suspended", 409, ADMIN_ERROR_MESSAGES.not_suspended);
@@ -107,6 +112,7 @@ export class SuspensionService {
           before: { reason: locked.suspendedReason },
           after: { reason: null },
         });
+        this.events.marketResumed(tx, { scope: "market", ticker: null });
       }
       return this.stateOf(tx.db, season.id);
     });

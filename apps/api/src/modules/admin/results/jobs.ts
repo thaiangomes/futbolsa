@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnApplicationBootstrap } from "@nestjs/common";
 import { SchedulerRegistry } from "@nestjs/schedule";
 import { jobsEnabled } from "../../../infra/jobs/account-jobs.js";
+import { AdminEvents } from "../events.js";
 import { ImportRunner } from "./import-runner.js";
 
 /**
@@ -17,12 +18,18 @@ export class ResultsJobs implements OnApplicationBootstrap {
   constructor(
     private readonly registry: SchedulerRegistry,
     private readonly runner: ImportRunner,
+    private readonly events: AdminEvents,
   ) {}
 
   onApplicationBootstrap(): void {
     if (!jobsEnabled()) return;
     this.every("results-calendar", 3_600_000, () => this.runner.runCalendarIfStale(), true);
-    this.every("results-scores", 15 * 60_000, () => this.runner.runScores(), false);
+    this.every("results-scores", 15 * 60_000, async () => {
+      const reports = await this.runner.runScores();
+      // um jogo vira pendência 6 horas depois do fim previsto, sem ninguém mexer nele: o aviso sai a cada rodada
+      await this.events.publishPending();
+      return reports;
+    }, false);
   }
 
   private every(name: string, ms: number, run: () => Promise<Array<{ error: string | null }>>, onBoot: boolean): void {
