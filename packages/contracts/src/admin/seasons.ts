@@ -113,3 +113,7 @@ export const seasonRulesResponseSchema = z.strictObject({
   cups: z.array(cupViewSchema),
 });
 export type SeasonRulesResponse = z.infer<typeof seasonRulesResponseSchema>;
+
+/** `GET /admin/clubs`: os clubes com ticker, para escolher a lista da temporada. */
+export const knownClubsResponseSchema = z.strictObject({ clubs: z.array(clubRefSchema) });
+export type KnownClubsResponse = z.infer<typeof knownClubsResponseSchema>;

@@ -75,10 +75,14 @@ export class StandingsService {
         if (club.created) report.clubsCreated.push(club.name);
         incoming.set(club.id, { position: row.position, points: row.points });
       }
+      // Trava a tabela (na mesma ordem da correção): a correção do admin em curso termina antes, e a
+      // importação vê o `manual_override` dela em vez de apagar a ordem corrigida.
       const existing = await tx.db
         .select()
         .from(standings)
-        .where(and(eq(standings.seasonId, seasonId), eq(standings.competition, competition)));
+        .where(and(eq(standings.seasonId, seasonId), eq(standings.competition, competition)))
+        .orderBy(asc(standings.position))
+        .for("update");
       const manual = existing.some((r) => r.manualOverride);
 
       if (manual) {

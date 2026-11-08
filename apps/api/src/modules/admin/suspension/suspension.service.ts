@@ -101,9 +101,14 @@ export class SuspensionService {
         const locked = await lockSeason(tx, season.id, "update");
         if (locked.suspendedReason === null) throw new DomainError("not_suspended", 409, ADMIN_ERROR_MESSAGES.not_suspended);
         const all = await this.listedTickers(tx, season.id);
-        await lockClubs(tx, season.id, all);
+        const lockedClubs = await lockClubs(tx, season.id, all);
         await tx.db.update(seasons).set({ suspendedReason: null }).where(eq(seasons.id, season.id));
-        await this.market.requestRefresh(tx, all, "resume");
+        // O clube suspenso à parte continua parado: só os outros voltam a ter cotação da casa.
+        await this.market.requestRefresh(
+          tx,
+          lockedClubs.filter((c) => c.suspendedReason === null).map((c) => c.ticker),
+          "resume",
+        );
         await this.log.record(tx, {
           actorId,
           action: "suspension.clear",
@@ -143,7 +148,8 @@ export class SuspensionService {
       .select({ ticker: clubs.ticker, reason: seasonClubs.suspendedReason })
       .from(seasonClubs)
       .innerJoin(clubs, eq(clubs.id, seasonClubs.clubId))
-      .where(isNotNull(seasonClubs.suspendedReason))
+      // Só os clubes desta temporada: a suspensão de uma temporada encerrada não vale para a atual.
+      .where(and(eq(seasonClubs.seasonId, seasonId), isNotNull(seasonClubs.suspendedReason)))
       .orderBy(asc(clubs.ticker));
     return {
       market: season?.reason ? { reason: season.reason } : null,

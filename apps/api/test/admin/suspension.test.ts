@@ -164,6 +164,9 @@ describe("suspensão da negociação", () => {
     const s = await state();
     expect(s.market).toBeNull();
     expect(s.clubs).toEqual([{ ticker: "FLA3", reason: "estádio interditado" }]);
+    // a casa só repõe os clubes que não estão suspensos à parte
+    expect(market.refreshes.at(-1)!.tickers).not.toContain("FLA3");
+    expect(market.refreshes.at(-1)!.tickers).toHaveLength(tickers.length - 1);
   });
 
   it("uma suspensão e uma retomada ao mesmo tempo não dão deadlock (50 repetições)", async () => {
@@ -189,6 +192,19 @@ describe("suspensão da negociação", () => {
     }
     expect(outcomes.length).toBeGreaterThan(0);
   }, 120_000);
+
+  it("admin 23: clube suspenso numa temporada encerrada não aparece suspenso na atual", async () => {
+    const [old] = await database.db.insert(seasons).values({ year: 2026, status: "closed" }).returning({ id: seasons.id });
+    await database.db
+      .insert(seasonClubs)
+      .values({ seasonId: old!.id, clubId: clubIds.get("FLA3")!, division: "A", suspendedReason: "suspensão de 2026" });
+    expect(await state()).toEqual({ market: null, clubs: [] });
+    const pub = publicSeasonSchema.parse((await app.inject({ method: "GET", url: "/season" })).json());
+    expect(pub.suspendedClubs).toEqual([]);
+    // e o clube segue suspendível na temporada atual
+    expect((await call("POST", "/admin/suspensions", { ticker: "FLA3", reason: "estádio interditado" })).statusCode).toBe(200);
+    expect((await state()).clubs).toEqual([{ ticker: "FLA3", reason: "estádio interditado" }]);
+  });
 
   it("sem temporada em andamento, suspender é recusado", async () => {
     await database.db.update(seasons).set({ status: "closed" }).where(eq(seasons.id, seasonId));
