@@ -66,6 +66,34 @@ O login fica atrás de um adaptador (`src/infra/auth-adapter/`): a API só conhe
   e `auth.ts`), `createAccount(db, { role: "admin" })` (`test/support/accounts.ts`) para ter um
   jogador ou admin com token, e `bearer(token)` no `app.inject`.
 
+## Admin (F7)
+
+Módulo `src/modules/admin/`, uma subpasta por assunto, cada uma com o próprio módulo do Nest:
+
+| Pasta | O que faz | Rotas |
+|---|---|---|
+| `log/` | Registro do admin: `AdminLogService.record(tx, ação)` na transação da ação, `reasons.ts` com as ações que exigem motivo, `listLog` | `GET /admin/log` |
+| `results/` | Fontes (ESPN e football-data.org), importação sem pisar no jogo do admin, jogos, pendências, tarefas agendadas | `GET/POST/PATCH /admin/matches`, `GET /admin/pending`, `POST /admin/imports/run` |
+| `standings/` | Classificação oficial da Série A e da B | `GET /admin/standings`, `PATCH /admin/standings/:competição`, `POST .../confirm` |
+| `seasons/` | Preparar a temporada, valores das ligas e tabela das copas | `GET /season` (público), `GET /admin/clubs`, `GET /admin/seasons/current`, `POST/PATCH /admin/seasons`, `PUT .../clubs`, `GET/PUT .../rules`, `PUT .../cups/:copa`, `POST .../confirm` |
+| `suspension/` | Suspender e retomar um clube ou o mercado | `GET/POST/DELETE /admin/suspensions` |
+| (raiz) | Visão geral e eventos de tempo real | `GET /admin/overview`; `market.suspended`, `market.resumed` e `admin.pending` |
+
+- **Todo motivo vai ao registro.** Cada ação grava autor, hora, antes, depois e motivo na mesma transação.
+  Ação nova entra em `ADMIN_ACTIONS` (`log/reasons.ts`) dizendo se o motivo é obrigatório; o `record` recusa nome
+  desconhecido e e-mail no antes ou no depois.
+- **Jogo editado à mão vale mais que a fonte** (`matches.manual_override`): a importação só atualiza o
+  `source_snapshot`, e a tela mostra a divergência.
+- **Fontes:** a ESPN atende todas as competições por padrão. `RESULT_SOURCES=brasileirao-a=football-data` usa a
+  football-data.org onde o plano da `FOOTBALL_DATA_KEY` a cobre. Os testes nunca chamam as fontes: usam as respostas
+  guardadas em `test/admin/fixtures/`.
+- **Tarefas agendadas** (`results/jobs.ts`): calendário a cada hora quando a última importação passou de 24 horas,
+  placares a cada 15 minutos das competições com jogo devido e a classificação depois deles. `JOBS_ENABLED=false` desliga.
+- **Ganchos para as outras fases:** `MarketPort` (a F9 troca a implementação vazia), `MatchesEvents` (a F12 assina),
+  `SeasonValuesService` em `modules/dividends/season-values` (`assertCupsConfirmed`, `lockSeasonValues` e
+  `loadSeasonValues`, para a F8, a F9 e a F12).
+- **Nos testes:** `expectAdminOnly(app, db, rota)` (`test/support/admin-routes.ts`) confere 401, 403 e o acesso do admin.
+
 ## Conferir o login no Supabase
 
 Depois de configurar o login no painel do projeto (Authentication), com o `.env` preenchido
