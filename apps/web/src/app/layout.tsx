@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { SessionProvider } from "../features/accounts/session-provider";
+import { SuspensionBanner } from "../features/market/suspension-banner";
 import { AppRealtimeProvider } from "../realtime/app-provider";
 import "../styles/futbolsa.css";
 
@@ -22,7 +23,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="fb" data-tema="escuro">
         {/* A sessão do login por fora; o tempo real por dentro, com o token dela. */}
         <SessionProvider>
-          <AppRealtimeProvider>{children}</AppRealtimeProvider>
+          <AppRealtimeProvider>
+            <SuspensionBanner />
+            {children}
+          </AppRealtimeProvider>
         </SessionProvider>
       </body>
     </html>
