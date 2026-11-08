@@ -154,8 +154,8 @@ describe("protocolo do gateway (T5)", () => {
       const client = await open();
       await client.ask({ type: "auth", token: "tok-adm" });
       expect(await client.ask({ type: "subscribe", channel: "admin" })).toMatchObject({ type: "subscribed" });
-      bus.publish("admin", "admin.pending", { games: 2 });
-      expect(await client.next()).toMatchObject({ type: "admin.pending", channel: "admin", data: { games: 2 } });
+      bus.publish("admin", "admin.pending", { pendingMatches: 2 });
+      expect(await client.next()).toMatchObject({ type: "admin.pending", channel: "admin", data: { pendingMatches: 2 } });
     });
   });
 

@@ -98,7 +98,7 @@ describe("o canal me é privado (T5)", () => {
     const visitante = await open();
     expect(await ana.ask({ type: "subscribe", channel: "admin" })).toMatchObject({ data: { code: "forbidden" } });
     expect(await visitante.ask({ type: "subscribe", channel: "admin" })).toMatchObject({ data: { code: "unauthorized" } });
-    bus.publish("admin", "admin.pending", { games: 1 });
+    bus.publish("admin", "admin.pending", { pendingMatches: 1 });
     expect(await ana.quiet()).toBe(true);
     expect(await visitante.quiet()).toBe(true);
   });
