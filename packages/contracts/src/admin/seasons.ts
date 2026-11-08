@@ -57,6 +57,13 @@ export const seasonClubsResponseSchema = z.strictObject({
   ),
 });
 
+/** `GET /admin/seasons/current`: a temporada atual e os clubes listados. */
+export const currentSeasonResponseSchema = z.strictObject({
+  season: seasonViewSchema.nullable(),
+  clubs: seasonClubsResponseSchema.shape.clubs,
+});
+export type CurrentSeasonResponse = z.infer<typeof currentSeasonResponseSchema>;
+
 /** Valores de dividendos das ligas (centavos por ação), como no `season_rules`. */
 export const seasonRulesSchema = z.strictObject({
   aPerPoint: z.number().int().min(0),
