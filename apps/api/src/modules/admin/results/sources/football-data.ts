@@ -23,7 +23,7 @@ interface FdMatch {
   homeTeam: { name: string };
   awayTeam: { name: string };
   score: {
-    winner?: "HOME_TEAM" | "AWAY_TEAM" | "DRAW" | null;
+    winner?: string | null;
     duration?: string;
     fullTime: { home: number | null; away: number | null };
   };

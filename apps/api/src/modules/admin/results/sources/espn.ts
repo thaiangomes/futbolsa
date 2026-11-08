@@ -44,7 +44,7 @@ const PHASES: Record<string, string> = {
 };
 
 interface EspnCompetitor {
-  homeAway: "home" | "away";
+  homeAway: string;
   score?: string;
   winner?: boolean;
   team: { displayName: string };
