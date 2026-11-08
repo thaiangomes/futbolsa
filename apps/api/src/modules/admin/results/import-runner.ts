@@ -1,0 +1,166 @@
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import { and, eq, isNull, sql } from "drizzle-orm";
+import { type CompetitionCode, type ImportKind, type RunImportBody } from "@futbolsa/contracts";
+import { Clock } from "../../../infra/clock/index.js";
+import { DB, type Database } from "../../../infra/db/index.js";
+import { matches } from "../../../infra/db/schema/index.js";
+import { COMPETITIONS } from "../../../infra/db/schema/values.js";
+import { currentSeason, type SeasonRow } from "../current-season.js";
+import { StandingsService } from "../standings/standings.service.js";
+import { ImportService, type ImportReport } from "./import.service.js";
+import { ResultSourceRegistry } from "./sources/registry.js";
+
+const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
+
+/** O calendário é importado uma vez por dia: passou disto desde a última importação, roda. */
+const CALENDAR_MAX_AGE = DAY;
+/** Placar devido há muito tempo não varre dias demais da fonte: no máximo estes dias para trás. */
+const SCORES_LOOKBACK = 14 * DAY;
+/** "Importar na hora" dos placares olha os últimos dias. */
+const MANUAL_SCORES_WINDOW = 3 * DAY;
+
+const isStandingsCompetition = (c: CompetitionCode): c is "brasileirao-a" | "brasileirao-b" =>
+  c === "brasileirao-a" || c === "brasileirao-b";
+
+/**
+ * O que as tarefas agendadas fazem, calculado pelo que já devia ter acontecido: uma tarefa que perdeu o horário
+ * (a API estava fora) se recupera sozinha na próxima rodada (Arquitetura da Fase 1, Tarefas agendadas).
+ * Cada tarefa roda uma por vez (a API é uma instância só nesta fase). A falha da fonte vira registro no log da
+ * API e relatório com o erro; a próxima rodada tenta de novo e nada é apagado.
+ */
+@Injectable()
+export class ImportRunner {
+  private readonly logger = new Logger("Resultados");
+  private readonly running = new Set<string>();
+
+  constructor(
+    @Inject(DB) private readonly db: Database,
+    private readonly clock: Clock,
+    private readonly imports: ImportService,
+    private readonly standings: StandingsService,
+    private readonly sources: ResultSourceRegistry,
+  ) {}
+
+  /** Calendário: roda nas competições cuja última importação tem mais de 24 horas (ou nunca houve). */
+  runCalendarIfStale(): Promise<ImportReport[]> {
+    return this.exclusive("calendar", async (season) => {
+      const last = await this.lastImports(season.id);
+      const now = this.clock.now().getTime();
+      const reports: ImportReport[] = [];
+      for (const competition of COMPETITIONS) {
+        const at = last.get(competition);
+        if (at !== undefined && now - at <= CALENDAR_MAX_AGE) continue;
+        reports.push(await this.importCalendar(season, competition));
+      }
+      return reports;
+    });
+  }
+
+  /** Placares: só das competições com jogo devido (fim previsto passado, sem placar); depois, a classificação. */
+  runScores(): Promise<ImportReport[]> {
+    return this.exclusive("scores", async (season) => {
+      const now = this.clock.now();
+      const due = await this.dueMatches(season.id, now);
+      const reports: ImportReport[] = [];
+      for (const [competition, earliest] of due) {
+        const from = new Date(Math.max(earliest.getTime(), now.getTime() - SCORES_LOOKBACK));
+        const report = await this.importScores(season, competition, { from, to: now });
+        reports.push(report);
+        if (report.error === null && isStandingsCompetition(competition)) {
+          reports.push(await this.importStandings(season, competition));
+        }
+      }
+      return reports;
+    });
+  }
+
+  /** `POST /admin/imports/run`: importa na hora, sem esperar os 15 minutos. Devolve o erro da fonte em vez de lançar. */
+  async runNow(body: RunImportBody): Promise<ImportReport[]> {
+    const season = await currentSeason(this.db);
+    if (!season) return [];
+    const competitions = body.competition ? [body.competition] : COMPETITIONS;
+    const now = this.clock.now();
+    const reports: ImportReport[] = [];
+    for (const competition of competitions) {
+      const kinds: ImportKind[] = body.kind ? [body.kind] : isStandingsCompetition(competition) ? ["calendar", "standings"] : ["calendar"];
+      for (const kind of kinds) {
+        if (kind === "calendar") reports.push(await this.importCalendar(season, competition));
+        else if (kind === "scores") {
+          reports.push(await this.importScores(season, competition, { from: new Date(now.getTime() - MANUAL_SCORES_WINDOW), to: now }));
+        } else if (isStandingsCompetition(competition)) reports.push(await this.importStandings(season, competition));
+      }
+    }
+    return reports;
+  }
+
+  private async exclusive(name: string, fn: (season: SeasonRow) => Promise<ImportReport[]>): Promise<ImportReport[]> {
+    if (this.running.has(name)) return [];
+    this.running.add(name);
+    try {
+      const season = await currentSeason(this.db);
+      return season ? await fn(season) : [];
+    } finally {
+      this.running.delete(name);
+    }
+  }
+
+  private async importCalendar(season: SeasonRow, competition: CompetitionCode): Promise<ImportReport> {
+    return this.guard(competition, "calendar", () =>
+      this.imports.importFromSource(this.sources.forCompetition(competition), season.id, competition, season.year),
+    );
+  }
+
+  private async importScores(season: SeasonRow, competition: CompetitionCode, range: { from: Date; to: Date }): Promise<ImportReport> {
+    return this.guard(competition, "scores", () =>
+      this.imports.importFromSource(this.sources.forCompetition(competition), season.id, competition, season.year, { range, kind: "scores" }),
+    );
+  }
+
+  private async importStandings(season: SeasonRow, competition: "brasileirao-a" | "brasileirao-b"): Promise<ImportReport> {
+    return this.guard(competition, "standings", () =>
+      this.standings.importFromSource(this.sources.forCompetition(competition), season.id, competition, season.year),
+    );
+  }
+
+  private async guard(competition: CompetitionCode, kind: ImportKind, run: () => Promise<ImportReport>): Promise<ImportReport> {
+    try {
+      return await run();
+    } catch (error) {
+      const message = (error as Error).message;
+      this.logger.error(`${kind} de ${competition} falhou: ${message}`);
+      return { competition, kind, inserted: 0, updated: 0, unchanged: 0, clubsCreated: [], error: message };
+    }
+  }
+
+  /** A última importação de cada competição: o maior `fetchedAt` dos jogos dela. */
+  private async lastImports(seasonId: number): Promise<Map<string, number>> {
+    const rows = await this.db
+      .select({
+        competition: matches.competition,
+        at: sql<string | null>`max((${matches.sourceSnapshot}->>'fetchedAt')::timestamptz)`,
+      })
+      .from(matches)
+      .where(eq(matches.seasonId, seasonId))
+      .groupBy(matches.competition);
+    return new Map(rows.filter((r) => r.at).map((r) => [r.competition, new Date(r.at!).getTime()]));
+  }
+
+  /** Por competição, o início do jogo devido mais antigo. */
+  private async dueMatches(seasonId: number, now: Date): Promise<Map<CompetitionCode, Date>> {
+    const rows = await this.db
+      .select({ competition: matches.competition, earliest: sql<string>`min(${matches.kickoff})` })
+      .from(matches)
+      .where(
+        and(
+          eq(matches.seasonId, seasonId),
+          eq(matches.status, "scheduled"),
+          isNull(matches.homeGoals),
+          eq(matches.outOfWindow, false),
+          sql`coalesce(${matches.finishedAt}, ${matches.kickoff} + interval '2 hours') <= ${now.toISOString()}::timestamptz`,
+        ),
+      )
+      .groupBy(matches.competition);
+    return new Map(rows.map((r) => [r.competition as CompetitionCode, new Date(r.earliest)]));
+  }
+}
