@@ -32,6 +32,7 @@ export const ADMIN_ERROR_MESSAGES = {
   already_suspended: "A negociação já está suspensa.",
   not_suspended: "A negociação não está suspensa.",
   club_not_listed: "Este clube não está listado na temporada.",
+  no_season: "Não há temporada em preparação ou em andamento.",
   match_not_found: "Jogo não encontrado.",
   season_exists: "Já existe uma temporada em andamento: encerre a anterior antes de preparar outra.",
   cups_not_confirmed: "Confirme a tabela das três copas antes de abrir o IPO.",

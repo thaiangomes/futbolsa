@@ -1,0 +1,228 @@
+{
+ "events": [
+  {
+   "id": "401858546",
+   "date": "2026-02-17T23:00Z",
+   "name": "Ferroviaria at Sampaio Correa RJ",
+   "season": {
+    "slug": "first-round"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FINAL_PEN"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": false,
+       "shootoutScore": 1,
+       "team": {
+        "id": "20855",
+        "displayName": "Sampaio Correa RJ"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": true,
+       "shootoutScore": 3,
+       "team": {
+        "id": "17326",
+        "displayName": "Ferroviaria"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401858701",
+   "date": "2026-02-18T19:00Z",
+   "name": "Serra Branca at Porta BA",
+   "season": {
+    "slug": "first-round"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "2",
+       "winner": true,
+       "team": {
+        "id": "131673",
+        "displayName": "Porta BA"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "131680",
+        "displayName": "Serra Branca"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401864129",
+   "date": "2026-03-17T22:00Z",
+   "name": "Fortaleza at Nova Iguaçu",
+   "season": {
+    "slug": "fourth-round"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "6087",
+        "displayName": "Nova Iguaçu"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": true,
+       "team": {
+        "id": "6272",
+        "displayName": "Fortaleza"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401866345",
+   "date": "2026-04-21T20:00Z",
+   "name": "Chapecoense at Botafogo",
+   "season": {
+    "slug": "fifth-round"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": true,
+       "team": {
+        "id": "6086",
+        "displayName": "Botafogo"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "9318",
+        "displayName": "Chapecoense"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401913106",
+   "date": "2026-12-06T20:00Z",
+   "name": "TBD Away at TBD Home",
+   "season": {
+    "slug": "final"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_SCHEDULED"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "131556",
+        "displayName": "TBD Home"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "131554",
+        "displayName": "TBD Away"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401913107",
+   "date": "2026-11-08T20:00Z",
+   "name": "Palmeiras at Vasco da Gama",
+   "season": {
+    "slug": "semifinals"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_SCHEDULED"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "3454",
+        "displayName": "Vasco da Gama"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "2029",
+        "displayName": "Palmeiras"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

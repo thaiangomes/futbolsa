@@ -1,0 +1,929 @@
+{
+ "events": [
+  {
+   "id": "401840808",
+   "date": "2026-01-28T22:00Z",
+   "name": "Palmeiras at Atlético-MG",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "2",
+       "winner": false,
+       "team": {
+        "id": "7632",
+        "displayName": "Atlético-MG"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "2",
+       "winner": false,
+       "team": {
+        "id": "2029",
+        "displayName": "Palmeiras"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840977",
+   "date": "2026-01-28T22:00Z",
+   "name": "Red Bull Bragantino at Coritiba",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "3456",
+        "displayName": "Coritiba"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": true,
+       "team": {
+        "id": "6079",
+        "displayName": "Red Bull Bragantino"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840814",
+   "date": "2026-01-28T22:00Z",
+   "name": "Athletico Paranaense at Internacional",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "1936",
+        "displayName": "Internacional"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": true,
+       "team": {
+        "id": "3458",
+        "displayName": "Athletico-PR"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840812",
+   "date": "2026-01-28T22:00Z",
+   "name": "Remo at Vitória",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "2",
+       "winner": true,
+       "team": {
+        "id": "3457",
+        "displayName": "Vitória"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "4936",
+        "displayName": "Remo"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840813",
+   "date": "2026-01-28T22:30Z",
+   "name": "Grêmio at Fluminense",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "2",
+       "winner": true,
+       "team": {
+        "id": "3445",
+        "displayName": "Fluminense"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "6273",
+        "displayName": "Grêmio"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840810",
+   "date": "2026-01-28T23:00Z",
+   "name": "Santos at Chapecoense",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "4",
+       "winner": true,
+       "team": {
+        "id": "9318",
+        "displayName": "Chapecoense"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "2",
+       "winner": false,
+       "team": {
+        "id": "2674",
+        "displayName": "Santos"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840811",
+   "date": "2026-01-28T23:00Z",
+   "name": "Bahia at Corinthians",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "874",
+        "displayName": "Corinthians"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "2",
+       "winner": true,
+       "team": {
+        "id": "9967",
+        "displayName": "Bahia"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840976",
+   "date": "2026-01-29T00:30Z",
+   "name": "Flamengo at São Paulo",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "2",
+       "winner": true,
+       "team": {
+        "id": "2026",
+        "displayName": "São Paulo"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "819",
+        "displayName": "Flamengo"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840975",
+   "date": "2026-01-29T23:00Z",
+   "name": "Vasco da Gama at Mirassol",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "2",
+       "winner": true,
+       "team": {
+        "id": "9169",
+        "displayName": "Mirassol"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "3454",
+        "displayName": "Vasco da Gama"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840809",
+   "date": "2026-01-30T00:30Z",
+   "name": "Cruzeiro at Botafogo",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "4",
+       "winner": true,
+       "team": {
+        "id": "6086",
+        "displayName": "Botafogo"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "2022",
+        "displayName": "Cruzeiro"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840978",
+   "date": "2026-02-04T22:00Z",
+   "name": "Internacional at Flamengo",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "819",
+        "displayName": "Flamengo"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "1936",
+        "displayName": "Internacional"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840984",
+   "date": "2026-02-04T22:00Z",
+   "name": "Atlético-MG at Red Bull Bragantino",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": true,
+       "team": {
+        "id": "6079",
+        "displayName": "Red Bull Bragantino"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "7632",
+        "displayName": "Atlético-MG"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840985",
+   "date": "2026-02-04T23:00Z",
+   "name": "Mirassol at Remo",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "2",
+       "winner": false,
+       "team": {
+        "id": "4936",
+        "displayName": "Remo"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "2",
+       "winner": false,
+       "team": {
+        "id": "9169",
+        "displayName": "Mirassol"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840986",
+   "date": "2026-02-04T23:00Z",
+   "name": "São Paulo at Santos",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "2674",
+        "displayName": "Santos"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "2026",
+        "displayName": "São Paulo"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840987",
+   "date": "2026-02-05T00:30Z",
+   "name": "Botafogo at Grêmio",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "5",
+       "winner": true,
+       "team": {
+        "id": "6273",
+        "displayName": "Grêmio"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "3",
+       "winner": false,
+       "team": {
+        "id": "6086",
+        "displayName": "Botafogo"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840983",
+   "date": "2026-02-05T00:30Z",
+   "name": "Vitória at Palmeiras",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "5",
+       "winner": true,
+       "team": {
+        "id": "2029",
+        "displayName": "Palmeiras"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "3457",
+        "displayName": "Vitória"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840980",
+   "date": "2026-02-05T22:00Z",
+   "name": "Fluminense at Bahia",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "9967",
+        "displayName": "Bahia"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "3445",
+        "displayName": "Fluminense"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840982",
+   "date": "2026-02-05T23:00Z",
+   "name": "Chapecoense at Vasco da Gama",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "3454",
+        "displayName": "Vasco da Gama"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "9318",
+        "displayName": "Chapecoense"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840979",
+   "date": "2026-02-06T00:30Z",
+   "name": "Coritiba at Cruzeiro",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "2022",
+        "displayName": "Cruzeiro"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "2",
+       "winner": true,
+       "team": {
+        "id": "3456",
+        "displayName": "Coritiba"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840993",
+   "date": "2026-02-11T00:30Z",
+   "name": "Flamengo at Vitória",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "3457",
+        "displayName": "Vitória"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "2",
+       "winner": true,
+       "team": {
+        "id": "819",
+        "displayName": "Flamengo"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840998",
+   "date": "2026-02-25T20:00Z",
+   "name": "Chapecoense at Bahia",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_POSTPONED"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "9967",
+        "displayName": "Bahia"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "9318",
+        "displayName": "Chapecoense"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401840999",
+   "date": "2026-02-25T20:00Z",
+   "name": "Vitória at Botafogo",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_POSTPONED"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "6086",
+        "displayName": "Botafogo"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "3457",
+        "displayName": "Vitória"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401841006",
+   "date": "2026-02-25T20:00Z",
+   "name": "Mirassol at Flamengo",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_POSTPONED"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "819",
+        "displayName": "Flamengo"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "9169",
+        "displayName": "Mirassol"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401841311",
+   "date": "2026-11-14T21:30Z",
+   "name": "Atlético-MG at Mirassol",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_SCHEDULED"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "9169",
+        "displayName": "Mirassol"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "7632",
+        "displayName": "Atlético-MG"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401841175",
+   "date": "2026-11-14T23:30Z",
+   "name": "Vasco da Gama at Chapecoense",
+   "season": {
+    "slug": "2026-brasileiro-serie-a"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_SCHEDULED"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "9318",
+        "displayName": "Chapecoense"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "3454",
+        "displayName": "Vasco da Gama"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

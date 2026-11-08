@@ -1,0 +1,191 @@
+{
+ "events": [
+  {
+   "id": "726763",
+   "date": "2025-02-05T00:30Z",
+   "name": "Defensor Sporting at Monagas SC",
+   "season": {
+    "slug": "first-stage"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "2",
+       "winner": true,
+       "team": {
+        "id": "6041",
+        "displayName": "Monagas SC"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "1007",
+        "displayName": "Defensor Sporting"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "734784",
+   "date": "2025-04-01T22:00Z",
+   "name": "Estudiantes de La Plata at Carabobo",
+   "season": {
+    "slug": "group-stage"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "6037",
+        "displayName": "Carabobo"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "2",
+       "winner": true,
+       "team": {
+        "id": "8",
+        "displayName": "Estudiantes de La Plata"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "734789",
+   "date": "2025-04-11T00:00Z",
+   "name": "Fortaleza at Colo Colo",
+   "season": {
+    "slug": "group-stage"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_ABANDONED"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "2688",
+        "displayName": "Colo Colo"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": true,
+       "team": {
+        "id": "6272",
+        "displayName": "Fortaleza"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "726765",
+   "date": "2025-02-14T00:30Z",
+   "name": "Blooming at El Nacional",
+   "season": {
+    "slug": "first-stage"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FINAL_PEN"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "2",
+       "winner": true,
+       "shootoutScore": 4,
+       "team": {
+        "id": "882",
+        "displayName": "El Nacional"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": false,
+       "shootoutScore": 3,
+       "team": {
+        "id": "6047",
+        "displayName": "Blooming"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "760339",
+   "date": "2025-11-29T21:15Z",
+   "name": "Flamengo at Palmeiras",
+   "season": {
+    "slug": "final"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "2029",
+        "displayName": "Palmeiras"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": true,
+       "team": {
+        "id": "819",
+        "displayName": "Flamengo"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

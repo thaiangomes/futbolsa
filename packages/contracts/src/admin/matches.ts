@@ -48,6 +48,7 @@ export const listMatchesQuerySchema = z.strictObject({
 export type ListMatchesQuery = z.infer<typeof listMatchesQuerySchema>;
 
 export const listMatchesResponseSchema = z.strictObject({ matches: z.array(adminMatchSchema) });
+export type ListMatchesResponse = z.infer<typeof listMatchesResponseSchema>;
 
 const goalsSchema = z.number().int().min(0).max(99);
 
@@ -77,6 +78,9 @@ export type CreateMatchBody = z.infer<typeof createMatchBodySchema>;
 /** `PATCH /admin/matches/:id`: só o que mudou. Marcar adiado é `status: "postponed"`; desmarcar, `"scheduled"`. */
 export const patchMatchBodySchema = z
   .strictObject({
+    /** Corrige a rodada ou a fase que a fonte numerou errado (a ESPN não informa a rodada). */
+    round: z.number().int().min(1).optional(),
+    phase: z.string().trim().min(1).max(40).optional(),
     kickoff: isoInstantSchema.optional(),
     finishedAt: isoInstantSchema.nullable().optional(),
     status: matchStatusSchema.optional(),

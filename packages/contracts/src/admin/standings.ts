@@ -23,6 +23,7 @@ export const standingsViewSchema = z.strictObject({
 export type StandingsView = z.infer<typeof standingsViewSchema>;
 
 export const standingsResponseSchema = z.strictObject({ standings: z.array(standingsViewSchema) });
+export type StandingsResponse = z.infer<typeof standingsResponseSchema>;
 
 /** `PATCH /admin/standings/:competition`: a ordem completa dos clubes, do 1º ao último. */
 export const patchStandingsBodySchema = z.strictObject({
