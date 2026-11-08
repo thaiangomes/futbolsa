@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { asc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import {
   ADMIN_ERROR_MESSAGES,
   COMMON_ERROR_MESSAGES,
@@ -53,7 +53,8 @@ export class SeasonsService {
       .select({ ticker: clubs.ticker, reason: seasonClubs.suspendedReason })
       .from(seasonClubs)
       .innerJoin(clubs, eq(clubs.id, seasonClubs.clubId))
-      .where(isNotNull(seasonClubs.suspendedReason))
+      // Só os clubes desta temporada: a suspensão de uma temporada encerrada não vale para a atual.
+      .where(and(eq(seasonClubs.seasonId, season.id), isNotNull(seasonClubs.suspendedReason)))
       .orderBy(asc(clubs.ticker));
     return {
       season: toSeasonView(season),
@@ -70,6 +71,10 @@ export class SeasonsService {
   async create(actorId: string, year: number): Promise<SeasonView> {
     return withTransaction(this.db, async (tx) => {
       if (await currentSeason(tx.db)) throw new DomainError("season_exists", 409, ADMIN_ERROR_MESSAGES.season_exists);
+      // O ano tem de ser maior que o de todas as temporadas já criadas (a chave única recusaria o repetido, e os valores
+      // são copiados da temporada anterior).
+      const [latest] = await tx.db.select({ year: seasons.year }).from(seasons).orderBy(desc(seasons.year)).limit(1);
+      if (latest && year <= latest.year) throw invalid("year");
       const [created] = await tx.db.insert(seasons).values({ year }).returning();
       await this.values.createInitial(tx, created!.id);
       await this.log.record(tx, {

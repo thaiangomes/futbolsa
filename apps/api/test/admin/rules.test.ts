@@ -5,7 +5,7 @@ import { cupViewSchema, seasonRulesSchema } from "@futbolsa/contracts";
 import { COPA_DO_BRASIL } from "@futbolsa/engine";
 import { FixedClock } from "../../src/infra/clock/index.js";
 import { withTransaction } from "../../src/infra/db/index.js";
-import { adminLog, cupPhases, matches, seasonCups, seasonRules } from "../../src/infra/db/schema/index.js";
+import { adminLog, cupPhases, matches, seasonCups, seasonRules, seasons } from "../../src/infra/db/schema/index.js";
 import { SeasonValuesService } from "../../src/modules/dividends/season-values/season-values.service.js";
 import { createAccount, type TestAccount } from "../support/accounts.js";
 import { expectAdminOnly } from "../support/admin-routes.js";
@@ -150,6 +150,23 @@ describe("regras e copas da temporada", () => {
     expect(log).toMatchObject({ reason: "inflação do jogo", before: expect.objectContaining({ aPerPoint: 10 }), after: expect.objectContaining({ aPerPoint: 12 }) });
     const bad = await call("PUT", `/admin/seasons/${seasonId}/rules`, { ...editable, aPerPoint: -1 });
     expect(bad.statusCode).toBe(400);
+  });
+
+  it("dividendos 28: temporada fora da preparação recusa mudar os valores mesmo sem locked_at", async () => {
+    await database.db.update(seasons).set({ status: "trading" }).where(eq(seasons.id, seasonId));
+    try {
+      const { lockedAt, ...editable } = (await call("GET", `/admin/seasons/${seasonId}/rules`)).json().rules;
+      expect(lockedAt).toBeNull();
+      const rules = await call("PUT", `/admin/seasons/${seasonId}/rules`, { ...editable, aPerPoint: 77 });
+      expect(rules.statusCode).toBe(409);
+      expect(rules.json().code).toBe("season_locked");
+      expect((await call("PUT", `/admin/seasons/${seasonId}/cups/copa-do-brasil`, { phases: NOVE_FASES })).statusCode).toBe(409);
+      expect((await call("POST", `/admin/seasons/${seasonId}/cups/copa-do-brasil/confirm`)).statusCode).toBe(409);
+      const [stored] = await database.db.select().from(seasonRules).where(eq(seasonRules.seasonId, seasonId));
+      expect(stored!.aPerPoint).toBe(12);
+    } finally {
+      await database.db.update(seasons).set({ status: "preparing" }).where(eq(seasons.id, seasonId));
+    }
   });
 
   it("dividendos 28: com o IPO aberto, mudar a tabela e os valores é recusado", async () => {

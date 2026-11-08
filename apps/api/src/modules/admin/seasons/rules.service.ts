@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, asc, eq } from "drizzle-orm";
 import {
+  ADMIN_ERROR_MESSAGES,
   COMMON_ERROR_MESSAGES,
   type CupCompetitionCode,
   type CupView,
@@ -137,6 +138,10 @@ export class RulesService {
 
   private async ensureEditable(tx: Tx, seasonId: number): Promise<void> {
     await this.ensure(tx, seasonId);
+    // Fora da preparação (IPO aberto ou depois) nada muda, mesmo que o `locked_at` não tenha sido gravado
+    // (temporada antiga que ganhou os valores só agora, na primeira consulta).
+    const [season] = await tx.db.select({ status: seasons.status }).from(seasons).where(eq(seasons.id, seasonId));
+    if (season!.status !== "preparing") throw new DomainError("season_locked", 409, ADMIN_ERROR_MESSAGES.season_locked);
     await this.values.assertEditable(tx, seasonId);
   }
 

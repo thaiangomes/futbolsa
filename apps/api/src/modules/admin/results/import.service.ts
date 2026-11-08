@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { ADMIN_ERROR_MESSAGES, type CompetitionCode, type ImportKind } from "@futbolsa/contracts";
 import { markOutOfWindow } from "@futbolsa/engine";
 import { Clock } from "../../../infra/clock/index.js";
@@ -87,10 +87,14 @@ export class ImportService {
       }
       const tickerOfClub = new Map<number, string | null>([...clubsByName.values()].map((c) => [c.id, c.ticker]));
 
+      // Trava os jogos da competição (em ordem de id): a edição do admin que chegar no meio espera, e a que
+      // já estava em curso termina antes, então o `manual_override` lido aqui vale até o fim da importação.
       const existing = await tx.db
         .select()
         .from(matches)
-        .where(and(eq(matches.seasonId, seasonId), eq(matches.competition, competition)));
+        .where(and(eq(matches.seasonId, seasonId), eq(matches.competition, competition)))
+        .orderBy(asc(matches.id))
+        .for("update");
       const byKey = new Map(existing.filter((m) => m.source && m.sourceId).map((m) => [`${m.source}:${m.sourceId}`, m]));
       const unlinkedManual = existing.filter((m) => m.source === "manual" && !m.sourceId);
 
@@ -207,7 +211,10 @@ export class ImportService {
       if (row.manualOverride || row.round === null) continue;
       const wanted = computed.get(row.id) ?? false;
       if (row.outOfWindow === wanted) continue;
-      await tx.db.update(matches).set({ outOfWindow: wanted }).where(eq(matches.id, row.id));
+      await tx.db
+        .update(matches)
+        .set({ outOfWindow: wanted })
+        .where(and(eq(matches.id, row.id), eq(matches.manualOverride, false)));
       changed.push(row.id);
     }
     return changed;

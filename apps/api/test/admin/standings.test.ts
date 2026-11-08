@@ -136,6 +136,39 @@ describe("classificação oficial", () => {
     expect(third).toMatchObject({ position: 3, sourcePosition: 1 });
   });
 
+  it("dividendos 8: correção do admin que termina no meio da importação não é apagada pela importação", async () => {
+    await service.importStandings(seasonId, "brasileirao-a", tableA());
+    const ids = (await view("brasileirao-a")).rows.map((r) => r.club.id);
+
+    // a correção do admin numa transação que ainda não terminou (segura as linhas da tabela)
+    const adminTx = await database.conn.pool.connect();
+    try {
+      await adminTx.query("begin");
+      await adminTx.query(
+        "update futbolsa.standings set manual_override = true where season_id = $1 and competition = 'brasileirao-a'",
+        [seasonId],
+      );
+      const moved = tableA();
+      [moved[0]!.position, moved[1]!.position] = [2, 1];
+      const running = service.importStandings(seasonId, "brasileirao-a", moved);
+      // espera a importação parar nas linhas travadas pelo admin, e só então o admin termina
+      for (let i = 0; i < 100; i++) {
+        const res = await database.conn.pool.query(
+          "select count(*)::int as n from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'",
+        );
+        if (res.rows[0].n > 0) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      await adminTx.query("commit");
+      await running;
+    } finally {
+      adminTx.release();
+    }
+    const after = await view("brasileirao-a");
+    expect(after.manualOverride).toBe(true);
+    expect(after.rows.map((r) => r.club.id)).toEqual(ids);
+  });
+
   it("a importação que muda a tabela sem correção manual tira a conferência; a que não muda, não", async () => {
     await service.importStandings(seasonId, "brasileirao-a", tableA());
     await call("POST", "/admin/standings/brasileirao-a/confirm");

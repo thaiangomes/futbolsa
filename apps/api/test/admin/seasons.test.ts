@@ -75,6 +75,13 @@ describe("preparar a temporada", () => {
     const [log] = (await database.db.select().from(adminLog).where(eq(adminLog.action, "season.create"))).slice(-1);
     expect(log).toMatchObject({ actorId: admin.id, targetType: "season", targetId: String(created.id) });
     expect((await call("POST", "/admin/seasons", { year: 2029 })).statusCode).toBe(409);
+    // ano repetido ou anterior é recusado com 400, não com erro do banco
+    await database.db.update(seasons).set({ status: "closed" }).where(eq(seasons.id, created.id));
+    const repeated = await call("POST", "/admin/seasons", { year: 2028 });
+    expect(repeated.statusCode).toBe(400);
+    expect(repeated.json()).toMatchObject({ code: "invalid_input", fields: ["year"] });
+    expect((await call("POST", "/admin/seasons", { year: 2026 })).statusCode).toBe(400);
+    await database.db.update(seasons).set({ status: "preparing" }).where(eq(seasons.id, created.id));
     // a temporada de 2028 sai do caminho dos outros testes
     await database.db.update(seasons).set({ status: "closed" }).where(eq(seasons.id, created.id));
   });

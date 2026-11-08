@@ -194,6 +194,44 @@ describe("importação de jogos", () => {
     expect((await rows()).find((m) => m.sourceId === "c")).toMatchObject({ outOfWindow: false, manualOverride: true });
   });
 
+  it("admin 6 e 7: edição do admin que termina no meio da importação não tem o adiado remarcado pela importação", async () => {
+    const batch = [
+      league("a", "Flamengo", "Palmeiras", 5, day(12)),
+      league("b", "Vasco da Gama", "Santos", 5, day(12)),
+      league("c", "Corinthians", "São Paulo", 5, day(12)),
+    ];
+    await service.importMatches(seasonId, "brasileirao-a", batch);
+    expect((await rows()).find((m) => m.sourceId === "c")).toMatchObject({ outOfWindow: false, manualOverride: false });
+
+    // o admin edita o jogo "c" numa transação que ainda não terminou (segura a linha)
+    const admin = await database.conn.pool.connect();
+    try {
+      await admin.query("begin");
+      await admin.query(
+        "update futbolsa.matches set manual_override = true, status = 'scheduled', out_of_window = false where season_id = $1 and source_id = 'c'",
+        [seasonId],
+      );
+      // a fonte muda a data de "a" e "b" para 23 dias depois: pela mediana, "c" ficaria fora da janela
+      const running = service.importMatches(seasonId, "brasileirao-a", [
+        league("a", "Flamengo", "Palmeiras", 5, day(12 + 23)),
+        league("b", "Vasco da Gama", "Santos", 5, day(12 + 23)),
+      ]);
+      // espera a importação parar na linha travada pelo admin, e só então o admin termina
+      for (let i = 0; i < 100; i++) {
+        const res = await database.conn.pool.query(
+          "select count(*)::int as n from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'",
+        );
+        if (res.rows[0].n > 0) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      await admin.query("commit");
+      await running;
+    } finally {
+      admin.release();
+    }
+    expect((await rows()).find((m) => m.sourceId === "c")).toMatchObject({ manualOverride: true, outOfWindow: false });
+  });
+
   it("a fonte que diz POSTPONED marca o jogo como adiado; o motor lê adiado = status adiado ou fora da janela", async () => {
     await service.importMatches(seasonId, "brasileirao-a", [
       league("p", "Flamengo", "Palmeiras", 2, day(14), { status: "postponed" }),
