@@ -1,2 +1,9 @@
-// Contratos do módulo admin (esquemas zod das rotas e dos eventos) entram aqui nas próximas fases.
-export {};
+export * from "./common.js";
+export * from "./log.js";
+export * from "./matches.js";
+export * from "./pending.js";
+export * from "./standings.js";
+export * from "./seasons.js";
+export * from "./suspension.js";
+export * from "./imports.js";
+export * from "./overview.js";
