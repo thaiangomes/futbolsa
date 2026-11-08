@@ -1,0 +1,154 @@
+{
+ "events": [
+  {
+   "id": "736481",
+   "date": "2025-08-21T00:30Z",
+   "name": "Universidad de Chile at Independiente",
+   "season": {
+    "slug": "round-of-16"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_CANCELED"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "11",
+        "displayName": "Independiente"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "4139",
+        "displayName": "Universidad de Chile"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "736250",
+   "date": "2025-07-15T22:00Z",
+   "name": "Cerro Largo at Central Córdoba (Santiago del Estero)",
+   "season": {
+    "slug": "knockout-round-playoffs"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "11989",
+        "displayName": "Central Córdoba (Santiago del Estero)"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "9902",
+        "displayName": "Cerro Largo"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "760381",
+   "date": "2025-11-22T20:00Z",
+   "name": "Atlético-MG at Lanús",
+   "season": {
+    "slug": "final"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FINAL_PEN"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "winner": true,
+       "shootoutScore": 5,
+       "team": {
+        "id": "12",
+        "displayName": "Lanús"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "shootoutScore": 4,
+       "team": {
+        "id": "7632",
+        "displayName": "Atlético-MG"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "734679",
+   "date": "2025-04-01T22:00Z",
+   "name": "Guaraní at Boston River",
+   "season": {
+    "slug": "group-stage"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "3",
+       "winner": false,
+       "team": {
+        "id": "9999",
+        "displayName": "Boston River"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "3",
+       "winner": false,
+       "team": {
+        "id": "7385",
+        "displayName": "Guaraní"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

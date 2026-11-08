@@ -1,0 +1,374 @@
+{
+ "events": [
+  {
+   "id": "733216",
+   "date": "2025-04-04T22:00Z",
+   "name": "Amazonas at Goiás",
+   "season": {
+    "slug": "2025-brasileiro-serie-b"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": true,
+       "team": {
+        "id": "3395",
+        "displayName": "Goiás"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "21888",
+        "displayName": "Amazonas"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "733214",
+   "date": "2025-04-05T00:00Z",
+   "name": "Operário PR at Criciúma",
+   "season": {
+    "slug": "2025-brasileiro-serie-b"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "9971",
+        "displayName": "Criciúma"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "2",
+       "winner": true,
+       "team": {
+        "id": "18187",
+        "displayName": "Operário PR"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "733209",
+   "date": "2025-04-05T00:00Z",
+   "name": "Athletico Paranaense at Paysandu",
+   "season": {
+    "slug": "2025-brasileiro-serie-b"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "15424",
+        "displayName": "Paysandu"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "2",
+       "winner": true,
+       "team": {
+        "id": "3458",
+        "displayName": "Athletico-PR"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "733213",
+   "date": "2025-04-05T19:00Z",
+   "name": "Vila Nova at Coritiba",
+   "season": {
+    "slug": "2025-brasileiro-serie-b"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": true,
+       "team": {
+        "id": "3456",
+        "displayName": "Coritiba"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "9973",
+        "displayName": "Vila Nova"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "733217",
+   "date": "2025-04-05T19:00Z",
+   "name": "Chapecoense at CRB",
+   "season": {
+    "slug": "2025-brasileiro-serie-b"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": true,
+       "team": {
+        "id": "9970",
+        "displayName": "CRB"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "9318",
+        "displayName": "Chapecoense"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "733212",
+   "date": "2025-04-05T21:30Z",
+   "name": "Botafogo-SP at América Mineiro",
+   "season": {
+    "slug": "2025-brasileiro-serie-b"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": true,
+       "team": {
+        "id": "6154",
+        "displayName": "América Mineiro"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "10281",
+        "displayName": "Botafogo-SP"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "733215",
+   "date": "2025-04-06T22:00Z",
+   "name": "Remo at Ferroviária",
+   "season": {
+    "slug": "2025-brasileiro-serie-b"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "18126",
+        "displayName": "Ferroviária"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "4936",
+        "displayName": "Remo"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "733210",
+   "date": "2025-04-06T22:00Z",
+   "name": "Cuiabá at Volta Redonda",
+   "season": {
+    "slug": "2025-brasileiro-serie-b"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "winner": false,
+       "team": {
+        "id": "4806",
+        "displayName": "Volta Redonda"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": true,
+       "team": {
+        "id": "17313",
+        "displayName": "Cuiabá"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "733218",
+   "date": "2025-04-06T23:00Z",
+   "name": "Novorizontino at Avaí",
+   "season": {
+    "slug": "2025-brasileiro-serie-b"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "9966",
+        "displayName": "Avaí"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "1",
+       "winner": false,
+       "team": {
+        "id": "18127",
+        "displayName": "Novorizontino"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "733211",
+   "date": "2025-04-07T22:00Z",
+   "name": "Athletic at Atlético Goianiense",
+   "season": {
+    "slug": "2025-brasileiro-serie-b"
+   },
+   "competitions": [
+    {
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "4",
+       "winner": true,
+       "team": {
+        "id": "10357",
+        "displayName": "Atlético Goianiense"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "2",
+       "winner": false,
+       "team": {
+        "id": "20851",
+        "displayName": "Athletic"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

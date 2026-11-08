@@ -1,0 +1,410 @@
+{
+ "children": [
+  {
+   "standings": {
+    "entries": [
+     {
+      "team": {
+       "id": "3456",
+       "displayName": "Coritiba"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 68
+       },
+       {
+        "name": "rank",
+        "value": 1
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "3458",
+       "displayName": "Athletico Paranaense"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 65
+       },
+       {
+        "name": "rank",
+        "value": 2
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "9318",
+       "displayName": "Chapecoense"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 62
+       },
+       {
+        "name": "rank",
+        "value": 3
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "4936",
+       "displayName": "Remo"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 62
+       },
+       {
+        "name": "rank",
+        "value": 4
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "9971",
+       "displayName": "Criciúma"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 61
+       },
+       {
+        "name": "rank",
+        "value": 5
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "3395",
+       "displayName": "Goiás"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 61
+       },
+       {
+        "name": "rank",
+        "value": 6
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "18127",
+       "displayName": "Novorizontino"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 60
+       },
+       {
+        "name": "rank",
+        "value": 7
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "9970",
+       "displayName": "CRB"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 56
+       },
+       {
+        "name": "rank",
+        "value": 8
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "9966",
+       "displayName": "Avaí"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 56
+       },
+       {
+        "name": "rank",
+        "value": 9
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "17313",
+       "displayName": "Cuiabá"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 54
+       },
+       {
+        "name": "rank",
+        "value": 10
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "10357",
+       "displayName": "Atlético Goianiense"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 52
+       },
+       {
+        "name": "rank",
+        "value": 11
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "18187",
+       "displayName": "Operário PR"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 48
+       },
+       {
+        "name": "rank",
+        "value": 12
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "9973",
+       "displayName": "Vila Nova"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 47
+       },
+       {
+        "name": "rank",
+        "value": 13
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "6154",
+       "displayName": "América Mineiro"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 46
+       },
+       {
+        "name": "rank",
+        "value": 14
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "20851",
+       "displayName": "Athletic"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 44
+       },
+       {
+        "name": "rank",
+        "value": 15
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "10281",
+       "displayName": "Botafogo-SP"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 42
+       },
+       {
+        "name": "rank",
+        "value": 16
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "18126",
+       "displayName": "Ferroviária"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 40
+       },
+       {
+        "name": "rank",
+        "value": 17
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "21888",
+       "displayName": "Amazonas"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 36
+       },
+       {
+        "name": "rank",
+        "value": 18
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "4806",
+       "displayName": "Volta Redonda"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 36
+       },
+       {
+        "name": "rank",
+        "value": 19
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "15424",
+       "displayName": "Paysandu"
+      },
+      "stats": [
+       {
+        "name": "gamesPlayed",
+        "value": 38
+       },
+       {
+        "name": "points",
+        "value": 28
+       },
+       {
+        "name": "rank",
+        "value": 20
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}
