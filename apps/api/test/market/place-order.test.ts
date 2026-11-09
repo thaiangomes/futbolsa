@@ -5,6 +5,7 @@ import type { Database } from "../../src/infra/db/client.js";
 import { type Tx, withTransaction } from "../../src/infra/db/index.js";
 import { orders, seasonClubs, seasons, trades, walletEntries } from "../../src/infra/db/schema/index.js";
 import {
+  displayedPrice,
   inMatch,
   MatchingEngine,
   OrderService,
@@ -557,6 +558,27 @@ describe("ordem nova no Postgres", () => {
       [4010, 4020, 4030].map((p, i) => ({ price: p, priceBefore: i === 0 ? 4000 : p - 10, inAuction: false, withHouse: false, at: NOW, buyOrderId: r.order.id })),
     );
     expect(await clubRow(db, seasonId, club("FLA3"))).toMatchObject({ lastPrice: 4030, lastTradeAt: NOW });
+  }));
+
+  it("o horário do negócio nunca recua: a ordem que chega com o relógio atrás do último negócio do clube negocia no horário dele", scene(async () => {
+    const bruno = await holder("FLA3", 20);
+    const ana = await player();
+    await ready();
+    const later = new Date("2027-04-06T13:10:00Z");
+    accepted(await service.place(o.sellLimit(bruno, "FLA3", 10, 4000, { now: later })));
+    expect(accepted(await service.place(o.buyLimit(ana, "FLA3", 10, 4000, { now: later }))).trades.map((x) => x.at)).toEqual([later]);
+
+    // Esta ordem leu o relógio às 10h05, antes de esperar a trava do clube, e só entrou depois do negócio das 10h10.
+    const earlier = new Date("2027-04-06T13:05:00Z");
+    accepted(await service.place(o.sellLimit(bruno, "FLA3", 10, 4010, { now: earlier })));
+    const r = accepted(await service.place(o.buyLimit(ana, "FLA3", 10, 4010, { now: earlier })));
+
+    expect(r.trades.map((x) => [x.price, x.at])).toEqual([[4010, later]]);
+    expect(r.posts.map((p) => p.entry.at)).toEqual([later, later, later]);
+    expect(await clubRow(db, seasonId, club("FLA3"))).toMatchObject({ lastPrice: 4010, lastTradeAt: later });
+    // o preço do passado (pelo horário dos negócios) concorda com o preço exibido (pela ordem da trava)
+    expect(await displayedPrice(db, seasonId, "FLA3", later)).toBe(4010);
+    expect(await displayedPrice(db, seasonId, "FLA3", earlier)).toBe(4000);
   }));
 
   it("a compra do livro executada em duas vezes: a reserva cai com cada negócio e a ordem sai das abertas quando termina", scene(async () => {

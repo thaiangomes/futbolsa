@@ -105,6 +105,7 @@ export class PostgresMatchingEngine extends MatchingEngine {
     if (!season) throw new Error(`temporada inexistente: ${input.seasonId}`);
     const gate = tradingGate(season, club, input.now);
     if (!gate.open) return gate.code === "club_suspended" ? reject(gate.code, gate.reason) : reject(gate.code);
+    const at = instantOf(input.now, club.lastTradeAt);
 
     // (L4) Túnel de preço: o leilão vencido fecha antes, e a referência do dia vira aqui, com o clube travado.
 
@@ -166,7 +167,7 @@ export class PostgresMatchingEngine extends MatchingEngine {
     // inteira, aberta, pela mesma `record` (com `match` sem negócios).
 
     // 8. Só agora o banco muda.
-    return this.record(tx, { input, request, club, displayedPrice, account, reach, match, houseWallets });
+    return this.record(tx, { input, at, request, club, displayedPrice, account, reach, match, houseWallets });
   }
 
   /**
@@ -218,6 +219,8 @@ export class PostgresMatchingEngine extends MatchingEngine {
     tx: Tx,
     r: {
       input: PlaceOrderInput;
+      /** O instante de tudo o que a ordem grava. */
+      at: Date;
       request: OrderRequestShape;
       club: LockedClub;
       displayedPrice: Cents;
@@ -227,8 +230,7 @@ export class PostgresMatchingEngine extends MatchingEngine {
       houseWallets: ReadonlySet<number>;
     },
   ): Promise<PlaceOrderResult> {
-    const { input, request, club, match } = r;
-    const at = input.now;
+    const { input, at, request, club, match } = r;
     const limitPrice = request.type === "limit" ? request.limitPrice! : null;
     const buying = request.side === "buy";
 
@@ -352,6 +354,17 @@ export class PostgresMatchingEngine extends MatchingEngine {
       auction: null,
     };
   }
+}
+
+/**
+ * O instante da ordem: o `now` de quem chama, mas nunca antes do último negócio do clube. Quem chama lê o relógio
+ * antes de esperar a trava do clube; com duas ordens quase juntas, a que leu o relógio primeiro pode pegar a trava
+ * depois, e o negócio dela sairia com horário anterior ao do negócio que ela encontrou feito. O preço do passado
+ * (`lastTradeUntil`) segue o horário e o `last_price` segue a ordem da trava: os dois só concordam se o horário dos
+ * negócios de um clube nunca recuar.
+ */
+function instantOf(now: Date, lastTradeAt: Date | null): Date {
+  return lastTradeAt !== null && lastTradeAt.getTime() > now.getTime() ? lastTradeAt : now;
 }
 
 function reject(code: PlaceOrderRejected["code"], reason?: string): PlaceOrderRejected {
