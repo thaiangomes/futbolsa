@@ -5,7 +5,9 @@ import { StandingsModule } from "../standings/standings.module.js";
 import { CloseEventsJob } from "./close-events.job.js";
 import { CloseEventsService } from "./close-events.service.js";
 import { EngineInputService } from "./engine-input.js";
+import { PayoutsController } from "./payouts.controller.js";
 import { NoopRankingsPort, RankingsPort } from "./ports.js";
+import { PreviewService } from "./preview.service.js";
 
 /**
  * Pagamentos de dividendos (F12; dono: `admin`): foto das posições, fechamento dos eventos, prévia, aprovação em lotes
@@ -15,7 +17,8 @@ import { NoopRankingsPort, RankingsPort } from "./ports.js";
  */
 @Module({
   imports: [DividendsModule, ResultsModule, StandingsModule],
-  providers: [{ provide: RankingsPort, useClass: NoopRankingsPort }, EngineInputService, CloseEventsService, CloseEventsJob],
+  controllers: [PayoutsController],
+  providers: [{ provide: RankingsPort, useClass: NoopRankingsPort }, EngineInputService, CloseEventsService, CloseEventsJob, PreviewService],
   exports: [RankingsPort, EngineInputService, CloseEventsService],
 })
 export class PayoutsModule {}
