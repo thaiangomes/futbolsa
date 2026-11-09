@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/infra/db/client.js";
-import { withTransaction } from "../../src/infra/db/index.js";
+import { lockClubs, lockSeason, withTransaction } from "../../src/infra/db/index.js";
 import { orders, trades } from "../../src/infra/db/schema/index.js";
 import type { OrderService, PlaceOrderInput, PlaceOrderResult } from "../../src/modules/market/index.js";
 import { useTestDatabase } from "../support/db.js";
@@ -20,6 +20,7 @@ import {
   orderRow,
   orderService,
   syncTotalShares,
+  waitForBlocked,
   walletOf,
 } from "./order-helpers.js";
 
@@ -30,7 +31,7 @@ const ROUNDS = 50;
 const NOW = new Date("2027-04-06T13:05:00Z");
 const RICH = 10_000_000;
 /** Cada cenário usa clubes só dele, para o livro que um deixa não entrar no casamento do outro. */
-const TICKERS = ["FLA3", "PAL3", "SPT3", "COR3", "CAM3", "BAH3", "FOR3", "GRE3", "INT3", "CRU3", "VAS3", "BOT3", "FLU3"];
+const TICKERS = ["FLA3", "PAL3", "SPT3", "COR3", "CAM3", "BAH3", "FOR3", "GRE3", "INT3", "CRU3", "VAS3", "BOT3", "FLU3", "SAO3"];
 const STRESS_TICKERS = ["VAS3", "BOT3", "FLU3"];
 
 /**
@@ -331,6 +332,38 @@ describe("ordens ao mesmo tempo, contra o Postgres", () => {
     // as recusas são só as da especificação
     const refused = new Set(results.filter((r) => !r.ok).map(outcome));
     for (const code of refused) expect(["price_out_of_band", "insufficient_cash", "insufficient_shares", "self_trade", "too_many_open_orders"]).toContain(code);
+    await assertMarketInvariants(db, seasonId, cashBefore);
+  });
+
+  it("7. quem travou a temporada em modo exclusivo e espera os clubes (a suspensão do mercado todo) com uma ordem em andamento num deles: as duas terminam sem deadlock", async () => {
+    for (let round = 0; round < 20; round++) {
+      const seasonHeld = deferred();
+      const go = deferred();
+      const suspension = withTransaction(
+        db,
+        async (tx) => {
+          await lockSeason(tx, seasonId, "update");
+          seasonHeld.resolve();
+          await go.promise;
+          await lockClubs(tx, seasonId, TICKERS);
+        },
+        transaction,
+      );
+      await seasonHeld.promise;
+      // a ordem já tem o clube; solta a suspensão, espera ela parar na trava do clube e só então grava em `orders`,
+      // que aponta para a temporada travada
+      const r = accepted(
+        await place(o.buyLimit(buyerA, "SAO3", 1, 3900), {
+          afterReadBeforeLock: async () => {
+            go.resolve();
+            await waitForBlocked(db);
+          },
+        }),
+      );
+      expect(r.order.status).toBe("open");
+      await suspension;
+    }
+    expect(retries).toBe(0);
     await assertMarketInvariants(db, seasonId, cashBefore);
   });
 

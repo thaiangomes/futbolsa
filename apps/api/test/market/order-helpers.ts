@@ -13,7 +13,7 @@ import {
 } from "../../src/modules/market/index.js";
 import { PortfolioLedger } from "../../src/modules/portfolio/index.js";
 import { post } from "../../src/modules/portfolio/ledger/index.js";
-import { createUser, openWallets, T0 } from "../support/fixtures.js";
+import { createUser, openWallets, sleep, T0 } from "../support/fixtures.js";
 import {
   assertBookNotCrossed,
   assertLedgerConsistent,
@@ -111,6 +111,21 @@ export async function rolledBack(db: Database, body: (inner: Database) => Promis
   } catch (error) {
     if (!(error instanceof RolledBack)) throw error;
   }
+}
+
+/**
+ * Espera até `count` conexões deste banco estarem paradas numa trava: o teste de concorrência só segue quando a
+ * outra transação já está esperando, sem depender de um tempo fixo.
+ */
+export async function waitForBlocked(db: Database, count = 1): Promise<void> {
+  for (let attempt = 0; attempt < 1_000; attempt++) {
+    const result = await db.execute(
+      sql`select count(*)::int as n from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'`,
+    );
+    if (Number(result.rows[0]!.n) >= count) return;
+    await sleep(5);
+  }
+  throw new Error(`esperava ${count} transação(ões) parada(s) numa trava, e nenhuma ficou`);
 }
 
 /** A ordem foi aceita: devolve o resultado já com o tipo certo. */
