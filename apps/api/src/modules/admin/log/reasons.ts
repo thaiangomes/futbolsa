@@ -27,6 +27,8 @@ export const ADMIN_ACTIONS = {
   // Suspensão do mercado (F7)
   "suspension.set": { reasonRequired: true },
   "suspension.clear": { reasonRequired: false },
+  // Percentuais da quantidade da casa e mínimos por lado (F9): muda quanto o formador cota, então pede motivo
+  "market-maker.update": { reasonRequired: true },
   // Pagamentos (F12): a aprovação não pede motivo; a correção mexe no dinheiro dos outros e pede
   "payout.approve": { reasonRequired: false },
   "payout.correct": { reasonRequired: true },
