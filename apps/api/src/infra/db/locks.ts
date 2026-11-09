@@ -1,18 +1,20 @@
 import { and, asc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { clubs, seasonClubs, seasons, wallets } from "./schema/index.js";
+import { clubs, payoutEvents, seasonClubs, seasons, wallets } from "./schema/index.js";
 import type { Tx } from "./transaction.js";
 
 /**
  * As travas de linha, sempre na mesma ordem em todo o jogo: a temporada; os
- * clubes por ticker; as carteiras de jogadores e bots por id; a tesouraria por
- * último (Arquitetura da Fase 1, decisão 4). Cada função ordena o que recebe e
- * recusa, com `LockOrderError`, uma trava que viria antes de outra já tomada.
+ * clubes por ticker; os eventos de pagamento por id (P3 da F12); as carteiras de
+ * jogadores e bots por id; a tesouraria por último (Arquitetura da Fase 1,
+ * decisão 4). Cada função ordena o que recebe e recusa, com `LockOrderError`, uma
+ * trava que viria antes de outra já tomada.
  */
 
 export type SeasonRow = typeof seasons.$inferSelect;
 export type LockedClub = typeof seasonClubs.$inferSelect & { ticker: string };
 export type WalletRow = typeof wallets.$inferSelect;
+export type PayoutEventRow = typeof payoutEvents.$inferSelect;
 
 /** `share` na oferta do IPO; `update` para fechar o IPO, encerrar a negociação ou a temporada. */
 export async function lockSeason(tx: Tx, seasonId: number, mode: "share" | "update"): Promise<SeasonRow> {
@@ -48,6 +50,30 @@ export async function lockClubs(tx: Tx, seasonId: number, tickers: readonly stri
   }
   tx.locks.markClubs(seasonId, sorted);
   return rows as LockedClub[];
+}
+
+/**
+ * Trava as linhas dos eventos de pagamento em ordem de id, depois dos clubes e antes das carteiras (P3 da F12),
+ * e as devolve nessa ordem. `share` (`FOR SHARE`) num lote de crédito: vários lotes do mesmo evento andam juntos,
+ * e quem quer mudar o evento (a correção, com `update`) espera o lote acabar, para o estorno não ser calculado
+ * sobre um pagamento pela metade.
+ */
+export async function lockPayoutEvents(tx: Tx, ids: readonly number[], mode: "share" | "update"): Promise<PayoutEventRow[]> {
+  const sorted = [...new Set(ids)].sort((a, b) => a - b);
+  if (sorted.length === 0) return [];
+  tx.locks.checkPayoutEvents(sorted, mode);
+  const rows = await tx.db
+    .select()
+    .from(payoutEvents)
+    .where(inArray(payoutEvents.id, sorted))
+    .orderBy(asc(payoutEvents.id))
+    .for(mode);
+  if (rows.length !== sorted.length) {
+    const found = new Set(rows.map((r) => r.id));
+    throw new Error(`evento de pagamento inexistente: ${sorted.filter((id) => !found.has(id)).join(", ")}`);
+  }
+  tx.locks.markPayoutEvents(sorted, mode);
+  return rows;
 }
 
 /**
