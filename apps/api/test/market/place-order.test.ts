@@ -1,11 +1,11 @@
 import "reflect-metadata";
 import { asc, eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/infra/db/client.js";
 import { withTransaction } from "../../src/infra/db/index.js";
 import { orders, seasonClubs, seasons, trades, walletEntries } from "../../src/infra/db/schema/index.js";
 import type { OrderService, PostgresMatchingEngine } from "../../src/modules/market/index.js";
-import { createTestDatabase, type TestDatabase } from "../support/db.js";
+import { useTestDatabase } from "../support/db.js";
 import { totalCash } from "../support/invariants.js";
 import { marketSeason } from "./helpers.js";
 import {
@@ -22,6 +22,7 @@ import {
   orderService,
   positionOf,
   rejected,
+  rolledBack,
   reverseCash,
   rowCounts,
   setDisplayedPrice,
@@ -39,8 +40,7 @@ const TICKERS = ["FLA3", "PAL3", "SPT3", "COR3", "CAM3"];
 const RICH = 10_000_000;
 
 describe("ordem nova no Postgres", () => {
-  // Um banco por teste: cada critério começa com o livro vazio e os clubes a R$ 40,00.
-  let conn: TestDatabase;
+  const t = useTestDatabase(5);
   let db: Database;
   let seasonId: number;
   let clubIds: Map<string, number>;
@@ -51,26 +51,28 @@ describe("ordem nova no Postgres", () => {
   /** O caixa total depois da montagem do teste; `undefined` até o teste chamar `ready`. */
   let cashBefore: number | undefined;
 
-  beforeEach(async () => {
-    conn = await createTestDatabase(5);
-    db = conn.db;
-    ({ seasonId, clubIds } = await marketSeason(db, { tickers: TICKERS }));
-    // a tesouraria nasce antes das carteiras dos jogadores: o id dela é o menor, e ela é travada por último
-    treasury = await openTreasury(db, seasonId);
-    ({ service, engine } = orderService(db));
-    o = orderInputs({ seasonId, now: NOW });
-    cashBefore = undefined;
+  beforeAll(async () => {
+    ({ seasonId, clubIds } = await marketSeason(t.db, { tickers: TICKERS }));
   });
 
-  afterEach(async () => {
-    try {
-      // livro 30 e as invariantes do livro, depois de cada teste
+  /**
+   * Cada teste começa do zero (livro vazio, clubes a R$ 40,00 e só a tesouraria, sem caixa nem ações) e termina
+   * conferindo o critério 30 e as invariantes do livro. Para não criar um banco por teste (uns 2 segundos cada), o
+   * teste roda dentro de uma transação que é desfeita no fim: cada `withTransaction` do serviço vira um ponto de
+   * salvamento dela. As transações de verdade, uma por conexão, ficam com `place-order-concurrency.test.ts`.
+   */
+  const scene = (body: () => Promise<void>) => () =>
+    rolledBack(t.db, async (inner) => {
+      db = inner;
+      // a tesouraria nasce antes das carteiras dos jogadores: o id dela é o menor, e ela é travada por último
+      treasury = await openTreasury(db, seasonId);
+      ({ service, engine } = orderService(db));
+      o = orderInputs({ seasonId, now: NOW });
+      cashBefore = undefined;
+      await body();
       if (cashBefore === undefined) throw new Error("o teste não chamou ready() depois de montar as carteiras");
       await assertMarketInvariants(db, seasonId, cashBefore);
-    } finally {
-      await conn.close();
-    }
-  });
+    });
 
   const club = (ticker: string) => clubIds.get(ticker)!;
   const player = (cash = RICH) => openPlayer(db, seasonId, cash);
@@ -91,7 +93,7 @@ describe("ordem nova no Postgres", () => {
 
   // ------------------------------------------------------------------ critérios da especificação
 
-  it("livro 1: compra limitada de 100 a R$ 40,00 sem venda até esse preço fica no livro com R$ 4.000,00 reservados", async () => {
+  it("livro 1: compra limitada de 100 a R$ 40,00 sem venda até esse preço fica no livro com R$ 4.000,00 reservados", scene(async () => {
     const ana = await player(1_000_000);
     const bruno = await holder("FLA3", 10);
     await ready();
@@ -107,9 +109,9 @@ describe("ordem nova no Postgres", () => {
     const [reserve] = (await entriesOf(ana)).slice(-1);
     expect(reserve).toMatchObject({ kind: "order_reserve", reservedCashDelta: 400_000, cashDelta: 0, refType: "order", refId: String(r.order.id), clubId: club("FLA3") });
     expect(await price("FLA3")).toBe(4000);
-  });
+  }));
 
-  it("livro 2: compra de 150 a R$ 41,00 leva 100 de Davi a R$ 40,50 e 50 de Bruno a R$ 41,00; a venda de Carla, que chegou depois, fica inteira", async () => {
+  it("livro 2: compra de 150 a R$ 41,00 leva 100 de Davi a R$ 40,50 e 50 de Bruno a R$ 41,00; a venda de Carla, que chegou depois, fica inteira", scene(async () => {
     const [bruno, carla, davi] = [await holder("FLA3", 100), await holder("FLA3", 100), await holder("FLA3", 100)];
     const ana = await player(1_000_000);
     await ready();
@@ -142,9 +144,9 @@ describe("ordem nova no Postgres", () => {
       [ofBruno.order.id, "open", 50],
     ]);
     expect([...r.walletIds].sort()).toEqual([ana, bruno, davi].sort());
-  });
+  }));
 
-  it("livro 3: compra de 100 a R$ 44,50 leva 10 da casa e 50 de Bruno, paga R$ 2.656,00, deixa 40 no livro com R$ 1.780,00 e devolve R$ 14,00", async () => {
+  it("livro 3: compra de 100 a R$ 44,50 leva 10 da casa e 50 de Bruno, paga R$ 2.656,00, deixa 40 no livro com R$ 1.780,00 e devolve R$ 14,00", scene(async () => {
     await giveShares(db, treasury, club("FLA3"), 10);
     const bruno = await holder("FLA3", 50);
     const ana = await player(1_000_000);
@@ -189,9 +191,9 @@ describe("ordem nova no Postgres", () => {
     expect(rejected(await service.place(o.buyLimit(carla, "FLA3", 1, 5317))).code).toBe("price_out_of_band");
     expect(rejected(await service.place(o.sellLimit(carla, "FLA3", 1, 3543))).code).toBe("price_out_of_band");
     accepted(await service.place(o.buyLimit(carla, "FLA3", 1, 3544)));
-  });
+  }));
 
-  it("livro 4: compra a mercado de 50 com R$ 1.000,00 livres compra 33 a R$ 30,00 e as outras 17 são canceladas", async () => {
+  it("livro 4: compra a mercado de 50 com R$ 1.000,00 livres compra 33 a R$ 30,00 e as outras 17 são canceladas", scene(async () => {
     const bruno = await holder("PAL3", 100);
     const ana = await player(100_000);
     await setDisplayedPrice(db, seasonId, club("PAL3"), 3000);
@@ -208,9 +210,9 @@ describe("ordem nova no Postgres", () => {
     expect(await orderRow(db, sale.order.id)).toMatchObject({ status: "open", filled: 33 });
     // a compra a mercado não reserva: o extrato só tem o negócio
     expect((await entriesOf(ana)).slice(1).map((e) => e.kind)).toEqual(["trade"]);
-  });
+  }));
 
-  it("livro 5: venda a mercado de 200 com 120 de compra no livro vende 120 e as 80 voltam a ficar livres; a de 800 é recusada", async () => {
+  it("livro 5: venda a mercado de 200 com 120 de compra no livro vende 120 e as 80 voltam a ficar livres; a de 800 é recusada", scene(async () => {
     const ana = await holder("FLA3", 700);
     const [bruno, carla] = [await player(), await player()];
     await ready();
@@ -237,9 +239,9 @@ describe("ordem nova no Postgres", () => {
     const before = await rowCounts(db);
     expect(rejected(await service.place(o.sellMarket(ana, "FLA3", 800)))).toEqual({ ok: false, code: "insufficient_shares" });
     expect(await rowCounts(db)).toEqual(before);
-  });
+  }));
 
-  it("livro 6: com o preço em R$ 40,00, compra a R$ 48,01 e venda a R$ 31,99 são recusadas; a R$ 48,00 e a R$ 32,00 são aceitas (jogador e bot)", async () => {
+  it("livro 6: com o preço em R$ 40,00, compra a R$ 48,01 e venda a R$ 31,99 são recusadas; a R$ 48,00 e a R$ 32,00 são aceitas (jogador e bot)", scene(async () => {
     const ana = await holder("FLA3", 10);
     const bot = await openBot(db, seasonId, RICH);
     await giveShares(db, bot, club("PAL3"), 10);
@@ -252,9 +254,9 @@ describe("ordem nova no Postgres", () => {
     expect(rejected(await service.place(o.buyLimit(bot, "PAL3", 1, 4801, { actor: "bot" }))).code).toBe("price_out_of_band");
     expect(rejected(await service.place(o.sellLimit(bot, "PAL3", 1, 3199, { actor: "bot" }))).code).toBe("price_out_of_band");
     expect(accepted(await service.place(o.sellLimit(bot, "PAL3", 1, 3200, { actor: "bot" }))).order.status).toBe("open");
-  });
+  }));
 
-  it("livro 7: compra a mercado de 120 com vendas de 50 a R$ 47,00 e 100 a R$ 49,00 compra só as 50: R$ 49,00 passa de R$ 48,00", async () => {
+  it("livro 7: compra a mercado de 120 com vendas de 50 a R$ 47,00 e 100 a R$ 49,00 compra só as 50: R$ 49,00 passa de R$ 48,00", scene(async () => {
     const [bruno, carla] = [await holder("FLA3", 50), await holder("FLA3", 100)];
     const ana = await player();
     await ready();
@@ -270,9 +272,9 @@ describe("ordem nova no Postgres", () => {
     expect(r.order).toMatchObject({ filled: 50, status: "cancelled", cancelReason: "market_remainder" });
     expect(await orderRow(db, far.order.id)).toMatchObject({ status: "open", filled: 0 });
     expect(await walletOf(db, ana)).toMatchObject({ cash: RICH - 235_000, reservedCash: 0 });
-  });
+  }));
 
-  it("livro 8: depois de um negócio a R$ 48,00 a compra limitada a R$ 57,00 é aceita: o limite passou a ir de R$ 38,40 a R$ 57,60", async () => {
+  it("livro 8: depois de um negócio a R$ 48,00 a compra limitada a R$ 57,00 é aceita: o limite passou a ir de R$ 38,40 a R$ 57,60", scene(async () => {
     const bruno = await holder("FLA3", 10);
     const [carla, ana] = [await player(), await player()];
     await ready();
@@ -283,18 +285,18 @@ describe("ordem nova no Postgres", () => {
     expect(rejected(await service.place(o.buyLimit(ana, "FLA3", 1, 5761))).code).toBe("price_out_of_band");
     expect(rejected(await service.place(o.buyLimit(ana, "FLA3", 1, 3839))).code).toBe("price_out_of_band");
     expect(accepted(await service.place(o.buyLimit(ana, "FLA3", 1, 5700))).order).toMatchObject({ status: "open", reservedCash: 5700 });
-  });
+  }));
 
-  it("livro 10: com o preço em R$ 0,55, a venda a R$ 0,49 é recusada pelo piso e a de R$ 0,50 é aceita", async () => {
+  it("livro 10: com o preço em R$ 0,55, a venda a R$ 0,49 é recusada pelo piso e a de R$ 0,50 é aceita", scene(async () => {
     const ana = await holder("SPT3", 10);
     await setDisplayedPrice(db, seasonId, club("SPT3"), 55);
     await ready();
 
     expect(rejected(await service.place(o.sellLimit(ana, "SPT3", 1, 49)))).toEqual({ ok: false, code: "below_min_price" });
     expect(accepted(await service.place(o.sellLimit(ana, "SPT3", 1, 50))).order).toMatchObject({ status: "open", limitPrice: 50 });
-  });
+  }));
 
-  it("livro 11: a venda de Ana a R$ 47,00 continua no livro quando o preço cai a R$ 35,00, e a compra de Bruno a R$ 47,00 é recusada", async () => {
+  it("livro 11: a venda de Ana a R$ 47,00 continua no livro quando o preço cai a R$ 35,00, e a compra de Bruno a R$ 47,00 é recusada", scene(async () => {
     const [ana, davi] = [await holder("FLA3", 10), await holder("FLA3", 5)];
     const [bruno, carla] = [await player(), await player()];
     await ready();
@@ -308,9 +310,9 @@ describe("ordem nova no Postgres", () => {
     // o limite foi a R$ 42,00: Bruno não alcança mais a venda de Ana
     expect(rejected(await service.place(o.buyLimit(bruno, "FLA3", 10, 4700))).code).toBe("price_out_of_band");
     expect(accepted(await service.place(o.buyLimit(bruno, "FLA3", 10, 4200))).trades).toEqual([]);
-  });
+  }));
 
-  it("livro 13: com uma venda aberta a R$ 42,00, a compra limitada a R$ 42,00 e a compra a mercado são recusadas; a R$ 41,99 é aceita", async () => {
+  it("livro 13: com uma venda aberta a R$ 42,00, a compra limitada a R$ 42,00 e a compra a mercado são recusadas; a R$ 41,99 é aceita", scene(async () => {
     const ana = await holder("FLA3", 10);
     await ready();
     accepted(await service.place(o.sellLimit(ana, "FLA3", 10, 4200)));
@@ -322,9 +324,9 @@ describe("ordem nova no Postgres", () => {
     expect(accepted(await service.place(o.buyLimit(ana, "FLA3", 5, 4199))).order.status).toBe("open");
     // em outro clube a venda de FLA3 não atrapalha
     expect(accepted(await service.place(o.buyMarket(ana, "PAL3", 5))).order.status).toBe("cancelled");
-  });
+  }));
 
-  it("livro 14: ordem de 0 ação, de 1,5 ação ou com preço de R$ 40,005 é recusada", async () => {
+  it("livro 14: ordem de 0 ação, de 1,5 ação ou com preço de R$ 40,005 é recusada", scene(async () => {
     const ana = await player();
     await ready();
     const before = await rowCounts(db);
@@ -337,9 +339,9 @@ describe("ordem nova no Postgres", () => {
     // mais ações do que a coluna da ordem guarda: a compra a mercado não reserva nada e passaria pelo motor
     expect(rejected(await service.place(o.buyMarket(ana, "FLA3", 3_000_000_000))).code).toBe("invalid_quantity");
     expect(await rowCounts(db)).toEqual(before);
-  });
+  }));
 
-  it("livro 15: com 50 ordens abertas somando os clubes, a 51ª é recusada; quando uma delas executa, a seguinte é aceita", async () => {
+  it("livro 15: com 50 ordens abertas somando os clubes, a 51ª é recusada; quando uma delas executa, a seguinte é aceita", scene(async () => {
     const ana = await player();
     const bruno = await holder("FLA3", 1);
     await ready();
@@ -357,9 +359,9 @@ describe("ordem nova no Postgres", () => {
     expect(await walletOf(db, ana)).toMatchObject({ openOrders: 49 });
     expect(accepted(await service.place(o.buyLimit(ana, "PAL3", 1, 4000))).order.status).toBe("open");
     expect(rejected(await service.place(o.buyLimit(ana, "SPT3", 1, 4000))).code).toBe("too_many_open_orders");
-  });
+  }));
 
-  it("livro 17: com o caixa em −R$ 250,00 a compra a mercado é recusada; a venda de 100 CAM3 a R$ 20,00 executa e o caixa vai a R$ 1.750,00", async () => {
+  it("livro 17: com o caixa em −R$ 250,00 a compra a mercado é recusada; a venda de 100 CAM3 a R$ 20,00 executa e o caixa vai a R$ 1.750,00", scene(async () => {
     const bruno = await holder("CAM3", 100, 0);
     await reverseCash(db, bruno, club("CAM3"), 25_000);
     const carla = await player();
@@ -375,11 +377,11 @@ describe("ordem nova no Postgres", () => {
     expect(r.trades.map((t) => [t.quantity, t.price])).toEqual([[100, 2000]]);
     expect(r.cash).toEqual({ total: 175_000, reserved: 0, free: 175_000 });
     expect(await walletOf(db, bruno)).toMatchObject({ cash: 175_000 });
-  });
+  }));
 
   // ------------------------------------------------------------------ a casa e os bots
 
-  it("a casa passa fora da faixa de 20% e do limite de 50 ordens abertas", async () => {
+  it("a casa passa fora da faixa de 20% e do limite de 50 ordens abertas", scene(async () => {
     await giveShares(db, treasury, club("FLA3"), 60);
     await ready();
     const house = { actor: "house" as const };
@@ -390,9 +392,9 @@ describe("ordem nova no Postgres", () => {
     expect(await walletOf(db, treasury)).toMatchObject({ openOrders: 52 });
     // sem caixa a casa não compra: a regra do caixa vale para ela
     expect(rejected(await service.place(o.buyLimit(treasury, "FLA3", 1, 2000, house))).code).toBe("insufficient_cash");
-  });
+  }));
 
-  it("a compra da casa fora da faixa executa contra a venda a mercado de um jogador, com with_house", async () => {
+  it("a compra da casa fora da faixa executa contra a venda a mercado de um jogador, com with_house", scene(async () => {
     const bruno = await holder("PAL3", 10);
     await giveCash(db, treasury, 100_000);
     await setDisplayedPrice(db, seasonId, club("PAL3"), 2000);
@@ -406,18 +408,18 @@ describe("ordem nova no Postgres", () => {
     expect(r.trades[0]).toMatchObject({ price: 2100, quantity: 10, withHouse: true, buyerWalletId: treasury, sellerWalletId: bruno, inAuction: false, priceBefore: 2000 });
     expect(await walletOf(db, treasury)).toEqual({ cash: 79_000, reservedCash: 0, free: 79_000, openOrders: 0 });
     expect(await positionOf(db, treasury, club("PAL3"))).toMatchObject({ shares: 10 });
-  });
+  }));
 
-  it("a ordem só é da casa com a carteira da tesouraria: trocar o ator é erro de programação, não recusa", async () => {
+  it("a ordem só é da casa com a carteira da tesouraria: trocar o ator é erro de programação, não recusa", scene(async () => {
     const ana = await player();
     await ready();
     await expect(service.place(o.buyLimit(ana, "FLA3", 1, 6000, { actor: "house" }))).rejects.toThrow(/carteira/);
     await expect(service.place(o.buyLimit(treasury, "FLA3", 1, 4000))).rejects.toThrow(/carteira/);
     await expect(service.place(o.buyLimit(ana, "FLA3", 1, 4000, { actor: "bot" }))).rejects.toThrow(/carteira/);
     await expect(service.place(o.buyLimit(ana, "XXX3", 1, 4000))).rejects.toThrow(/não listado/);
-  });
+  }));
 
-  it("a ordem do bot entra pela mesma entrada: fica no livro, executa e conta nas ordens abertas", async () => {
+  it("a ordem do bot entra pela mesma entrada: fica no livro, executa e conta nas ordens abertas", scene(async () => {
     const bot = await openBot(db, seasonId, 1_000_000);
     const bruno = await holder("FLA3", 10);
     await ready();
@@ -432,11 +434,11 @@ describe("ordem nova no Postgres", () => {
     expect(sale.trades.map((t) => [t.buyerWalletId, t.quantity, t.price, t.withHouse])).toEqual([[bot, 4, 4000, false]]);
     expect(await walletOf(db, bot)).toEqual({ cash: 1_000_000 - 16_000, reservedCash: 24_000, free: 960_000, openOrders: 1 });
     expect(await orderRow(db, r.order.id)).toMatchObject({ status: "open", filled: 4, reservedCash: 24_000 });
-  });
+  }));
 
   // ------------------------------------------------------------------ o que fica gravado
 
-  it("a ordem a mercado sem negócio fica gravada como cancelada com market_remainder, sem mexer no caixa nem nas ações", async () => {
+  it("a ordem a mercado sem negócio fica gravada como cancelada com market_remainder, sem mexer no caixa nem nas ações", scene(async () => {
     const ana = await holder("FLA3", 10);
     await ready();
     const before = await rowCounts(db);
@@ -459,9 +461,9 @@ describe("ordem nova no Postgres", () => {
     expect(await walletOf(db, ana)).toEqual({ cash: RICH, reservedCash: 0, free: RICH, openOrders: 0 });
     expect(await rowCounts(db)).toEqual({ orders: before.orders + 2, trades: before.trades, entries: before.entries + 2 });
     expect(await price("FLA3")).toBe(4000);
-  });
+  }));
 
-  it("a recusa não grava nada: nem ordem, nem negócio, nem extrato, nem reserva", async () => {
+  it("a recusa não grava nada: nem ordem, nem negócio, nem extrato, nem reserva", scene(async () => {
     const ana = await holder("FLA3", 5, 100_000);
     const bruno = await holder("FLA3", 50);
     await ready();
@@ -475,17 +477,17 @@ describe("ordem nova no Postgres", () => {
     expect(rejected(await service.place(o.buyLimit(ana, "FLA3", 1, 4801))).code).toBe("price_out_of_band");
 
     expect({ counts: await rowCounts(db), wallet: await walletOf(db, ana), position: await positionOf(db, ana, club("FLA3")), price: await price("FLA3") }).toEqual(before);
-  });
+  }));
 
-  it("a compra limitada conta só o caixa livre: com R$ 8.000,00 já reservados de R$ 10.000,00, outra de R$ 4.000,00 é recusada", async () => {
+  it("a compra limitada conta só o caixa livre: com R$ 8.000,00 já reservados de R$ 10.000,00, outra de R$ 4.000,00 é recusada", scene(async () => {
     const ana = await player(1_000_000);
     await ready();
     accepted(await service.place(o.buyLimit(ana, "FLA3", 200, 4000)));
     expect(rejected(await service.place(o.buyLimit(ana, "PAL3", 100, 4000))).code).toBe("insufficient_cash");
     expect(accepted(await service.place(o.buyLimit(ana, "PAL3", 50, 4000))).cash).toEqual({ total: 1_000_000, reserved: 1_000_000, free: 0 });
-  });
+  }));
 
-  it("price_before negócio a negócio: cada negócio da mesma ordem guarda o preço exibido logo antes dele", async () => {
+  it("price_before negócio a negócio: cada negócio da mesma ordem guarda o preço exibido logo antes dele", scene(async () => {
     const sellers = [await holder("FLA3", 10), await holder("FLA3", 10), await holder("FLA3", 10)];
     const ana = await player();
     await ready();
@@ -502,9 +504,9 @@ describe("ordem nova no Postgres", () => {
       [4010, 4020, 4030].map((p, i) => ({ price: p, priceBefore: i === 0 ? 4000 : p - 10, inAuction: false, withHouse: false, at: NOW, buyOrderId: r.order.id })),
     );
     expect(await clubRow(db, seasonId, club("FLA3"))).toMatchObject({ lastPrice: 4030, lastTradeAt: NOW });
-  });
+  }));
 
-  it("a compra do livro executada em duas vezes: a reserva cai com cada negócio e a ordem sai das abertas quando termina", async () => {
+  it("a compra do livro executada em duas vezes: a reserva cai com cada negócio e a ordem sai das abertas quando termina", scene(async () => {
     const ana = await player(1_000_000);
     const bruno = await holder("FLA3", 100);
     await ready();
@@ -523,9 +525,9 @@ describe("ordem nova no Postgres", () => {
     expect(await walletOf(db, ana)).toEqual({ cash: 600_000, reservedCash: 0, free: 600_000, openOrders: 0 });
     expect(await walletOf(db, bruno)).toMatchObject({ cash: RICH + 400_000, openOrders: 0 });
     expect(await positionOf(db, bruno, club("FLA3"))).toEqual({ shares: 0, reservedShares: 0, free: 0 });
-  });
+  }));
 
-  it("o outro lado é lido em páginas: com 2 ordens por página, a compra atravessa 5 vendas na ordem de prioridade", async () => {
+  it("o outro lado é lido em páginas: com 2 ordens por página, a compra atravessa 5 vendas na ordem de prioridade", scene(async () => {
     const sellers = [await holder("FLA3", 20), await holder("FLA3", 20), await holder("FLA3", 10)];
     const ana = await player(300_000);
     await ready();
@@ -540,11 +542,11 @@ describe("ordem nova no Postgres", () => {
     const market = accepted(await service.place(o.buyMarket(ana, "FLA3", 8)));
     expect(market.trades.map((t) => [t.price, t.quantity])).toEqual([[4040, 5]]);
     expect(market.order).toMatchObject({ status: "cancelled", filled: 5 });
-  });
+  }));
 
   // ------------------------------------------------------------------ horário e suspensão
 
-  it("livro 21: às 9h59 do dia da estreia a ordem dá market_closed; às 10h00 é aceita", async () => {
+  it("livro 21: às 9h59 do dia da estreia a ordem dá market_closed; às 10h00 é aceita", scene(async () => {
     const ana = await player();
     await ready();
     const before = await rowCounts(db);
@@ -552,15 +554,15 @@ describe("ordem nova no Postgres", () => {
     expect(rejected(await service.place(o.buyLimit(ana, "FLA3", 1, 4000, { now: new Date("2027-04-05T12:59:59Z") })))).toEqual({ ok: false, code: "market_closed" });
     expect(await rowCounts(db)).toEqual(before);
     expect(accepted(await service.place(o.buyLimit(ana, "FLA3", 1, 4000, { now: new Date("2027-04-05T13:00:00Z") }))).order.status).toBe("open");
-  });
+  }));
 
-  it("livro 22: num domingo às 3h de Brasília a ordem é aceita", async () => {
+  it("livro 22: num domingo às 3h de Brasília a ordem é aceita", scene(async () => {
     const ana = await player();
     await ready();
     expect(accepted(await service.place(o.buyLimit(ana, "FLA3", 1, 4000, { now: new Date("2027-04-11T06:00:00Z") }))).order.status).toBe("open");
-  });
+  }));
 
-  it("antes de a negociação abrir (IPO fechado) e depois do fim dela, toda ordem dá market_closed", async () => {
+  it("antes de a negociação abrir (IPO fechado) e depois do fim dela, toda ordem dá market_closed", scene(async () => {
     const ana = await player();
     await ready();
     for (const status of ["ipo_closed", "trading_ended", "closed"]) {
@@ -569,9 +571,9 @@ describe("ordem nova no Postgres", () => {
       expect(rejected(await service.place(o.buyMarket(ana, "PAL3", 1))).code).toBe("market_closed");
     }
     expect(await rowCounts(db)).toMatchObject({ orders: 0, trades: 0 });
-  });
+  }));
 
-  it("clube suspenso recusa com club_suspended e o motivo; os outros clubes seguem; o mercado todo suspenso recusa em todos", async () => {
+  it("clube suspenso recusa com club_suspended e o motivo; os outros clubes seguem; o mercado todo suspenso recusa em todos", scene(async () => {
     const ana = await player();
     await ready();
     await db.update(seasonClubs).set({ suspendedReason: "Resultado em revisão" }).where(eq(seasonClubs.clubId, club("FLA3")));
@@ -585,9 +587,9 @@ describe("ordem nova no Postgres", () => {
     expect(rejected(await service.place(o.buyLimit(ana, "PAL3", 1, 4000)))).toEqual({ ok: false, code: "club_suspended", reason: "Manutenção do jogo" });
     expect(rejected(await service.place(o.buyLimit(ana, "FLA3", 1, 4000)))).toEqual({ ok: false, code: "club_suspended", reason: "Manutenção do jogo" });
     expect(await db.select().from(orders)).toHaveLength(1);
-  });
+  }));
 
-  it("placeOrder roda dentro da transação de quem chama: se ela desfaz, a ordem e o negócio somem juntos", async () => {
+  it("placeOrder roda dentro da transação de quem chama: se ela desfaz, a ordem e o negócio somem juntos", scene(async () => {
     const ana = await player();
     const bruno = await holder("FLA3", 10);
     await ready();
@@ -604,5 +606,5 @@ describe("ordem nova no Postgres", () => {
 
     expect({ counts: await rowCounts(db), ana: await walletOf(db, ana), bruno: await walletOf(db, bruno) }).toEqual(before);
     expect(await price("FLA3")).toBe(4000);
-  });
+  }));
 });

@@ -94,6 +94,25 @@ export async function setDisplayedPrice(db: Database, seasonId: number, clubId: 
   await db.update(seasonClubs).set({ lastPrice: price }).where(and(eq(seasonClubs.seasonId, seasonId), eq(seasonClubs.clubId, clubId)));
 }
 
+class RolledBack extends Error {}
+
+/**
+ * Roda `body` dentro de uma transação que é sempre desfeita no fim, para um teste não deixar nada para o seguinte
+ * (o extrato e os negócios são histórico: o banco não deixa apagar nem com `TRUNCATE`, e criar um banco por teste
+ * custa uns 2 segundos). `body` recebe a transação no lugar do banco: cada `withTransaction` feito com ela vira um
+ * ponto de salvamento, que confirma ou desfaz como uma transação comum. Só serve a testes em sequência, numa conexão.
+ */
+export async function rolledBack(db: Database, body: (inner: Database) => Promise<void>): Promise<void> {
+  try {
+    await db.transaction(async (outer) => {
+      await body(outer as unknown as Database);
+      throw new RolledBack();
+    });
+  } catch (error) {
+    if (!(error instanceof RolledBack)) throw error;
+  }
+}
+
 /** A ordem foi aceita: devolve o resultado já com o tipo certo. */
 export function accepted(result: PlaceOrderResult): PlaceOrderAccepted {
   if (!result.ok) throw new Error(`a ordem devia ser aceita e foi recusada: ${result.code}${result.reason ? ` (${result.reason})` : ""}`);
