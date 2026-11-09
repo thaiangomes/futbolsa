@@ -136,9 +136,15 @@ export const correctionChangeSchema = z.strictObject({
   delta: z.number().int(),
   closedAtBefore: isoInstantSchema.nullable(),
   closedAtAfter: isoInstantSchema.nullable(),
-  /** Ações na foto do evento (jogadores e bots, sem a conta excluída e a tesouraria). */
+  /**
+   * Ações na foto do evento (jogadores e bots, sem a conta excluída e a tesouraria): a foto que paga o valor novo
+   * (a do fechamento novo, se ele mudou), ou a original no evento que sumiu.
+   */
   shares: z.number().int(),
-  /** `shares × delta`. */
+  /**
+   * O que a correção move em R$ no evento: `shares × delta` quando o fechamento não muda; com o fechamento mudado,
+   * o estorno do valor antigo pela foto antiga mais o pagamento do novo pela foto nova.
+   */
   total: z.number().int(),
   /** `correction`: valor ou fechamento mudou; `new_in_paid_group`: evento novo numa rodada ou fase já paga; `vanished`: sumiu (vira R$ 0,00). */
   outcome: correctionOutcomeSchema,

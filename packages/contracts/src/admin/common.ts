@@ -37,5 +37,8 @@ export const ADMIN_ERROR_MESSAGES = {
   match_not_found: "Jogo não encontrado.",
   season_exists: "Já existe uma temporada em andamento: encerre a anterior antes de preparar outra.",
   cups_not_confirmed: "Confirme a tabela das três copas antes de abrir o IPO.",
+  payout_settling:
+    "Um pagamento aprovado ainda está sendo creditado: espere terminar para a correção não ser calculada sobre um pagamento pela metade.",
+  correction_stale: "Os resultados mudaram desde a prévia da correção: confira a prévia nova antes de aplicar.",
 } as const;
 export type AdminErrorCode = keyof typeof ADMIN_ERROR_MESSAGES;

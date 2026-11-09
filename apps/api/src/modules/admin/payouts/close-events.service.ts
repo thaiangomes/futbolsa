@@ -76,7 +76,7 @@ const emptySummary = (): CloseSummary => ({ created: 0, versioned: 0, superseded
 const isLeague = (competition: string) => (LEAGUE_COMPETITIONS as readonly string[]).includes(competition);
 
 /** A rodada (pontos corridos, `stage` numérico) ou a fase (copas); `fim` não é nem uma nem outra. */
-function roundAndPhase(event: PayoutEvent): { round: number | null; phase: string | null } {
+export function roundAndPhase(event: PayoutEvent): { round: number | null; phase: string | null } {
   if (isLeague(event.competition)) return { round: /^\d+$/.test(event.stage) ? Number(event.stage) : null, phase: null };
   return { round: null, phase: event.stage === "fim" ? null : event.stage };
 }
@@ -85,7 +85,7 @@ function roundAndPhase(event: PayoutEvent): { round: number | null; phase: strin
  * O grupo do evento: a competição e a rodada ou fase (o `stage`); a colocação, o acesso e os pontos pagos no
  * fechamento do campeonato ficam no grupo `competição|fim`. Sai da chave (`tipo|competição|stage|clube`).
  */
-const groupOfKey = (key: string) => key.split("|").slice(1, 3).join("|");
+export const groupOfKey = (key: string) => key.split("|").slice(1, 3).join("|");
 
 /**
  * A passada de fechamento dos eventos de pagamento (Plano dos dividendos e pagamentos, T3; Admin, critérios 1,

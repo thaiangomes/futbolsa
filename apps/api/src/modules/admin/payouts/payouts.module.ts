@@ -4,6 +4,8 @@ import { ResultsModule } from "../results/results.module.js";
 import { StandingsModule } from "../standings/standings.module.js";
 import { CloseEventsJob } from "./close-events.job.js";
 import { CloseEventsService } from "./close-events.service.js";
+import { CorrectionPlanService } from "./correction-plan.js";
+import { CorrectionsController } from "./corrections.controller.js";
 import { EngineInputService } from "./engine-input.js";
 import { PayoutsController } from "./payouts.controller.js";
 import { NoopRankingsPort, RankingsPort } from "./ports.js";
@@ -17,8 +19,15 @@ import { PreviewService } from "./preview.service.js";
  */
 @Module({
   imports: [DividendsModule, ResultsModule, StandingsModule],
-  controllers: [PayoutsController],
-  providers: [{ provide: RankingsPort, useClass: NoopRankingsPort }, EngineInputService, CloseEventsService, CloseEventsJob, PreviewService],
-  exports: [RankingsPort, EngineInputService, CloseEventsService],
+  controllers: [PayoutsController, CorrectionsController],
+  providers: [
+    { provide: RankingsPort, useClass: NoopRankingsPort },
+    EngineInputService,
+    CloseEventsService,
+    CloseEventsJob,
+    PreviewService,
+    CorrectionPlanService,
+  ],
+  exports: [RankingsPort, EngineInputService, CloseEventsService, CorrectionPlanService],
 })
 export class PayoutsModule {}
