@@ -24,6 +24,8 @@ export interface ApiClientOptions {
 export interface ApiRequest {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
+  /** Cabeçalhos a mais (por exemplo `Idempotency-Key` no envio de ordem). Não substituem o `Authorization`. */
+  headers?: Record<string, string>;
 }
 
 /**
@@ -50,7 +52,7 @@ export class ApiClient {
   }
 
   private send(path: string, req: ApiRequest, token: string | null): Promise<Response> {
-    const headers: Record<string, string> = { accept: "application/json" };
+    const headers: Record<string, string> = { accept: "application/json", ...req.headers };
     if (token) headers.authorization = `Bearer ${token}`;
     if (req.body !== undefined) headers["content-type"] = "application/json";
     return this.fetchFn(`${this.options.baseUrl.replace(/\/+$/, "")}${path}`, {
