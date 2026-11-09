@@ -13,7 +13,7 @@ import { createAccount, type TestAccount } from "../support/accounts.js";
 import { createTestApp } from "../support/app.js";
 import { withTestAuth } from "../support/auth.js";
 import { useTestDatabase } from "../support/db.js";
-import { openPlayerWallets, rng, seedSeason } from "../support/fixtures.js";
+import { openPlayerWallets, rng, seedSeason, sleep } from "../support/fixtures.js";
 import { assertLedgerConsistent } from "../support/invariants.js";
 
 /** Cada cenário roda 20 vezes, como os testes das travas da F4. */
@@ -191,8 +191,40 @@ describe("fechamento do IPO sob concorrência, contra o Postgres", () => {
           .where(and(eq(adminLog.action, "season.ipo.postpone"), eq(adminLog.targetId, String(seasonId))))
       )[0]!.n;
 
+    /** Espera até `n` conexões deste banco estarem paradas numa trava. */
+    async function waitForLockWaiters(n: number) {
+      for (let i = 0; i < 200; i++) {
+        const res = await t.conn.pool.query(
+          "select count(*)::int as n from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'",
+        );
+        if (res.rows[0].n >= n) return;
+        await sleep(10);
+      }
+      throw new Error(`as ${n} transações não chegaram à trava da temporada`);
+    }
+
+    /**
+     * Dispara as duas ao mesmo tempo com a temporada presa por uma transação de fora: a primeira chega à
+     * trava, depois a segunda, e só então a de fora termina. A fila da trava da linha decide a ordem, então
+     * cada lado da corrida acontece quando a rodada manda, sem depender do sorteio do escalonador.
+     */
+    async function inLockOrder<A, B>(first: () => Promise<A>, second: () => Promise<B>): Promise<[A, B]> {
+      const gate = await t.conn.pool.connect();
+      try {
+        await gate.query("begin");
+        await gate.query("select id from futbolsa.seasons where id = $1 for update", [seasonId]);
+        const a = first();
+        await waitForLockWaiters(1);
+        const b = second();
+        await waitForLockWaiters(2);
+        await gate.query("commit");
+        return [await a, await b];
+      } finally {
+        gate.release();
+      }
+    }
+
     it("o adiamento e a tarefa de fechar no mesmo instante: ou fechou (e o adiamento dá ipo_closed) ou adiou (e a tarefa não fecha), nunca os dois", async () => {
-      const random = rng(5555);
       const seen = { closed: 0, postponed: 0 };
       const postponed = new Date("2027-04-06T19:00:00Z");
       for (let round = 0; round < ROUNDS; round++) {
@@ -201,14 +233,15 @@ describe("fechamento do IPO sob concorrência, contra o Postgres", () => {
         clock.set(new Date(CLOSES_AT.getTime() - 1));
         const logsBefore = await postponeLogs();
 
-        const calls = [
-          () => outcome(seasonsService.patch(admin.id, seasonId, { ipoClosesAt: postponed.toISOString(), reason: `rodada ${round}` })),
-          () => closing.closeIfDue(CLOSES_AT).then((r) => r.status),
-        ] as const;
-        const closeFirst = random() < 0.5;
+        const patch = () =>
+          outcome(seasonsService.patch(admin.id, seasonId, { ipoClosesAt: postponed.toISOString(), reason: `rodada ${round}` }));
+        const close = () => closing.closeIfDue(CLOSES_AT).then((r) => r.status);
+        // As rodadas pares com o fechamento na frente da fila da trava, as ímpares com o adiamento.
+        const closeFirst = round % 2 === 0;
         const [patchResult, closeResult] = closeFirst
-          ? await Promise.all([calls[1](), calls[0]()]).then(([c, p]) => [p, c] as const)
-          : await Promise.all([calls[0](), calls[1]()]);
+          ? await inLockOrder(close, patch).then(([c, p]) => [p, c] as const)
+          : await inLockOrder(patch, close);
+        expect(closeResult === "closed", `rodada ${round}`).toBe(closeFirst);
 
         const season = await seasonRow();
         const logs = (await postponeLogs()) - logsBefore;
@@ -229,10 +262,8 @@ describe("fechamento do IPO sob concorrência, contra o Postgres", () => {
           seen.postponed++;
         }
       }
-      expect(seen.closed + seen.postponed).toBe(ROUNDS);
-      // A corrida aconteceu para os dois lados.
-      expect(seen.closed).toBeGreaterThan(0);
-      expect(seen.postponed).toBeGreaterThan(0);
+      // Os dois lados da corrida, cada um em metade das rodadas (a ordem é forçada, não sorteada).
+      expect(seen).toEqual({ closed: ROUNDS / 2, postponed: ROUNDS / 2 });
     });
   });
 
