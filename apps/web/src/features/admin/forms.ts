@@ -28,16 +28,8 @@ export function differsFromSource(rows: ReadonlyArray<{ position: number; source
   return rows.flatMap((r, i) => (r.sourcePosition !== null && r.sourcePosition !== r.position ? [i] : []));
 }
 
-/** Reais com vírgula, a partir de centavos. */
-export function formatCents(cents: number): string {
-  return `R$ ${(cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-/** Data e hora de Brasília, como o resto do jogo mostra. */
-export function formatInstant(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" });
-}
+/** Reais e data de Brasília: moram em `lib/format` (o IPO usa os mesmos). */
+export { formatCents, formatInstant } from "../../lib/format";
 
 /** Nome de cada ação do registro, em português. */
 export const ACTION_LABELS: Record<string, string> = {
@@ -47,6 +39,7 @@ export const ACTION_LABELS: Record<string, string> = {
   "standings.confirm": "Classificação conferida",
   "season.create": "Temporada criada",
   "season.update": "Temporada alterada",
+  "season.ipo.postpone": "Fechamento do IPO adiado",
   "season.clubs.update": "Clubes da temporada",
   "season.rules.update": "Valores da temporada",
   "cup.update": "Tabela da copa alterada",

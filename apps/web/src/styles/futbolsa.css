@@ -171,3 +171,35 @@ body{margin:0}
 .steps span{height:6px;flex:1;min-width:40px;border-radius:3px;background:var(--line2)}
 .steps span.on{background:var(--amber)}
 .link-btn{background:none;border:0;padding:0;font:inherit;color:var(--amber-ink);cursor:pointer;text-decoration:underline}
+/* IPO (pranchas 3 e 3b): uma linha por clube no computador */
+.ipo-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.ipo-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:grid;grid-template-columns:190px minmax(0,1.6fr) minmax(0,1.3fr) auto;gap:8px 20px;align-items:center}
+.ipo-id{display:flex;align-items:center;gap:10px;min-width:0}
+.ipo-cells{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.ipo-cell{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ipo-k{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.ipo-v{font-weight:600;font-size:15px;font-variant-numeric:tabular-nums}
+.ipo-conta{margin:6px 0 0}
+.ipo-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.ipo-form,.ipo-card>.note{grid-column:1/-1}
+.ipo-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) minmax(0,1.4fr);gap:12px 16px;align-items:start;border-top:1px solid var(--line);padding-top:12px}
+.ipo-preview{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.ipo-form-actions{display:flex;gap:8px;flex-wrap:wrap;grid-column:1/-1}
+.ipo-result{grid-template-columns:190px minmax(0,2.6fr) minmax(0,1.4fr)}
+.ipo-cells-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.ipo-cells-4 .ipo-v{font-size:14px}
+/* IPO no celular (390 px): cartões empilhados, formulário em coluna e alvos de toque grandes */
+@media (max-width:760px){
+  .ipo-list{gap:10px}
+  .ipo-card{grid-template-columns:minmax(0,1fr);gap:12px;padding:14px}
+  .ipo-result{grid-template-columns:minmax(0,1fr)}
+  .ipo-cells,.ipo-cells-4{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .ipo-cells .ipo-cell:last-child:nth-child(odd){grid-column:1/-1}
+  .ipo-v{overflow-wrap:anywhere}
+  .ipo-actions{justify-content:stretch}
+  .ipo-actions .btn{flex:1}
+  .ipo-form{grid-template-columns:minmax(0,1fr)}
+  .ipo-form .input{font-size:16px}
+  .ipo-form-actions .btn{flex:1}
+  .ipo-touch{min-height:44px}
+}
