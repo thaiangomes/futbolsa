@@ -7,6 +7,7 @@ import { IpoBidsController } from "./bids.controller.js";
 import { IpoBidsService } from "./bids.service.js";
 import { IpoClosingService } from "./closing.service.js";
 import { IpoClosureHook } from "./closure-hook.js";
+import { IpoJob } from "./ipo.job.js";
 import { IpoOpeningService } from "./opening.service.js";
 import { IpoSettlementService } from "./settlement.service.js";
 
@@ -23,8 +24,8 @@ import { IpoSettlementService } from "./settlement.service.js";
 @Module({
   imports: [AccountsModule, PortfolioModule, DividendsModule, AdminLogModule],
   controllers: [IpoBidsController],
-  providers: [IpoOpeningService, IpoBidsService, IpoClosingService, IpoSettlementService, IpoClosureHook],
-  exports: [IpoOpeningService, IpoBidsService, IpoClosingService, IpoSettlementService, IpoClosureHook],
+  providers: [IpoOpeningService, IpoBidsService, IpoClosingService, IpoSettlementService, IpoClosureHook, IpoJob],
+  exports: [IpoOpeningService, IpoBidsService, IpoClosingService, IpoSettlementService, IpoClosureHook, IpoJob],
 })
 export class IpoModule implements OnModuleInit {
   constructor(
