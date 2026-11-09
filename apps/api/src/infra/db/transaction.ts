@@ -3,7 +3,10 @@ import type { Database } from "./client.js";
 /** A transação do Drizzle que `db.transaction` entrega. */
 export type DrizzleTx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
-/** Trava pedida fora da ordem temporada → clubes → carteiras → tesouraria. Erro de programação. */
+/**
+ * Trava pedida fora da ordem temporada → clubes → eventos de pagamento → carteiras → tesouraria. Erro de
+ * programação.
+ */
 export class LockOrderError extends Error {
   readonly code = "lock_order";
   constructor(message: string) {
@@ -19,14 +22,17 @@ const compareKeys = (a: WalletKey, b: WalletKey) => a[0] - b[0] || a[1] - b[1];
 /**
  * O que a transação já travou, para recusar uma trava fora da ordem. A ordem é
  * sempre a mesma em todo o jogo (Arquitetura da Fase 1, decisão 4): a temporada;
- * os clubes por ticker; as carteiras de jogadores e bots por id; a tesouraria por
- * último. Assim duas transações nunca esperam uma pela outra em círculo.
+ * os clubes por ticker; as linhas dos eventos de pagamento por id (P3 da F12, entre
+ * os clubes e as carteiras); as carteiras de jogadores e bots por id; a tesouraria
+ * por último. Assim duas transações nunca esperam uma pela outra em círculo.
  */
 export class LockState {
   private season?: { id: number; mode: "share" | "update" };
   private clubSeasonId?: number;
   private readonly clubs = new Set<string>();
   private lastTicker?: string;
+  private readonly payoutEvents = new Map<number, "share" | "update">();
+  private lastPayoutEvent?: number;
   private readonly wallets = new Map<number, boolean>();
   private lastWallet?: WalletKey;
 
@@ -38,8 +44,8 @@ export class LockState {
       }
       return;
     }
-    if (this.clubs.size > 0 || this.wallets.size > 0) {
-      throw new LockOrderError("a temporada é travada antes dos clubes e das carteiras");
+    if (this.clubs.size > 0 || this.payoutEvents.size > 0 || this.wallets.size > 0) {
+      throw new LockOrderError("a temporada é travada antes dos clubes, dos eventos de pagamento e das carteiras");
     }
   }
 
@@ -62,6 +68,7 @@ export class LockState {
     }
     const fresh = sortedTickers.filter((t) => !this.clubs.has(t));
     if (fresh.length === 0) return fresh;
+    if (this.payoutEvents.size > 0) throw new LockOrderError(`clube ${fresh[0]} travado depois de um evento de pagamento`);
     if (this.wallets.size > 0) throw new LockOrderError(`clube ${fresh[0]} travado depois de uma carteira`);
     if (this.lastTicker !== undefined && fresh[0]! < this.lastTicker) {
       throw new LockOrderError(`clube ${fresh[0]} travado depois de ${this.lastTicker}, fora da ordem de ticker`);
@@ -79,6 +86,36 @@ export class LockState {
 
   isClubLocked(ticker: string): boolean {
     return this.clubs.has(ticker);
+  }
+
+  /**
+   * Confere a ordem dos eventos de pagamento ainda não travados (`sortedIds` já em ordem de id): depois dos
+   * clubes e antes das carteiras; e a trava de um evento não sobe de compartilhada para exclusiva (duas
+   * transações com `FOR SHARE` subindo para `FOR UPDATE` esperariam uma pela outra).
+   */
+  checkPayoutEvents(sortedIds: readonly number[], mode: "share" | "update"): void {
+    for (const id of sortedIds) {
+      if (this.payoutEvents.get(id) === "share" && mode === "update") {
+        throw new LockOrderError(`a trava do evento de pagamento ${id} não sobe de compartilhada para exclusiva`);
+      }
+    }
+    const fresh = sortedIds.filter((id) => !this.payoutEvents.has(id));
+    if (fresh.length === 0) return;
+    if (this.wallets.size > 0) throw new LockOrderError(`evento de pagamento ${fresh[0]} travado depois de uma carteira`);
+    if (this.lastPayoutEvent !== undefined && fresh[0]! < this.lastPayoutEvent) {
+      throw new LockOrderError(`evento de pagamento ${fresh[0]} travado depois do ${this.lastPayoutEvent}, fora da ordem de id`);
+    }
+  }
+
+  markPayoutEvents(sortedIds: readonly number[], mode: "share" | "update"): void {
+    for (const id of sortedIds) {
+      if (!this.payoutEvents.has(id)) this.payoutEvents.set(id, mode);
+      if (this.lastPayoutEvent === undefined || id > this.lastPayoutEvent) this.lastPayoutEvent = id;
+    }
+  }
+
+  isPayoutEventLocked(id: number): boolean {
+    return this.payoutEvents.has(id);
   }
 
   /** Confere a ordem das carteiras ainda não travadas (`keys` já ordenadas). */

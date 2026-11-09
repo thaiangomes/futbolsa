@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { and, asc, eq } from "drizzle-orm";
 import {
   ADMIN_ERROR_MESSAGES,
@@ -17,6 +17,7 @@ import { AdminLogService } from "../log/index.js";
 import { resolveClub } from "../results/club-resolver.js";
 import type { ImportReport } from "../results/import.service.js";
 import type { ResultSource, SourceStanding } from "../results/sources/types.js";
+import { StandingsEvents } from "./standings-events.js";
 
 const COMPETITIONS: readonly StandingsCompetition[] = ["brasileirao-a", "brasileirao-b"];
 
@@ -44,7 +45,14 @@ export class StandingsService {
     @Inject(DB) private readonly db: Database,
     private readonly clock: Clock,
     private readonly log: AdminLogService,
+    @Optional() private readonly events?: StandingsEvents,
   ) {}
+
+  /** Depois do `COMMIT`: a ordem da tabela mudou (a F12 fecha a colocação e o acesso). */
+  private notifyChanged(tx: Tx, seasonId: number, competition: StandingsCompetition): void {
+    const events = this.events;
+    if (events) tx.afterCommit(() => events.publish({ seasonId, competition }));
+  }
 
   /** Busca na fonte (fora de transação) e grava. Fonte fora do ar: lança, e a tabela fica como está. */
   async importFromSource(
@@ -129,6 +137,7 @@ export class StandingsService {
           })),
         );
       }
+      this.notifyChanged(tx, seasonId, competition);
       return report;
     });
   }
@@ -177,6 +186,7 @@ export class StandingsService {
         after: { order },
         reason: body.reason,
       });
+      this.notifyChanged(tx, seasonId, competition);
       return this.view(tx.db, seasonId, competition);
     });
   }
