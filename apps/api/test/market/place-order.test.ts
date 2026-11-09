@@ -2,9 +2,16 @@ import "reflect-metadata";
 import { asc, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/infra/db/client.js";
-import { withTransaction } from "../../src/infra/db/index.js";
+import { type Tx, withTransaction } from "../../src/infra/db/index.js";
 import { orders, seasonClubs, seasons, trades, walletEntries } from "../../src/infra/db/schema/index.js";
-import { inMatch, type OrderService, type PostgresMatchingEngine } from "../../src/modules/market/index.js";
+import {
+  inMatch,
+  MatchingEngine,
+  OrderService,
+  type PlaceOrderInput,
+  type PlaceOrderResult,
+  type PostgresMatchingEngine,
+} from "../../src/modules/market/index.js";
 import { useTestDatabase } from "../support/db.js";
 import { totalCash } from "../support/invariants.js";
 import { insertMatch, marketSeason } from "./helpers.js";
@@ -653,4 +660,20 @@ describe("ordem nova no Postgres", () => {
     expect({ counts: await rowCounts(db), ana: await walletOf(db, ana), bruno: await walletOf(db, bruno) }).toEqual(before);
     expect(await price("FLA3")).toBe(4000);
   }));
+
+  it("o OrderService fala com o casamento só pela porta MatchingEngine: outra implementação entra sem mudar quem chama", async () => {
+    // o que a F16 faria com um serviço dedicado que guarda o livro na memória
+    class ClosedEngine extends MatchingEngine {
+      readonly seen: PlaceOrderInput[] = [];
+      async place(_tx: Tx, input: PlaceOrderInput): Promise<PlaceOrderResult> {
+        this.seen.push(input);
+        return { ok: false, code: "market_closed" };
+      }
+    }
+    const other = new ClosedEngine();
+    const input = orderInputs({ seasonId, now: NOW }).buyLimit(1, "FLA3", 1, 4000);
+
+    expect(await new OrderService(t.db, other).place(input)).toEqual({ ok: false, code: "market_closed" });
+    expect(other.seen).toEqual([input]);
+  });
 });
