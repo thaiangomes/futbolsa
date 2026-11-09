@@ -47,6 +47,14 @@ export class LockState {
     if (!this.season) this.season = { id: seasonId, mode };
   }
 
+  /**
+   * Se esta transação já travou a temporada (em qualquer modo). Para quem roda dentro da transação de
+   * outro e precisa que o status da temporada não mude até o `COMMIT` (o gancho de encerramento do IPO).
+   */
+  isSeasonLocked(seasonId: number): boolean {
+    return this.season?.id === seasonId;
+  }
+
   /** Confere e devolve os tickers ainda não travados, já em ordem. */
   checkClubs(seasonId: number, sortedTickers: readonly string[]): string[] {
     if (this.clubSeasonId !== undefined && this.clubSeasonId !== seasonId) {

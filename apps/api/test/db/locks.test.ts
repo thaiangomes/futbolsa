@@ -173,6 +173,17 @@ describe("T6: travas em ordem", () => {
     });
   });
 
+  it("sabe se a temporada está travada: antes da trava não, depois sim (compartilhada ou exclusiva), outra temporada não", async () => {
+    for (const mode of ["share", "update"] as const) {
+      await withTransaction(t.db, async (tx) => {
+        expect(tx.locks.isSeasonLocked(seasonId)).toBe(false);
+        await lockSeason(tx, seasonId, mode);
+        expect(tx.locks.isSeasonLocked(seasonId)).toBe(true);
+        expect(tx.locks.isSeasonLocked(seasonId + 1)).toBe(false);
+      });
+    }
+  });
+
   it("ticker que não está listado na temporada dá erro com o ticker no texto", async () => {
     await expect(withTransaction(t.db, (tx) => lockClubs(tx, seasonId, ["FLA3", "SAN3"]))).rejects.toThrow(/SAN3/);
   });
