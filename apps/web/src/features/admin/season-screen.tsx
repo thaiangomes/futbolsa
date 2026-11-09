@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { ClubRef, CupView, SeasonView } from "@futbolsa/contracts";
 import type { AdminApi } from "./api";
 import { COMPETITION_LABELS, formatCents, formatInstant } from "./forms";
+import { PostponeIpo } from "./season/postpone-ipo";
 import { Card, ErrorNote, LoadState, useAction, useLoader } from "./ui";
 
 const opened = (s: SeasonView) => s.status !== "preparing";
@@ -185,6 +186,7 @@ export function SeasonScreen({ admin }: { admin: AdminApi }) {
         {rules.data?.rules.lockedAt && <span className="small muted">Valores travados em {formatInstant(rules.data.rules.lockedAt)}</span>}
       </div>
       <OfferCard season={current} admin={admin} onDone={reloadAll} />
+      <PostponeIpo season={current} admin={admin} onDone={reloadAll} />
       {known.data && <ClubsCard key={season.data.clubs.length} season={current} listed={season.data.clubs} known={known.data.clubs} admin={admin} onDone={reloadAll} />}
       <LoadState loader={rules} />
       {rules.data && (

@@ -39,6 +39,7 @@ export const ACTION_LABELS: Record<string, string> = {
   "standings.confirm": "Classificação conferida",
   "season.create": "Temporada criada",
   "season.update": "Temporada alterada",
+  "season.ipo.postpone": "Fechamento do IPO adiado",
   "season.clubs.update": "Clubes da temporada",
   "season.rules.update": "Valores da temporada",
   "cup.update": "Tabela da copa alterada",
