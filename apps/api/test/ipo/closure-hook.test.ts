@@ -64,7 +64,7 @@ describe("gancho de encerramento do IPO", () => {
       await lockClubs(tx, seasonId, await hooks.clubsToLock(tx, wallet(name)));
       await lockWallets(tx, [wallet(name)]);
       await tx.db.update(users).set({ status: "blocked" }).where(eq(users.id, players.get(name)!.userId));
-      await hooks.cancelOpen(tx, wallet(name), "blocked");
+      await hooks.cancelOpen(tx, wallet(name), "blocked", clock.now());
     });
   }
 
@@ -143,7 +143,7 @@ describe("gancho de encerramento do IPO", () => {
     await withTransaction(database.db, async (tx) => {
       await lockSeason(tx, seasonId, "share");
       await lockWallets(tx, [wallet("carla")]);
-      await app.get(IpoClosureHook).cancelOpen(tx, wallet("carla"), "blocked");
+      await app.get(IpoClosureHook).cancelOpen(tx, wallet("carla"), "blocked", clock.now());
     });
     expect(await entriesOf("carla")).toEqual(before);
     expect(await walletRow("carla")).toMatchObject({ cash: INITIAL_CASH, reservedCash: 0 });
@@ -154,7 +154,7 @@ describe("gancho de encerramento do IPO", () => {
     await expect(
       withTransaction(database.db, async (tx) => {
         await lockWallets(tx, [wallet("dora")]);
-        await app.get(IpoClosureHook).cancelOpen(tx, wallet("dora"), "deleted");
+        await app.get(IpoClosureHook).cancelOpen(tx, wallet("dora"), "deleted", clock.now());
       }),
     ).rejects.toThrow(/temporada .*travada/);
     expect(await bidOf("dora", "PAL3")).toMatchObject({ status: "active", reserved: 1000 * 3500 });

@@ -13,8 +13,12 @@ export type ClosureReason = "deleted" | "blocked";
 export interface ClosureHook {
   /** Tickers dos clubes a travar antes da carteira (os das ordens abertas dela). */
   clubsToLock(tx: Tx, walletId: number): Promise<string[]>;
-  /** Cancela o que está aberto e libera as reservas, pelo `portfolio.post`, na transação dada. */
-  cancelOpen(tx: Tx, walletId: number, reason: ClosureReason): Promise<void>;
+  /**
+   * Cancela o que está aberto e libera as reservas, pelo `portfolio.post`, na transação dada. `at` é o
+   * instante do encerramento (relógio da API), o mesmo com que quem chama decidiu encerrar agora: o IPO
+   * decide por ele se as ofertas ainda podem sair (depois do horário de fechamento, não podem).
+   */
+  cancelOpen(tx: Tx, walletId: number, reason: ClosureReason, at: Date): Promise<void>;
 }
 
 /** A lista dos ganchos. A F8 (ofertas) e a F9 (ordens) registram o deles no `onModuleInit`. */
@@ -32,7 +36,7 @@ export class AccountClosureHooks {
   }
 
   /** Em sequência, na ordem de registro: as travas já foram tomadas antes. */
-  async cancelOpen(tx: Tx, walletId: number, reason: ClosureReason): Promise<void> {
-    for (const hook of this.hooks) await hook.cancelOpen(tx, walletId, reason);
+  async cancelOpen(tx: Tx, walletId: number, reason: ClosureReason, at: Date): Promise<void> {
+    for (const hook of this.hooks) await hook.cancelOpen(tx, walletId, reason, at);
   }
 }

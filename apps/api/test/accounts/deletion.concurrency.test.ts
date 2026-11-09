@@ -100,8 +100,9 @@ describe("exclusão de conta contra o fechamento do IPO, contra o Postgres", () 
       const account = await createAccount(database.db);
       const [walletId] = (await openWallets(database.db, seasonId, [{ type: "user", userId: account.id }])) as [number];
       await app.get(IpoBidsService).place(walletId, "FLA3", { quantity: QTY, maxPrice: MAX_PRICE, expect: "new" });
-      // O pedido de exclusão chega no instante do fechamento; a tarefa de fechar roda com o mesmo horário.
-      clock.set(CLOSES_AT);
+      // O pedido de exclusão chega um segundo antes do fechamento; a tarefa de fechar roda no horário. (Pedido
+      // no horário de fechamento ou depois já fica para depois da liquidação sem disputar a trava.)
+      clock.set(new Date(CLOSES_AT.getTime() - 1000));
 
       const closeFirst = round % 2 === 0;
       const del = () => deletion.deleteAccount(account.id);

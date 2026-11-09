@@ -57,7 +57,7 @@ export class AccountDeletionService {
       let result: DeleteMeResponse["walletCloseout"] = "done";
       if (season && wallet) {
         // A leitura sem trava é um atalho; quem decide de fato é o `closeWallet`, com a temporada travada.
-        if (await this.awaitingSettlement(tx, season)) result = "after_ipo_settlement";
+        if (await this.awaitingSettlement(tx, season, now)) result = "after_ipo_settlement";
         else if (!(await this.closeWallet(tx, season.id, wallet, now))) result = "after_ipo_settlement";
       }
       await tx.db
@@ -91,7 +91,7 @@ export class AccountDeletionService {
     for (const { walletId, seasonId } of pending) {
       const closed = await withTransaction(this.db, async (tx) => {
         const [season] = await tx.db.select().from(seasons).where(eq(seasons.id, seasonId));
-        if (!season || (await this.awaitingSettlement(tx, season))) return false;
+        if (!season || (await this.awaitingSettlement(tx, season, now))) return false;
         const [wallet] = await tx.db.select().from(wallets).where(eq(wallets.id, walletId));
         return this.closeWallet(tx, seasonId, wallet!, now);
       });
@@ -143,8 +143,14 @@ export class AccountDeletionService {
     return user;
   }
 
-  /** Entre o fechamento e a liquidação do IPO: falta o resultado de algum clube listado. */
-  private async awaitingSettlement(tx: Tx, season: SeasonRow): Promise<boolean> {
+  /**
+   * Entre o fechamento e a liquidação do IPO: falta o resultado de algum clube listado. O fechamento é o
+   * horário (`ipo_closes_at`), não a passada da tarefa que muda o status: com `ipo_open` e `at` já no
+   * horário de fechamento ou depois, as ofertas também não podem mais sair (critério 14 e proposta 8 do
+   * IPO; o adiamento só vale antes desse horário, então ele não volta atrás).
+   */
+  private async awaitingSettlement(tx: Tx, season: SeasonRow, at: Date): Promise<boolean> {
+    if (season.status === "ipo_open") return season.ipoClosesAt !== null && at.getTime() >= season.ipoClosesAt.getTime();
     if (season.status !== "ipo_closed") return false;
     const [{ missing }] = (await tx.db
       .select({ missing: sql<number>`count(*)::int` })
@@ -171,14 +177,15 @@ export class AccountDeletionService {
    */
   private async closeWallet(tx: Tx, seasonId: number, wallet: typeof wallets.$inferSelect, at: Date): Promise<boolean> {
     const season = await lockSeason(tx, seasonId, "share");
-    if (await this.awaitingSettlement(tx, season)) return false;
+    if (await this.awaitingSettlement(tx, season, at)) return false;
     await lockClubs(tx, seasonId, await this.hooks.clubsToLock(tx, wallet.id));
     const [treasury] = await tx.db
       .select({ id: wallets.id })
       .from(wallets)
       .where(and(eq(wallets.seasonId, seasonId), eq(wallets.ownerType, "treasury")));
     await lockWallets(tx, treasury ? [wallet.id, treasury.id] : [wallet.id]);
-    await this.hooks.cancelOpen(tx, wallet.id, "deleted");
+    // O mesmo instante da decisão acima: o gancho do IPO não pode achar o período fechado depois de ela o achar aberto.
+    await this.hooks.cancelOpen(tx, wallet.id, "deleted", at);
 
     const held = await tx.db
       .select({
