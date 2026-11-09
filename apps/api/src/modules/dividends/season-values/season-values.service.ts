@@ -22,6 +22,11 @@ export class SeasonValuesService {
   /**
    * Grava os valores da temporada: cópia da anterior com valores, ou as constantes do motor. As tabelas das
    * copas começam não confirmadas, mesmo que a anterior estivesse. Devolve `false` se a temporada já tinha os dela.
+   *
+   * Duas primeiras consultas ao mesmo tempo (as duas só com a trava compartilhada da temporada) passam juntas pela
+   * conferência de cima: a linha de `season_rules` entra com `ON CONFLICT DO NOTHING`, então a segunda espera o
+   * `COMMIT` da primeira e desiste sem erro; como a transação é `READ COMMITTED`, a releitura de quem chamou já vê
+   * os valores (e as copas) que a primeira gravou.
    */
   async createInitial(tx: Tx, seasonId: number): Promise<boolean> {
     const [already] = await tx.db.select({ id: seasonRules.seasonId }).from(seasonRules).where(eq(seasonRules.seasonId, seasonId));
@@ -48,7 +53,12 @@ export class SeasonValuesService {
         if (own.length > 0) cups.set(competition, own);
       }
     }
-    await tx.db.insert(seasonRules).values({ seasonId, ...rules });
+    const created = await tx.db
+      .insert(seasonRules)
+      .values({ seasonId, ...rules })
+      .onConflictDoNothing({ target: seasonRules.seasonId })
+      .returning({ seasonId: seasonRules.seasonId });
+    if (created.length === 0) return false;
     for (const [competition, rows] of cups) {
       await tx.db.insert(cupPhases).values(
         rows.map((r) => ({ seasonId, competition, phaseKey: r.phaseKey, variant: r.variant, ord: r.ord, perShare: r.perShare })),
