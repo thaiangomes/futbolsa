@@ -84,3 +84,28 @@ export async function insertMatch(
     .returning({ id: matches.id });
   return row!.id;
 }
+
+/** Uma ordem limitada aberta já pronta no livro (sem reserva nem extrato): serve a testes que só leem o livro. */
+export async function insertOpenOrder(
+  db: Database,
+  o: { seasonId: number; clubId: number; walletId: number; side: "buy" | "sell"; price: number; quantity: number; filled?: number; at?: Date },
+): Promise<number> {
+  const at = o.at ?? new Date("2027-04-05T13:00:00Z");
+  const [row] = await db
+    .insert(orders)
+    .values({
+      seasonId: o.seasonId,
+      clubId: o.clubId,
+      walletId: o.walletId,
+      side: o.side,
+      type: "limit",
+      quantity: o.quantity,
+      filled: o.filled ?? 0,
+      limitPrice: o.price,
+      status: "open",
+      createdAt: at,
+      updatedAt: at,
+    })
+    .returning({ id: orders.id });
+  return row!.id;
+}
