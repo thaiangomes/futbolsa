@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, asc, eq } from "drizzle-orm";
-import { ADMIN_ERROR_MESSAGES, type CompetitionCode, type ImportKind } from "@futbolsa/contracts";
+import { ADMIN_ERROR_MESSAGES, type CompetitionCode, type ImportError, type ImportKind } from "@futbolsa/contracts";
 import { markOutOfWindow } from "@futbolsa/engine";
 import { Clock } from "../../../infra/clock/index.js";
 import { DB, type Database, lockSeason, type Tx, withTransaction } from "../../../infra/db/index.js";
@@ -19,7 +19,8 @@ export interface ImportReport {
   unchanged: number;
   /** Clubes que a importação criou sem ticker (podem ser duplicados de outro nome). */
   clubsCreated: string[];
-  error: string | null;
+  /** Código e mensagem genérica; o detalhe da falha fica só no log do servidor. */
+  error: ImportError | null;
 }
 
 /** O que a fonte disse por último sobre o jogo, guardado em `source_snapshot` (e mostrado na divergência). */

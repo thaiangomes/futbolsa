@@ -1,7 +1,8 @@
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { CompetitionCode } from "@futbolsa/contracts";
+import { Logger } from "@nestjs/common";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { ADMIN_ERROR_MESSAGES, type CompetitionCode } from "@futbolsa/contracts";
 import { FixedClock } from "../../src/infra/clock/index.js";
 import { adminLog, matches, standings } from "../../src/infra/db/schema/index.js";
 import { AdminLogService } from "../../src/modules/admin/log/index.js";
@@ -19,6 +20,8 @@ import { useTestDatabase } from "../support/db.js";
 import { seedSeason } from "../support/fixtures.js";
 
 const HOUR = 3_600_000;
+/** O relatório mostra só o código e a mensagem genérica; o texto da fonte fica no log do servidor. */
+const IMPORT_FAILED = { code: "import_failed", message: ADMIN_ERROR_MESSAGES.import_failed };
 
 /** Uma fonte de mentira: guarda as chamadas e devolve o que o teste mandou. */
 class FakeSource implements ResultSource {
@@ -149,7 +152,7 @@ describe("tarefas de resultados", () => {
     source.failFor.add("brasileirao-a");
     source.results.set("libertadores", [game("l1", "libertadores", new Date(clock.now().getTime() - 3 * HOUR), { status: "finished", homeGoals: 1, awayGoals: 0 })]);
     const reports = await runner.runScores();
-    expect(reports.find((r) => r.competition === "brasileirao-a")).toMatchObject({ error: expect.stringContaining("fora do ar") });
+    expect(reports.find((r) => r.competition === "brasileirao-a")).toMatchObject({ error: IMPORT_FAILED });
     expect(reports.find((r) => r.competition === "libertadores")).toMatchObject({ error: null, updated: 1 });
     expect(await database.db.select().from(matches)).toHaveLength(2);
     // a classificação não é chamada depois de uma falha dos placares
@@ -166,11 +169,15 @@ describe("tarefas de resultados", () => {
 
   it("importar na hora força a competição pedida e devolve o erro da fonte em vez de lançar", async () => {
     const admin = await createAccount(database.db, { role: "admin" });
+    const serverLog = vi.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
     source.failFor.add("brasileirao-b");
     const reports = await runner.runNow(admin.id, { competition: "brasileirao-b", kind: "calendar" });
     expect(reports).toEqual([
-      expect.objectContaining({ competition: "brasileirao-b", kind: "calendar", error: expect.stringContaining("fora do ar") }),
+      expect.objectContaining({ competition: "brasileirao-b", kind: "calendar", error: IMPORT_FAILED }),
     ]);
+    // o detalhe da fonte vai só para o log do servidor
+    expect(serverLog).toHaveBeenCalledWith(expect.stringContaining("fonte fora do ar em brasileirao-b"), expect.any(String));
+    serverLog.mockRestore();
     source.failFor.clear();
     const ok = await runner.runNow(admin.id, { competition: "copa-do-brasil", kind: "scores" });
     expect(ok.map((r) => r.kind)).toEqual(["scores"]);
@@ -231,7 +238,8 @@ describe("POST /admin/imports/run", () => {
       payload: { competition: "sulamericana" },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().reports).toEqual([expect.objectContaining({ competition: "sulamericana", error: expect.stringContaining("fora do ar") })]);
+    expect(res.json().reports).toEqual([expect.objectContaining({ competition: "sulamericana", error: IMPORT_FAILED })]);
+    expect(res.body).not.toContain("fora do ar");
   });
 
   it("o corpo vazio importa todas as competições", async () => {
@@ -262,7 +270,7 @@ describe("POST /admin/imports/run", () => {
       before: null,
       after: {
         request: { competition: "libertadores", kind: "calendar" },
-        reports: [expect.objectContaining({ competition: "libertadores", kind: "calendar", inserted: 0 })],
+        reports: [expect.objectContaining({ competition: "libertadores", kind: "calendar", inserted: 0, error: "import_failed" })],
       },
     });
     expect(rows[0]!.targetId).toMatch(/^\d+$/);

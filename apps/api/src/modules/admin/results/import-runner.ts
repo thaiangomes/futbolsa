@@ -1,9 +1,10 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { type CompetitionCode, type ImportKind, type RunImportBody } from "@futbolsa/contracts";
+import { ADMIN_ERROR_MESSAGES, type CompetitionCode, type ImportKind, type RunImportBody } from "@futbolsa/contracts";
 import { Clock } from "../../../infra/clock/index.js";
 import { DB, type Database, withTransaction } from "../../../infra/db/index.js";
 import { matches } from "../../../infra/db/schema/index.js";
+import { DomainError } from "../../../infra/http/index.js";
 import { COMPETITIONS } from "../../../infra/db/schema/values.js";
 import { currentSeason, type SeasonRow } from "../current-season.js";
 import { AdminLogService } from "../log/index.js";
@@ -99,7 +100,7 @@ export class ImportRunner {
             updated: r.updated,
             unchanged: r.unchanged,
             clubsCreated: r.clubsCreated,
-            failed: r.error !== null,
+            error: r.error?.code ?? null,
           })),
         },
       }),
@@ -156,9 +157,14 @@ export class ImportRunner {
     try {
       return await run();
     } catch (error) {
-      const message = (error as Error).message;
-      this.logger.error(`${kind} de ${competition} falhou: ${message}`);
-      return { competition, kind, inserted: 0, updated: 0, unchanged: 0, clubsCreated: [], error: message };
+      // O detalhe (resposta da fonte, endereço, SQL) fica só no log do servidor; o relatório leva código e
+      // mensagem genérica, como as respostas de erro da API. Recusa nossa (DomainError) já tem mensagem pública.
+      this.logger.error(`${kind} de ${competition} falhou: ${(error as Error).message}`, (error as Error).stack);
+      const reported =
+        error instanceof DomainError
+          ? { code: error.code, message: error.message }
+          : { code: "import_failed", message: ADMIN_ERROR_MESSAGES.import_failed };
+      return { competition, kind, inserted: 0, updated: 0, unchanged: 0, clubsCreated: [], error: reported };
     }
   }
 

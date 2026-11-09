@@ -11,6 +11,10 @@ export const runImportBodySchema = z.strictObject({
 });
 export type RunImportBody = z.infer<typeof runImportBodySchema>;
 
+/** Falha de uma etapa da importação, no formato `{ code, message }` das respostas de erro; o detalhe fica no log do servidor. */
+export const importErrorSchema = z.strictObject({ code: z.string(), message: z.string() });
+export type ImportError = z.infer<typeof importErrorSchema>;
+
 export const importReportSchema = z.strictObject({
   competition: competitionSchema,
   kind: importKindSchema,
@@ -19,7 +23,7 @@ export const importReportSchema = z.strictObject({
   unchanged: z.number().int(),
   /** Clubes que a importação criou sem ticker (podem ser duplicados de outro nome). */
   clubsCreated: z.array(z.string()),
-  error: z.string().nullable(),
+  error: importErrorSchema.nullable(),
 });
 export const runImportResponseSchema = z.strictObject({ reports: z.array(importReportSchema) });
 export type RunImportResponse = z.infer<typeof runImportResponseSchema>;

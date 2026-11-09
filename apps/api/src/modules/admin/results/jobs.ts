@@ -32,7 +32,7 @@ export class ResultsJobs implements OnApplicationBootstrap {
     }, false);
   }
 
-  private every(name: string, ms: number, run: () => Promise<Array<{ error: string | null }>>, onBoot: boolean): void {
+  private every(name: string, ms: number, run: () => Promise<Array<{ error: unknown }>>, onBoot: boolean): void {
     const tick = () =>
       run()
         .then((reports) => reports.length > 0 && this.logger.log(`${name}: ${reports.length} importações, ${reports.filter((r) => r.error).length} com erro`))
