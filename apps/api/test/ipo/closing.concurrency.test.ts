@@ -7,7 +7,7 @@ import { Clock, FixedClock } from "../../src/infra/clock/index.js";
 import { adminLog, ipoBids, seasonClubs, seasons, walletEntries, wallets } from "../../src/infra/db/schema/index.js";
 import { DomainError } from "../../src/infra/http/index.js";
 import { SeasonsService } from "../../src/modules/admin/seasons/seasons.service.js";
-import { IpoBidsService, IpoClosingService } from "../../src/modules/ipo/index.js";
+import { IpoBidsService, IpoClosingService, IpoEvents } from "../../src/modules/ipo/index.js";
 import { PortfolioLedger } from "../../src/modules/portfolio/index.js";
 import { createAccount, type TestAccount } from "../support/accounts.js";
 import { createTestApp } from "../support/app.js";
@@ -15,6 +15,8 @@ import { withTestAuth } from "../support/auth.js";
 import { useTestDatabase } from "../support/db.js";
 import { openPlayerWallets, rng, seedSeason, sleep } from "../support/fixtures.js";
 import { assertLedgerConsistent } from "../support/invariants.js";
+
+const noEvents = { seasonStatus: () => {}, posted: () => {} } as unknown as IpoEvents;
 
 /** Cada cenário roda 20 vezes, como os testes das travas da F4. */
 const ROUNDS = 20;
@@ -83,9 +85,9 @@ describe("fechamento do IPO sob concorrência, contra o Postgres", () => {
 
     beforeAll(() => {
       // Os serviços como a aplicação monta, com o pool do arquivo: cada transação pega a sua conexão.
-      bids = new IpoBidsService(t.db, new PortfolioLedger(), clock);
+      bids = new IpoBidsService(t.db, new PortfolioLedger(), clock, noEvents);
       // O fechamento não grava no registro do admin: não precisa dele.
-      closing = new IpoClosingService(t.db, clock, undefined as never);
+      closing = new IpoClosingService(t.db, clock, undefined as never, noEvents);
     });
 
     it("50 ofertas em volta de ipo_closes_at com a tarefa de fechar rodando: toda oferta gravada é de antes do fechamento, nenhuma depois, sem deadlock", async () => {

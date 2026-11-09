@@ -11,6 +11,7 @@ import { currentSeason } from "../admin/current-season.js";
 import { SeasonValuesService } from "../dividends/season-values/season-values.service.js";
 import { PortfolioLedger } from "../portfolio/index.js";
 import { clubsListValid, ipoBands, type ListedClub } from "./bands.js";
+import { IpoEvents } from "./events.js";
 
 /** O que uma passada da tarefa de abertura fez. */
 export type IpoOpenResult =
@@ -44,6 +45,7 @@ export class IpoOpeningService {
     private readonly accounts: AccountsService,
     private readonly ledger: PortfolioLedger,
     private readonly values: SeasonValuesService,
+    private readonly events: IpoEvents,
   ) {}
 
   async openIfDue(now: Date): Promise<IpoOpenResult> {
@@ -64,7 +66,7 @@ export class IpoOpeningService {
       await this.values.lockSeasonValues(tx, season.id, now);
       await this.openHouseWallets(tx, season.id, now);
       const credited = await this.accounts.creditSeasonStart(tx, season.id, now);
-      await tx.db
+      const [opened] = await tx.db
         .update(seasons)
         .set({
           status: "ipo_open",
@@ -72,8 +74,10 @@ export class IpoOpeningService {
           ipoClosesAt: new Date(dates.closesAt),
           tradingOpensAt: new Date(dates.tradingOpensAt),
         })
-        .where(eq(seasons.id, season.id));
-      // O evento `season.status` (tempo real) entra aqui com `tx.afterCommit`, na A10.
+        .where(eq(seasons.id, season.id))
+        .returning();
+      // Depois do COMMIT, todo mundo que está com o site aberto vê o IPO abrir sem recarregar.
+      this.events.seasonStatus(tx, opened!);
       return { status: "opened", seasonId: season.id, credited } as const;
     });
   }

@@ -3,7 +3,9 @@ import { AccountClosureHooks, AccountsModule } from "../accounts/index.js";
 import { AdminLogModule } from "../admin/log/index.js";
 import { DividendsModule } from "../dividends/index.js";
 import { PortfolioModule } from "../portfolio/index.js";
+import { RealtimeModule } from "../../infra/realtime/index.js";
 import { IpoBidsController } from "./bids.controller.js";
+import { IpoEvents } from "./events.js";
 import { IpoController } from "./ipo.controller.js";
 import { IpoReadService } from "./read.service.js";
 import { IpoBidsService } from "./bids.service.js";
@@ -24,9 +26,9 @@ import { IpoSettlementService } from "./settlement.service.js";
  * num sentido só.
  */
 @Module({
-  imports: [AccountsModule, PortfolioModule, DividendsModule, AdminLogModule],
+  imports: [AccountsModule, PortfolioModule, DividendsModule, AdminLogModule, RealtimeModule],
   controllers: [IpoBidsController, IpoController],
-  providers: [IpoOpeningService, IpoBidsService, IpoClosingService, IpoSettlementService, IpoClosureHook, IpoJob, IpoReadService],
+  providers: [IpoOpeningService, IpoBidsService, IpoClosingService, IpoSettlementService, IpoClosureHook, IpoJob, IpoReadService, IpoEvents],
   exports: [IpoOpeningService, IpoBidsService, IpoClosingService, IpoSettlementService, IpoClosureHook, IpoJob, IpoReadService],
 })
 export class IpoModule implements OnModuleInit {

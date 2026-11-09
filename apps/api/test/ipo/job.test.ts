@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ipoDates } from "@futbolsa/engine";
 import { Clock, FixedClock } from "../../src/infra/clock/index.js";
 import { withTransaction } from "../../src/infra/db/index.js";
+import { EventBus } from "../../src/infra/realtime/index.js";
 import { ipoBids, ipoResults, seasonClubs, seasonCups, seasons, wallets } from "../../src/infra/db/schema/index.js";
 import { SeasonValuesService } from "../../src/modules/dividends/season-values/season-values.service.js";
 import {
@@ -70,6 +71,9 @@ describe("tarefa agendada do IPO", () => {
 
   it("admin 19 e ipo 1: só o relógio avançando abre, fecha e liquida, sem nenhuma chamada do admin", async () => {
     const account = await createAccount(database.db, { nickname: "ana_job", at: new Date(DATES.opensAt - 5 * MINUTE) });
+    // o canal season avisa a abertura e o fechamento (A10), uma vez cada
+    const seasonEvents: string[] = [];
+    app.get(EventBus, { strict: false }).subscribe("season", (e) => seasonEvents.push(JSON.parse(e.frame).data.status));
 
     // antes da abertura: nada acontece
     let report = await job.runOnce();
@@ -105,6 +109,7 @@ describe("tarefa agendada do IPO", () => {
     const again = await job.runOnce();
     expect(again).toMatchObject({ opening: { status: "idle" }, closing: { status: "idle" }, settlement: { status: "ran", settled: [], pending: 0 } });
     expect(await resultCount()).toBe(20);
+    expect(seasonEvents).toEqual(["ipo_open", "ipo_closed"]);
     await assertLedgerConsistent(database.db, seasonId);
     await assertSharesConserved(database.db, seasonId);
   });

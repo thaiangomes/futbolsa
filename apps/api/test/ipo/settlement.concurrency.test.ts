@@ -19,7 +19,7 @@ import {
   wallets,
 } from "../../src/infra/db/schema/index.js";
 import { AccountDeletionService } from "../../src/modules/accounts/index.js";
-import { IpoBidsService, IpoClosingService, type IpoSettleResult, IpoSettlementService } from "../../src/modules/ipo/index.js";
+import { IpoBidsService, IpoClosingService, type IpoSettleResult, IpoSettlementService, IpoEvents } from "../../src/modules/ipo/index.js";
 import { PortfolioLedger } from "../../src/modules/portfolio/index.js";
 import type { Movement } from "../../src/modules/portfolio/ledger/index.js";
 import { createAccount } from "../support/accounts.js";
@@ -28,6 +28,8 @@ import { withTestAuth } from "../support/auth.js";
 import { useTestDatabase } from "../support/db.js";
 import { INITIAL_CASH, openWallets, rng, seedSeason, sleep } from "../support/fixtures.js";
 import { assertLedgerConsistent, assertSharesConserved, totalCash } from "../support/invariants.js";
+
+const noEvents = { seasonStatus: () => {}, posted: () => {} } as unknown as IpoEvents;
 
 /** Cada cenário roda 20 vezes, cada vez numa temporada nova, como os testes das travas da F4. */
 const ROUNDS = 20;
@@ -299,7 +301,7 @@ describe("liquidação do IPO sob concorrência, contra o Postgres", () => {
     async () => {
       const random = rng(8080);
       // A segunda instância da API, com o mesmo banco: nada é compartilhado em memória.
-      const other = new IpoSettlementService(t.db, new PortfolioLedger());
+      const other = new IpoSettlementService(t.db, new PortfolioLedger(), noEvents);
       let mixed = 0;
       let skippedUpfront = 0;
       for (let round = 0; round < ROUNDS; round++) {
@@ -342,7 +344,7 @@ describe("liquidação do IPO sob concorrência, contra o Postgres", () => {
     async () => {
       const random = rng(9090);
       const ledger = new FailingLedger();
-      const failingPass = new IpoSettlementService(t.db, ledger);
+      const failingPass = new IpoSettlementService(t.db, ledger, noEvents);
       const firstSeven = tickers.slice(0, SETTLED_BEFORE_FAILURE);
       const rest = tickers.slice(SETTLED_BEFORE_FAILURE);
       const logged = vi.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);

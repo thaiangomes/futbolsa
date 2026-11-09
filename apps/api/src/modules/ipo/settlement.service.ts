@@ -5,6 +5,7 @@ import { DB, type Database, lockClubs, lockSeason, lockWallets, type Tx, withTra
 import { clubs, ipoAllocations, ipoBids, ipoResults, seasonClubs, wallets } from "../../infra/db/schema/index.js";
 import { currentSeason } from "../admin/current-season.js";
 import { PortfolioLedger } from "../portfolio/index.js";
+import { IpoEvents } from "./events.js";
 
 /** Um clube que não liquidou nesta passada, com o erro (a passada seguinte tenta de novo). */
 export interface IpoSettleFailure {
@@ -57,6 +58,7 @@ export class IpoSettlementService {
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly ledger: PortfolioLedger,
+    private readonly events: IpoEvents,
   ) {}
 
   /**
@@ -177,7 +179,7 @@ export class IpoSettlementService {
 
     const reservedOf = new Map(bids.map((b) => [b.id, b.reserved]));
     for (const a of result.allocations) {
-      await this.ledger.post(tx, {
+      const posted = await this.ledger.post(tx, {
         walletId: a.walletId,
         at: now,
         kind: "ipo_settle",
@@ -190,6 +192,8 @@ export class IpoSettlementService {
         // Não atendida: a linha só devolve a reserva.
         ...(a.shares > 0 ? { cashDelta: -a.paid, sharesDelta: a.shares, price: result.cutPrice, costBasis: "purchase" as const } : {}),
       });
+      // O dono vê o caixa, as ações do clube e a linha do extrato mudarem sem recarregar (depois do COMMIT).
+      this.events.posted(tx, posted, ticker);
     }
     if (result.allocations.length > 0) {
       await tx.db

@@ -5,5 +5,6 @@ export * from "./closing.service.js";
 export * from "./settlement.service.js";
 export * from "./ipo.job.js";
 export * from "./read.service.js";
+export * from "./events.js";
 export * from "./closure-hook.js";
 export * from "./errors.js";
