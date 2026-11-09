@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { lockClubs, lockSeason, lockWallets } from "../../src/infra/db/locks.js";
+import { lockClubs, lockPayoutEvents, lockSeason, lockWallets } from "../../src/infra/db/locks.js";
+import { payoutEvents } from "../../src/infra/db/schema/index.js";
 import { LockOrderError, withTransaction } from "../../src/infra/db/transaction.js";
 import { useTestDatabase } from "../support/db.js";
 import { createUser, deferred, listClubs, openWallets, seedSeason, sleep } from "../support/fixtures.js";
@@ -9,11 +10,34 @@ describe("T6: travas em ordem", () => {
   let seasonId: number;
   let treasury: number;
   let players: number[];
+  /** Dois eventos de pagamento (P3 da F12: travados entre os clubes e as carteiras), em ordem de id. */
+  let events: number[];
 
   beforeAll(async () => {
     const seeded = await seedSeason(t.db);
     seasonId = seeded.seasonId;
     await listClubs(t.db, seasonId, seeded.clubIds, ["BOT3", "FLA3", "PAL3"]);
+    const closedAt = new Date("2027-06-06T20:00:00Z");
+    events = (
+      await t.db
+        .insert(payoutEvents)
+        .values(
+          ["FLA3", "PAL3"].map((ticker) => ({
+            seasonId,
+            clubId: seeded.clubIds.get(ticker)!,
+            eventKey: `points|brasileirao-a|10|${ticker}`,
+            kind: "points",
+            reason: "3 pontos, rodada 10",
+            competition: "brasileirao-a",
+            round: 10,
+            perShare: 30,
+            closedAt,
+            status: "approved",
+            createdAt: closedAt,
+          })),
+        )
+        .returning({ id: payoutEvents.id })
+    ).map((r) => r.id);
     // a tesouraria nasce antes dos jogadores: tem o menor id
     const ids = await openWallets(t.db, seasonId, [
       { type: "treasury" },
@@ -171,6 +195,71 @@ describe("T6: travas em ordem", () => {
       await lockWallets(tx, [treasury]);
       expect(tx.locks.isWalletLocked(treasury)).toBe(true);
     });
+  });
+
+  it("F12, P3: eventos de pagamento em ordem de id, entre os clubes e as carteiras", async () => {
+    await withTransaction(t.db, async (tx) => {
+      await lockSeason(tx, seasonId, "share");
+      await lockClubs(tx, seasonId, ["FLA3"]);
+      const rows = await lockPayoutEvents(tx, [events[1]!, events[0]!, events[1]!], "share");
+      expect(rows.map((r) => r.id)).toEqual([events[0], events[1]]);
+      expect(rows[0]!.status).toBe("approved");
+      // travar de novo o que já está travado não é fora da ordem
+      await lockPayoutEvents(tx, [events[0]!], "share");
+      await lockWallets(tx, [players[0]!, treasury]);
+    });
+  });
+
+  it("F12, P3: recusa evento depois de carteira, id menor numa segunda chamada, clube ou temporada depois de evento e trava que sobe", async () => {
+    const outOfOrder = (fn: Parameters<typeof withTransaction>[1]) =>
+      expect(withTransaction(t.db, fn)).rejects.toBeInstanceOf(LockOrderError);
+    await outOfOrder(async (tx) => {
+      await lockWallets(tx, [players[0]!]);
+      await lockPayoutEvents(tx, [events[0]!], "share");
+    });
+    await outOfOrder(async (tx) => {
+      await lockPayoutEvents(tx, [events[1]!], "update");
+      await lockPayoutEvents(tx, [events[0]!], "update");
+    });
+    await outOfOrder(async (tx) => {
+      await lockPayoutEvents(tx, [events[0]!], "share");
+      await lockClubs(tx, seasonId, ["FLA3"]);
+    });
+    await outOfOrder(async (tx) => {
+      await lockPayoutEvents(tx, [events[0]!], "share");
+      await lockSeason(tx, seasonId, "share");
+    });
+    await outOfOrder(async (tx) => {
+      await lockPayoutEvents(tx, [events[0]!], "share");
+      await lockPayoutEvents(tx, [events[0]!], "update");
+    });
+  });
+
+  it("F12, P3: o evento em FOR SHARE deixa outro lote ler e segura quem quer mudá-lo até o COMMIT", async () => {
+    const holding = deferred();
+    const release = deferred();
+    const batch = withTransaction(t.db, async (tx) => {
+      await lockPayoutEvents(tx, [events[0]!], "share");
+      holding.resolve();
+      await release.promise;
+    });
+    await holding.promise;
+    // outro lote compartilha a trava sem esperar
+    await withTransaction(t.db, (tx) => lockPayoutEvents(tx, [events[0]!], "share"));
+    let changed = false;
+    const correction = withTransaction(t.db, async (tx) => {
+      await lockPayoutEvents(tx, [events[0]!], "update");
+      changed = true;
+    });
+    await sleep(100);
+    expect(changed).toBe(false);
+    release.resolve();
+    await Promise.all([batch, correction]);
+    expect(changed).toBe(true);
+  });
+
+  it("F12: evento de pagamento inexistente dá erro com o id no texto", async () => {
+    await expect(withTransaction(t.db, (tx) => lockPayoutEvents(tx, [987654], "share"))).rejects.toThrow(/987654/);
   });
 
   it("ticker que não está listado na temporada dá erro com o ticker no texto", async () => {

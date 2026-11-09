@@ -14,7 +14,7 @@ import { DomainError } from "../../../infra/http/index.js";
 import { currentSeason } from "../current-season.js";
 
 /** A classificação oficial de que cada tipo de evento depende (colocação da Série A, acesso da Série B). */
-const STANDINGS_OF_KIND = { placement: "brasileirao-a", promotion: "brasileirao-b" } as const;
+export const STANDINGS_OF_KIND = { placement: "brasileirao-a", promotion: "brasileirao-b" } as const;
 
 /**
  * A prévia dos pagamentos (Admin, "Pagamento de dividendos", critério 2): por evento, o motivo, o valor por ação,

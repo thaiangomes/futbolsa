@@ -37,6 +37,9 @@ export const ADMIN_ERROR_MESSAGES = {
   match_not_found: "Jogo não encontrado.",
   season_exists: "Já existe uma temporada em andamento: encerre a anterior antes de preparar outra.",
   cups_not_confirmed: "Confirme a tabela das três copas antes de abrir o IPO.",
+  event_superseded: "Este pagamento mudou desde a prévia (um resultado foi corrigido): recarregue a prévia e aprove a versão nova.",
+  standings_not_confirmed:
+    "Confira a classificação oficial antes de aprovar a colocação ou o acesso: o valor depende da posição final.",
   payout_settling:
     "Um pagamento aprovado ainda está sendo creditado: espere terminar para a correção não ser calculada sobre um pagamento pela metade.",
   correction_stale: "Os resultados mudaram desde a prévia da correção: confira a prévia nova antes de aplicar.",
