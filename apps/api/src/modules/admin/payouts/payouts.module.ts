@@ -1,4 +1,6 @@
 import { Module } from "@nestjs/common";
+import { DividendsModule } from "../../dividends/dividends.module.js";
+import { EngineInputService } from "./engine-input.js";
 import { NoopRankingsPort, RankingsPort } from "./ports.js";
 
 /**
@@ -6,7 +8,8 @@ import { NoopRankingsPort, RankingsPort } from "./ports.js";
  * e correção com estorno. A F13 troca o `RankingsPort` vazio pelo de verdade.
  */
 @Module({
-  providers: [{ provide: RankingsPort, useClass: NoopRankingsPort }],
-  exports: [RankingsPort],
+  imports: [DividendsModule],
+  providers: [{ provide: RankingsPort, useClass: NoopRankingsPort }, EngineInputService],
+  exports: [RankingsPort, EngineInputService],
 })
 export class PayoutsModule {}
