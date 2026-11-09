@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { overviewSchema } from "@futbolsa/contracts";
 import { FixedClock } from "../../src/infra/clock/index.js";
-import { matches, seasonClubs, seasonCups, standings } from "../../src/infra/db/schema/index.js";
+import { matches, seasonClubs, seasonCups, seasons, standings } from "../../src/infra/db/schema/index.js";
 import { createAccount, type TestAccount } from "../support/accounts.js";
 import { expectAdminOnly } from "../support/admin-routes.js";
 import { createTestApp } from "../support/app.js";
@@ -45,6 +45,7 @@ describe("visão geral do admin", () => {
       cupsNotConfirmed: ["copa-do-brasil", "libertadores", "sulamericana"],
       suspendedClubs: [],
       marketSuspended: false,
+      ipoBlockers: [],
     });
 
     // jogo pendente
@@ -90,5 +91,36 @@ describe("visão geral do admin", () => {
     expect(done.marketSuspended).toBe(false);
     expect(done.suspendedClubs).toEqual([]);
     await database.db.update(seasonClubs).set({ suspendedReason: null });
+  });
+
+  it("dividendos 28 e proposta 6 do IPO: passado o horário de abertura, a visão geral mostra o que falta para abrir", async () => {
+    const setSeason = (values: Partial<typeof seasons.$inferInsert>) => database.db.update(seasons).set(values).where(eq(seasons.id, seasonId));
+    // agora = 2027-04-01 13:01 UTC; primeiro jogo em 2027-04-20: a abertura (04-06) ainda não chegou, nada a mostrar
+    await setSeason({ offerSize: null, firstKickoff: new Date("2027-04-20T19:00:00Z") });
+    expect((await overview()).ipoBlockers).toEqual([]);
+
+    // primeiro jogo em 2027-04-10: abriria em 03-27 e fecha em 04-03. Sem oferta, com os clubes sem a colocação
+    // anterior (o `listClubs` não a grava) e a Libertadores sem confirmar
+    await setSeason({ firstKickoff: new Date("2027-04-10T19:00:00Z") });
+    await database.db.update(seasonCups).set({ confirmedAt: null, confirmedBy: null }).where(eq(seasonCups.competition, "libertadores"));
+    expect((await overview()).ipoBlockers).toEqual(["offer_size_missing", "clubs_missing", "cups_not_confirmed"]);
+
+    // tudo completo: nada a mostrar (a tarefa abre no minuto seguinte)
+    await setSeason({ offerSize: 3000 });
+    const tickers = [...clubIds.keys()].sort();
+    for (const [i, t] of tickers.entries()) {
+      await database.db.update(seasonClubs).set({ prevPlacement: i + 1 }).where(eq(seasonClubs.clubId, clubIds.get(t)!));
+    }
+    await call("POST", `/admin/seasons/${seasonId}/cups/libertadores/confirm`);
+    expect((await overview()).ipoBlockers).toEqual([]);
+
+    // primeiro jogo em 2027-04-05: o fechamento (03-29) já passou, e o IPO não abre mais sem mudar a data
+    await setSeason({ firstKickoff: new Date("2027-04-05T19:00:00Z") });
+    expect((await overview()).ipoBlockers).toEqual(["past_close"]);
+
+    // com o IPO aberto, nada a mostrar
+    await setSeason({ status: "ipo_open" });
+    expect((await overview()).ipoBlockers).toEqual([]);
+    await setSeason({ status: "preparing", offerSize: null, firstKickoff: null });
   });
 });

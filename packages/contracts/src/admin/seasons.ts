@@ -27,9 +27,11 @@ export const patchSeasonBodySchema = z
   .strictObject({
     offerSize: z.number().int().min(1).optional(),
     firstKickoff: isoInstantSchema.optional(),
+    /** Novo fechamento do IPO, só para adiar com as ofertas abertas (F8; antecipar é recusado). */
+    ipoClosesAt: isoInstantSchema.optional(),
     reason: adminReasonSchema.optional(),
   })
-  .refine((b) => b.offerSize !== undefined || b.firstKickoff !== undefined, {
+  .refine((b) => b.offerSize !== undefined || b.firstKickoff !== undefined || b.ipoClosesAt !== undefined, {
     message: "Nada para mudar.",
     path: ["(corpo)"],
   });

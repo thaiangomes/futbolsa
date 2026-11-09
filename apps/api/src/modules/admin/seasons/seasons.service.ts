@@ -14,6 +14,7 @@ import { DB, type Database, type DrizzleTx, lockSeason, type Tx, withTransaction
 import { clubs, seasonClubs, seasons } from "../../../infra/db/schema/index.js";
 import { DomainError } from "../../../infra/http/index.js";
 import { SeasonValuesService } from "../../dividends/season-values/season-values.service.js";
+import { IpoClosingService } from "../../ipo/index.js";
 import { currentSeason, type SeasonRow } from "../current-season.js";
 import { AdminLogService } from "../log/index.js";
 
@@ -31,6 +32,7 @@ export const toSeasonView = (s: SeasonRow): SeasonView => ({
 
 const invalid = (...fields: string[]) => new DomainError("invalid_input", 400, COMMON_ERROR_MESSAGES.invalid_input, fields);
 const notFound = () => new DomainError("not_found", 404, COMMON_ERROR_MESSAGES.not_found);
+const ipoOpened = () => new DomainError("ipo_opened", 409, ADMIN_ERROR_MESSAGES.ipo_opened);
 
 /**
  * Preparar a temporada (Admin, "Temporada e IPO"; IPO por bookbuilding, critério 7): criar, definir a oferta e a
@@ -43,6 +45,7 @@ export class SeasonsService {
     @Inject(DB) private readonly db: Database,
     private readonly log: AdminLogService,
     private readonly values: SeasonValuesService,
+    private readonly closing: IpoClosingService,
   ) {}
 
   /** `GET /season` (público): a temporada atual e os clubes suspensos com o motivo, para todos verem. */
@@ -88,7 +91,27 @@ export class SeasonsService {
     });
   }
 
+  /**
+   * Muda a oferta e o primeiro jogo (só em `preparing`) ou adia o fechamento das ofertas (`ipoClosesAt`, só
+   * com o IPO aberto; IPO por bookbuilding, critério 28; Admin, critério 20). Tudo ou nada: com um campo
+   * recusado, nada muda. Depois da abertura, a oferta e o primeiro jogo continuam recusados com
+   * `ipo_opened`, mesmo junto do `ipoClosesAt` (o primeiro jogo adiado não muda mais as datas, critério 27);
+   * o `ipoClosesAt` antes da abertura é `ipo_not_open`.
+   */
   async patch(actorId: string, id: number, body: PatchSeasonBody): Promise<SeasonView> {
+    if (body.ipoClosesAt === undefined) return this.patchPreparing(actorId, id, body);
+    const newClosesAt = new Date(body.ipoClosesAt);
+    return withTransaction(this.db, async (tx) => {
+      // Uma trava exclusiva só: o adiamento trava de novo no mesmo modo, sem esperar.
+      const season = await this.lockExisting(tx, id);
+      if ((body.offerSize !== undefined || body.firstKickoff !== undefined) && season.status !== "preparing") throw ipoOpened();
+      // Em `preparing`, o adiamento recusa com `ipo_not_open` antes de gravar qualquer coisa.
+      const updated = await this.closing.postponeClose(tx, id, newClosesAt, actorId, body.reason);
+      return toSeasonView(updated);
+    });
+  }
+
+  private async patchPreparing(actorId: string, id: number, body: PatchSeasonBody): Promise<SeasonView> {
     return withTransaction(this.db, async (tx) => {
       const season = await this.lockPreparing(tx, id);
       const dates = body.firstKickoff ? ipoDates(Date.parse(body.firstKickoff)) : null;
@@ -164,11 +187,16 @@ export class SeasonsService {
 
   /** A temporada travada (exclusiva) e ainda em preparação; depois da abertura do IPO, 409. */
   private async lockPreparing(tx: Tx, id: number): Promise<SeasonRow> {
+    const season = await this.lockExisting(tx, id);
+    if (season.status !== "preparing") throw ipoOpened();
+    return season;
+  }
+
+  /** A temporada travada (exclusiva), em qualquer status; 404 se não existe. */
+  private async lockExisting(tx: Tx, id: number): Promise<SeasonRow> {
     const [exists] = await tx.db.select({ id: seasons.id }).from(seasons).where(eq(seasons.id, id));
     if (!exists) throw notFound();
-    const season = await lockSeason(tx, id, "update");
-    if (season.status !== "preparing") throw new DomainError("ipo_opened", 409, ADMIN_ERROR_MESSAGES.ipo_opened);
-    return season;
+    return lockSeason(tx, id, "update");
   }
 
   private async clubsOf(db: Database | DrizzleTx, seasonId: number): Promise<CurrentSeasonResponse["clubs"]> {
