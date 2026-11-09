@@ -56,8 +56,9 @@ export class AccountDeletionService {
       const wallet = season ? await this.walletOf(tx, season.id, userId) : undefined;
       let result: DeleteMeResponse["walletCloseout"] = "done";
       if (season && wallet) {
+        // A leitura sem trava é um atalho; quem decide de fato é o `closeWallet`, com a temporada travada.
         if (await this.awaitingSettlement(tx, season)) result = "after_ipo_settlement";
-        else await this.closeWallet(tx, season.id, wallet, now);
+        else if (!(await this.closeWallet(tx, season.id, wallet, now))) result = "after_ipo_settlement";
       }
       await tx.db
         .update(users)
@@ -92,8 +93,7 @@ export class AccountDeletionService {
         const [season] = await tx.db.select().from(seasons).where(eq(seasons.id, seasonId));
         if (!season || (await this.awaitingSettlement(tx, season))) return false;
         const [wallet] = await tx.db.select().from(wallets).where(eq(wallets.id, walletId));
-        await this.closeWallet(tx, seasonId, wallet!, now);
-        return true;
+        return this.closeWallet(tx, seasonId, wallet!, now);
       });
       if (closed) done++;
     }
@@ -163,9 +163,15 @@ export class AccountDeletionService {
    * Encerra a carteira, na ordem das travas (temporada, clubes das ordens abertas, carteira e
    * tesouraria por último): cancela ordens e ofertas pelos ganchos, manda as ações para a
    * tesouraria e zera o caixa. Se o caixa estava negativo por estorno, a dívida some com a conta.
+   *
+   * Devolve `false`, sem mexer em nada, se com a temporada já travada ela está entre o fechamento e a
+   * liquidação do IPO: o status lido antes, sem trava, pode ter mudado enquanto a trava era esperada (o
+   * pedido leu `ipo_open` no instante em que o IPO fechava). Aí as ofertas não podem mais sair, e a
+   * carteira fica para o `account-closeout`, como no pedido que já chega com o IPO fechado.
    */
-  private async closeWallet(tx: Tx, seasonId: number, wallet: typeof wallets.$inferSelect, at: Date): Promise<void> {
-    await lockSeason(tx, seasonId, "share");
+  private async closeWallet(tx: Tx, seasonId: number, wallet: typeof wallets.$inferSelect, at: Date): Promise<boolean> {
+    const season = await lockSeason(tx, seasonId, "share");
+    if (await this.awaitingSettlement(tx, season)) return false;
     await lockClubs(tx, seasonId, await this.hooks.clubsToLock(tx, wallet.id));
     const [treasury] = await tx.db
       .select({ id: wallets.id })
@@ -205,6 +211,7 @@ export class AccountDeletionService {
     if (current!.cash !== 0) {
       await this.ledger.post(tx, { walletId: wallet.id, at, kind: "account_deleted", cashDelta: -current!.cash, ref });
     }
+    return true;
   }
 
   private async currentSeason(tx: Tx): Promise<SeasonRow | undefined> {
