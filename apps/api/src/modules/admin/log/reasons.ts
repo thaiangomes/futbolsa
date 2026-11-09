@@ -23,6 +23,9 @@ export const ADMIN_ACTIONS = {
   // Suspensão do mercado (F7)
   "suspension.set": { reasonRequired: true },
   "suspension.clear": { reasonRequired: false },
+  // Pagamentos (F12): a aprovação não pede motivo; a correção mexe no dinheiro dos outros e pede
+  "payout.approve": { reasonRequired: false },
+  "payout.correct": { reasonRequired: true },
   // Convites e papéis (F5)
   "invite.create": { reasonRequired: false },
   "invite.revoke": { reasonRequired: false },

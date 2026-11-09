@@ -15,6 +15,9 @@ export const marketResumedEventSchema = z.strictObject({
 });
 export type MarketResumedEvent = z.infer<typeof marketResumedEventSchema>;
 
-/** `admin.pending`, no canal `admin`: quantos jogos já deviam ter terminado e seguem sem placar. */
-export const adminPendingEventSchema = z.strictObject({ pendingMatches: z.number().int() });
+/**
+ * `admin.pending`, no canal `admin`: quantos jogos já deviam ter terminado e seguem sem placar e, quando a F12 avisa,
+ * quantos pagamentos aguardam aprovação.
+ */
+export const adminPendingEventSchema = z.strictObject({ pendingMatches: z.number().int(), pendingPayouts: z.number().int().optional() });
 export type AdminPendingEvent = z.infer<typeof adminPendingEventSchema>;
