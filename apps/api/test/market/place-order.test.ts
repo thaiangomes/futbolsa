@@ -1,13 +1,13 @@
 import "reflect-metadata";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/infra/db/client.js";
 import { withTransaction } from "../../src/infra/db/index.js";
 import { orders, seasonClubs, seasons, trades, walletEntries } from "../../src/infra/db/schema/index.js";
-import type { OrderService, PostgresMatchingEngine } from "../../src/modules/market/index.js";
+import { inMatch, type OrderService, type PostgresMatchingEngine } from "../../src/modules/market/index.js";
 import { useTestDatabase } from "../support/db.js";
 import { totalCash } from "../support/invariants.js";
-import { marketSeason } from "./helpers.js";
+import { insertMatch, marketSeason } from "./helpers.js";
 import {
   accepted,
   assertMarketInvariants,
@@ -377,6 +377,52 @@ describe("ordem nova no Postgres", () => {
     expect(r.trades.map((t) => [t.quantity, t.price])).toEqual([[100, 2000]]);
     expect(r.cash).toEqual({ total: 175_000, reserved: 0, free: 175_000 });
     expect(await walletOf(db, bruno)).toMatchObject({ cash: 175_000 });
+  }));
+
+  it("livro 27: a venda de Ana a R$ 44,00 aberta antes do jogo continua no livro com o mesmo preço depois que o jogo começa, e executa quando uma compra a alcança", scene(async () => {
+    const ana = await holder("FLA3", 10);
+    const bruno = await player();
+    await ready();
+    const sale = accepted(await service.place(o.sellLimit(ana, "FLA3", 10, 4400, { now: new Date("2027-04-06T18:00:00Z") })));
+
+    // Flamengo × Palmeiras começa às 16h de Brasília. O motor de ordens não olha os jogos nem os fechamentos:
+    // quem muda com o jogo é a cotação da casa (T10); as ordens dos jogadores ficam como estavam.
+    await insertMatch(db, { seasonId, homeClubId: club("FLA3"), awayClubId: club("PAL3"), kickoff: new Date("2027-04-06T19:00:00Z") });
+    const during = new Date("2027-04-06T19:30:00Z");
+    expect(await inMatch(db, seasonId, club("FLA3"), during)).toBe(true);
+    expect(await orderRow(db, sale.order.id)).toMatchObject({ status: "open", limitPrice: 4400, filled: 0 });
+
+    const r = accepted(await service.place(o.buyLimit(bruno, "FLA3", 10, 4400, { now: during })));
+    expect(r.trades.map((x) => [x.price, x.quantity, x.at])).toEqual([[4400, 10, during]]);
+    expect(await orderRow(db, sale.order.id)).toMatchObject({ status: "filled", filled: 10, updatedAt: during });
+  }));
+
+  it("livro 30: depois de uma sequência de negócios com a casa, as ações de FLA3 de todas as contas e da tesouraria somam o total emitido", scene(async () => {
+    await giveShares(db, treasury, club("FLA3"), 600);
+    await giveCash(db, treasury, 1_000_000);
+    const [ana, bruno] = [await holder("FLA3", 1_200), await holder("FLA3", 1_200)];
+    await ready();
+    expect((await clubRow(db, seasonId, club("FLA3"))).totalShares).toBe(3_000);
+    const house = { actor: "house" as const };
+    const held = async () =>
+      Number((await db.execute(sql`select sum(shares)::int as n from futbolsa.positions where club_id = ${club("FLA3")}`)).rows[0]!.n);
+
+    // três voltas da casa cotando 10 por lado (livro 23): Ana compra as 10 da casa, Bruno vende 10 à casa
+    for (let turn = 0; turn < 3; turn++) {
+      accepted(await service.place(o.sellLimit(treasury, "FLA3", 10, 4410, house)));
+      accepted(await service.place(o.buyLimit(treasury, "FLA3", 10, 3990, house)));
+      expect(accepted(await service.place(o.buyMarket(ana, "FLA3", 10))).trades.map((x) => [x.price, x.withHouse])).toEqual([[4410, true]]);
+      expect(await held()).toBe(3_000);
+      expect(accepted(await service.place(o.sellMarket(bruno, "FLA3", 10))).trades.map((x) => [x.price, x.withHouse])).toEqual([[3990, true]]);
+      expect(await held()).toBe(3_000);
+    }
+
+    expect(await positionOf(db, treasury, club("FLA3"))).toEqual({ shares: 600, reservedShares: 0, free: 600 });
+    expect(await positionOf(db, ana, club("FLA3"))).toMatchObject({ shares: 1_230 });
+    expect(await positionOf(db, bruno, club("FLA3"))).toMatchObject({ shares: 1_170 });
+    // a casa vendeu a R$ 44,10 e comprou a R$ 39,90: ficou com R$ 4,20 por ação em cada volta
+    expect(await walletOf(db, treasury)).toEqual({ cash: 1_000_000 + 3 * 10 * 420, reservedCash: 0, free: 1_012_600, openOrders: 0 });
+    expect(await tradesOf("FLA3")).toHaveLength(6);
   }));
 
   // ------------------------------------------------------------------ a casa e os bots
