@@ -20,6 +20,8 @@ export const ADMIN_ACTIONS = {
   "season.rules.update": { reasonRequired: false },
   "cup.update": { reasonRequired: false },
   "cup.confirm": { reasonRequired: false },
+  // Importar na hora (F7): o admin só pede, quem traz os dados é a fonte; motivo aceito e não exigido.
+  "import.run": { reasonRequired: false },
   // Adiar o fechamento das ofertas do IPO (F8): como as outras ações de temporada, motivo aceito e não exigido.
   "season.ipo.postpone": { reasonRequired: false },
   // Suspensão do mercado (F7)
