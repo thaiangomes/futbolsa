@@ -48,6 +48,7 @@ export class SeasonsController {
     return this.seasons.create(admin.id, body.year);
   }
 
+  /** Oferta e primeiro jogo (em preparação) ou o novo fechamento das ofertas do IPO (`ipoClosesAt`, só para adiar). */
   @Patch(":id")
   patch(
     @CurrentUser() admin: ResolvedUser,

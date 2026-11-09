@@ -80,13 +80,14 @@ describe("registro do admin (record)", () => {
       "season.rules.update",
       "cup.update",
       "cup.confirm",
+      "season.ipo.postpone",
       "suspension.clear",
       "invite.create",
       "invite.revoke",
     ]) {
       expect(reasonRequired(action), action).toBe(false);
     }
-    expect(Object.keys(ADMIN_ACTIONS)).toHaveLength(15);
+    expect(Object.keys(ADMIN_ACTIONS)).toHaveLength(16);
   });
 
   it("admin 33: ação sem motivo que exige motivo é recusada e nada é gravado", async () => {

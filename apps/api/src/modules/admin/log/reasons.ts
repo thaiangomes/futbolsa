@@ -20,6 +20,8 @@ export const ADMIN_ACTIONS = {
   "season.rules.update": { reasonRequired: false },
   "cup.update": { reasonRequired: false },
   "cup.confirm": { reasonRequired: false },
+  // Adiar o fechamento das ofertas do IPO (F8): como as outras ações de temporada, motivo aceito e não exigido.
+  "season.ipo.postpone": { reasonRequired: false },
   // Suspensão do mercado (F7)
   "suspension.set": { reasonRequired: true },
   "suspension.clear": { reasonRequired: false },
