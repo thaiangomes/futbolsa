@@ -24,6 +24,7 @@ export * from "./engine/payoutDiff.js";
 export * from "./engine/matching.js";
 export * from "./engine/orderRules.js";
 export * from "./engine/fairValue.js";
+export * from "./engine/tunnel.js";
 // Clubes conhecidos e a regra do jogo adiado, para a importação de resultados do admin (F7).
 export { CLUBS, CLUBE_DOS_TREZE, clubIdFromName, clubName, type ClubInfo } from "./data/clubs.js";
 export { markOutOfWindow } from "./data/season.js";

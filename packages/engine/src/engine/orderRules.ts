@@ -18,7 +18,8 @@ export type RejectCode =
   | "too_many_open_orders"
   | "insufficient_cash"
   | "insufficient_shares"
-  | "self_trade";
+  | "self_trade"
+  | "club_in_auction";
 
 /** Máximo de ordens abertas por jogador ou bot, somando todos os clubes. */
 export const MAX_OPEN_ORDERS = 50;
@@ -62,6 +63,15 @@ export interface OrderState {
   myOpenOrders: readonly { side: Side; limitPrice: Cents }[];
   /** A casa não passa pela faixa de 20% nem pelo limite de 50 ordens. */
   isHouse?: boolean;
+  /** O clube está em leilão: ordem a mercado é recusada (`club_in_auction`) e a limitada entra no livro sem casar. */
+  inAuction?: boolean;
+  /**
+   * O túnel de preço do clube (`tunnelBand` da referência), fora de leilão. O teto da compra a mercado e o piso
+   * da venda a mercado passam a ser o mais apertado entre os 20% e o túnel: a ordem a mercado executa só dentro
+   * do túnel e o resto é cancelado, sem abrir leilão (D1). Não muda a ordem limitada, que pode sair do túnel e
+   * abrir o leilão.
+   */
+  tunnel?: TradingBand;
 }
 
 export type OrderValidation = { ok: true; marketPriceLimit?: Cents } | { ok: false; code: RejectCode };
@@ -82,6 +92,9 @@ export function validateOrder(req: OrderRequestShape, state: OrderState): OrderV
     if (!Number.isSafeInteger(req.quantity * req.limitPrice)) return reject("invalid_quantity");
   }
 
+  // Em leilão não sai negócio, e a ordem a mercado não tem preço para esperar o preço único.
+  if (state.inAuction && req.type === "market") return reject("club_in_auction");
+
   if (req.side === "buy" && state.cash < 0) return reject("negative_cash");
 
   const band = state.isHouse ? undefined : tradingBand(state.displayedPrice);
@@ -95,6 +108,10 @@ export function validateOrder(req: OrderRequestShape, state: OrderState): OrderV
 
   if (selfTradeConflict(req, state.myOpenOrders)) return reject("self_trade");
 
-  if (req.type === "market" && band) return { ok: true, marketPriceLimit: req.side === "buy" ? band.max : band.min };
+  if (req.type === "market" && band) {
+    const ceiling = state.tunnel ? Math.min(band.max, state.tunnel.max) : band.max;
+    const floor = state.tunnel ? Math.max(band.min, state.tunnel.min) : band.min;
+    return { ok: true, marketPriceLimit: req.side === "buy" ? ceiling : floor };
+  }
   return { ok: true };
 }

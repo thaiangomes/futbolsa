@@ -123,3 +123,48 @@ describe("validateOrder", () => {
     expect(validateOrder(limit("buy", 2 ** 50, 4000), state({ displayedPrice: 4000 }))).toEqual({ ok: false, code: "invalid_quantity" });
   });
 });
+
+// Túnel de preço e leilão (L1 do Plano do livro de ofertas e formador): `inAuction` e `tunnel`.
+describe("validateOrder com túnel e leilão", () => {
+  const tunnel = { min: 3600, max: 4400 }; // referência de R$ 40,00
+
+  it("livro 41: ordem a mercado em leilão dá club_in_auction", () => {
+    expect(validateOrder(market("buy", 1), state({ inAuction: true }))).toEqual({ ok: false, code: "club_in_auction" });
+    expect(validateOrder(market("sell", 1), state({ inAuction: true }))).toEqual({ ok: false, code: "club_in_auction" });
+  });
+
+  it("livro 41: em leilão, a limitada a R$ 48,01 é recusada pelos 20% e a de R$ 48,00 é aceita (sem casar)", () => {
+    expect(validateOrder(limit("buy", 1, 4801), state({ inAuction: true }))).toEqual({ ok: false, code: "price_out_of_band" });
+    expect(validateOrder(limit("buy", 1, 4800), state({ inAuction: true }))).toEqual({ ok: true });
+  });
+
+  it("em leilão valem as mesmas recusas de sempre (caixa, 51ª ordem, contra si mesmo)", () => {
+    expect(validateOrder(limit("buy", 100, 4000), state({ inAuction: true, availableCash: 100 }))).toEqual({ ok: false, code: "insufficient_cash" });
+    expect(validateOrder(limit("buy", 1, 4000), state({ inAuction: true, openOrders: 50 }))).toEqual({ ok: false, code: "too_many_open_orders" });
+    expect(validateOrder(limit("buy", 1, 4200), state({ inAuction: true, myOpenOrders: [{ side: "sell", limitPrice: 4200 }] }))).toEqual({ ok: false, code: "self_trade" });
+  });
+
+  it("D1: fora de leilão, o teto da compra a mercado é o do túnel (R$ 44,00), mais apertado que os 20%", () => {
+    expect(validateOrder(market("buy", 1), state({ tunnel }))).toEqual({ ok: true, marketPriceLimit: 4400 });
+    expect(validateOrder(market("sell", 1), state({ tunnel }))).toEqual({ ok: true, marketPriceLimit: 3600 });
+  });
+
+  it("D1: se os 20% em volta do preço exibido forem mais apertados que o túnel, valem os 20%", () => {
+    // preço exibido R$ 40,00 e referência de R$ 50,00 (túnel R$ 45,00 a R$ 55,00): os 20% (R$ 32,00 a R$ 48,00) apertam a compra,
+    // e o piso da venda é o do túnel
+    const wide = { min: 4500, max: 5500 };
+    expect(validateOrder(market("buy", 1), state({ tunnel: wide }))).toEqual({ ok: true, marketPriceLimit: 4800 });
+    expect(validateOrder(market("sell", 1), state({ tunnel: wide }))).toEqual({ ok: true, marketPriceLimit: 4500 });
+  });
+
+  it("a limitada fora do túnel mas dentro dos 20% continua aceita (ela abre o leilão no casamento)", () => {
+    expect(validateOrder(limit("buy", 1, 4500), state({ tunnel }))).toEqual({ ok: true });
+    expect(validateOrder(limit("sell", 1, 3300), state({ tunnel }))).toEqual({ ok: true });
+  });
+
+  it("sem os campos novos, o resultado é o mesmo de antes (regressão da simulação)", () => {
+    expect(validateOrder(market("buy", 1), state())).toEqual({ ok: true, marketPriceLimit: 4800 });
+    expect(validateOrder(market("sell", 1), state())).toEqual({ ok: true, marketPriceLimit: 3200 });
+    expect(validateOrder(market("buy", 1), state({ inAuction: false }))).toEqual({ ok: true, marketPriceLimit: 4800 });
+  });
+});
