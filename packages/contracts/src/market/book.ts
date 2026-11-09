@@ -63,6 +63,8 @@ export const bookViewSchema = z.strictObject({
   price: z.strictObject({
     /** O preço exibido: o último negócio (antes do primeiro, o preço do IPO). */
     displayed: z.number().int(),
+    /** O preço exibido às 0h de Brasília: a base da variação, para o site refazer a conta a cada negócio. */
+    open: z.number().int(),
     /** Variação desde o preço exibido às 0h de Brasília, em centésimos de ponto percentual (+5,00% = 500). */
     changeBp: z.number().int(),
   }),

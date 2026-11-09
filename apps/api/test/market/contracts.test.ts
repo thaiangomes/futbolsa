@@ -172,7 +172,7 @@ describe("contratos: livro e eventos do mercado", () => {
     const base = {
       ticker: "FLA3",
       seq: 42,
-      price: { displayed: 4430, changeBp: 500 },
+      price: { displayed: 4430, open: 4219, changeBp: 500 },
       matchMode: false,
       auction: null,
       market: { state: "open" as const, opensAt: "2027-04-05T13:00:00.000Z", reason: null },
