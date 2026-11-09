@@ -6,7 +6,7 @@
 export const walletChangedData = (cash: number) => ({ cash, reserved: 0, club: null, version: 1 });
 
 export const entryAddedData = (n: number) => ({
-  id: n,
+  version: n,
   at: "2027-04-01T13:00:00.000Z",
   kind: "ipo_reserve",
   ticker: null,

@@ -17,6 +17,7 @@ export const IPO_ERROR_MESSAGES = {
   negative_cash: "Seu caixa está negativo: regularize antes de fazer ofertas.",
   no_wallet: "Você não tem carteira nesta temporada: o IPO já fechou para a sua conta.",
   ipo_close_earlier: "O fechamento do IPO só pode ser adiado, nunca antecipado.",
+  ipo_close_too_late: "O fechamento do IPO não pode ir tão longe: a negociação precisa abrir antes do primeiro jogo.",
   ipo_not_ready: "O IPO ainda não pode abrir.",
 } as const;
 

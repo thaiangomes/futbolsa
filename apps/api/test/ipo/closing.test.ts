@@ -183,6 +183,22 @@ describe("fechar e adiar o IPO", () => {
     expect(await postponeLogs()).toHaveLength(before);
   });
 
+  it("limite do adiamento: a negociação precisa abrir antes do primeiro jogo (2027-04-11 às 16h de Brasília)", async () => {
+    const before = (await postponeLogs()).length;
+    // fechar em 2027-04-11 às 09h de Brasília abriria a negociação em 04-12, depois do primeiro jogo
+    const tooLate = await patch({ ipoClosesAt: "2027-04-11T12:00:00Z" });
+    expect(tooLate.statusCode).toBe(422);
+    expect(tooLate.json().code).toBe("ipo_close_too_late");
+    await expectDatesUnchanged();
+    expect(await postponeLogs()).toHaveLength(before);
+    // fechar em 04-10 às 16h (negociação em 04-11 às 10h, 6 horas antes do jogo) ainda passa
+    const ok = await patch({ ipoClosesAt: "2027-04-10T19:00:00Z" });
+    expect(ok.statusCode).toBe(200);
+    const season = await seasonRow();
+    expect(season.ipoClosesAt).toEqual(new Date("2027-04-10T19:00:00Z"));
+    expect(season.tradingOpensAt).toEqual(new Date("2027-04-11T13:00:00Z"));
+  });
+
   it("adiar depois do fechamento → ipo_closed: com a temporada em ipo_closed e com o horário passado e a tarefa ainda sem rodar", async () => {
     const before = (await postponeLogs()).length;
     // Horário de fechamento passado, temporada ainda em ipo_open (a tarefa não rodou).

@@ -54,6 +54,7 @@ type ClubOutcome = "settled" | "skipped" | "stopped";
 @Injectable()
 export class IpoSettlementService {
   private readonly logger = new Logger("IPO");
+  private lastFailures: Array<{ ticker: string; error: string }> = [];
 
   constructor(
     @Inject(DB) private readonly db: Database,
@@ -68,7 +69,10 @@ export class IpoSettlementService {
    */
   async settleDue(now: Date): Promise<IpoSettleResult> {
     const season = await currentSeason(this.db);
-    if (!season || season.status !== "ipo_closed") return { status: "idle" };
+    if (!season || season.status !== "ipo_closed") {
+      this.lastFailures = [];
+      return { status: "idle" };
+    }
 
     const listed = await this.listedClubs(season.id);
     const settled: string[] = [];
@@ -91,7 +95,19 @@ export class IpoSettlementService {
       (outcome === "settled" ? settled : skipped).push(ticker);
     }
     skipped.sort();
+    // Guarda os erros da última passada para a visão geral do admin mostrar (decisão do Thaian em 2026-11-09):
+    // um clube que liquidou sai da lista, e a lista toda some quando a passada seguinte não falha.
+    this.lastFailures = failed.map((f) => ({ ticker: f.ticker, error: f.error.message }));
     return { status: "ran", seasonId: season.id, settled, skipped, failed, pending: await this.pendingClubs(season.id) };
+  }
+
+  /**
+   * Os clubes que falharam na última passada desta instância, com a mensagem de erro, para a visão geral do
+   * admin ("a liquidação do IPO de X está com erro"). Vazia enquanto nada falhou ou depois que a passada
+   * seguinte liquida tudo; some também quando a temporada sai de `ipo_closed`.
+   */
+  failures(): ReadonlyArray<{ ticker: string; error: string }> {
+    return this.lastFailures;
   }
 
   /** Quantos clubes listados na temporada ainda estão sem `ipo_results` (0 = o IPO está liquidado). */
@@ -193,7 +209,7 @@ export class IpoSettlementService {
         ...(a.shares > 0 ? { cashDelta: -a.paid, sharesDelta: a.shares, price: result.cutPrice, costBasis: "purchase" as const } : {}),
       });
       // O dono vê o caixa, as ações do clube e a linha do extrato mudarem sem recarregar (depois do COMMIT).
-      this.events.posted(tx, posted, ticker);
+      await this.events.posted(tx, posted, ticker);
     }
     if (result.allocations.length > 0) {
       await tx.db

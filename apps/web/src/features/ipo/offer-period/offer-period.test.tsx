@@ -132,7 +132,7 @@ describe("período de ofertas (tela)", () => {
     expect(dom.$("[data-testid=caixa-livre]").textContent).toContain("R$ 100.000,00");
   });
 
-  it.each(Object.keys(IPO_ERROR_MESSAGES).filter((c) => c !== "ipo_close_earlier" && c !== "ipo_not_ready"))(
+  it.each(Object.keys(IPO_ERROR_MESSAGES).filter((c) => c !== "ipo_close_earlier" && c !== "ipo_close_too_late" && c !== "ipo_not_ready"))(
     "ipo 10, 11, 12, 14: a recusa %s mostra a mensagem do código, não o texto da resposta",
     async (code) => {
       const putBid = vi.fn(async () => {

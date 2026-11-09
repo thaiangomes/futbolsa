@@ -338,6 +338,24 @@ describe("abertura do IPO", () => {
         .set({ status: "deleted", email: null, nickname: null, deletedAt: clock.now() })
         .where(and(ne(users.status, "deleted"), ne(users.id, admin.id)));
 
+    it("abertura atrasada grava o horário real em ipo_opens_at; no horário (ou até 5 minutos depois) fica o previsto", async () => {
+      await retireAccounts();
+      const late = await prepareSeason(2090);
+      clock.set(new Date(late.dates.opensAt + 3 * 60 * MINUTE));
+      expect(await opening.openIfDue(clock.now())).toMatchObject({ status: "opened", seasonId: late.seasonId });
+      const lateRow = await seasonRow(late.seasonId);
+      expect(lateRow.ipoOpensAt).toEqual(new Date(late.dates.opensAt + 3 * 60 * MINUTE));
+      // o fechamento e a negociação seguem o primeiro jogo, como antes
+      expect(lateRow.ipoClosesAt).toEqual(new Date(late.dates.closesAt));
+      expect(lateRow.tradingOpensAt).toEqual(new Date(late.dates.tradingOpensAt));
+
+      await retireAccounts();
+      const onTime = await prepareSeason(2091);
+      clock.set(new Date(onTime.dates.opensAt + 40_000)); // a tarefa pegou no primeiro minuto
+      expect(await opening.openIfDue(clock.now())).toMatchObject({ status: "opened" });
+      expect((await seasonRow(onTime.seasonId)).ipoOpensAt).toEqual(new Date(onTime.dates.opensAt));
+    });
+
     it("concorrência 6: 30 POST /me durante a abertura, 20 vezes: toda conta com exatamente uma carteira de R$ 100.000,00", async () => {
       const random = rng(6);
       for (let round = 0; round < 20; round++) {

@@ -118,6 +118,29 @@ describe("adiar o fechamento do IPO (tela)", () => {
     expect(dom.$("[data-testid=adiado]")).toBeNull();
   });
 
+  it("limite: fechar a ponto de a negociação abrir só depois do primeiro jogo mostra a mensagem de ipo_close_too_late", async () => {
+    await cardFor(fake({}));
+    // 2027-04-10 às 16h: negociação em 04-11 às 10h, antes do jogo das 16h: sem aviso
+    await dom.type("#novo-fechamento", "2027-04-10T16:00");
+    expect(dom.$("[data-testid=tarde-demais]")).toBeNull();
+    expect(dom.$("[data-testid=nova-abertura]")).not.toBeNull();
+    // 2027-04-11 às 09h: negociação em 04-12, depois do jogo
+    await dom.type("#novo-fechamento", "2027-04-11T09:00");
+    expect(dom.$("[data-testid=tarde-demais]").textContent).toBe(IPO_ERROR_MESSAGES.ipo_close_too_late);
+    expect(dom.$("[data-testid=nova-abertura]")).toBeNull();
+  });
+
+  it("a API recusa com ipo_close_too_late e a tela mostra a mensagem do contrato", async () => {
+    const patchSeason = vi.fn(async () => {
+      throw new ApiError(422, "ipo_close_too_late", "TEXTO DO SERVIDOR");
+    });
+    // sem firstKickoff na tela (aviso antecipado desligado), a recusa da API aparece do mesmo jeito
+    await cardFor(fake({ patchSeason }), { ...open, firstKickoff: null });
+    await dom.type("#novo-fechamento", "2027-04-11T09:00");
+    await dom.click(dom.button("Adiar o fechamento"));
+    expect(dom.$("[role=alert]").textContent).toBe(IPO_ERROR_MESSAGES.ipo_close_too_late);
+  });
+
   it("adiar depois do fechamento (ipo_closed) mostra a mensagem do código", async () => {
     const patchSeason = vi.fn(async () => {
       throw new ApiError(409, "ipo_closed", "x");

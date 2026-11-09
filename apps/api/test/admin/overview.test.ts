@@ -1,9 +1,10 @@
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { overviewSchema } from "@futbolsa/contracts";
 import { FixedClock } from "../../src/infra/clock/index.js";
 import { matches, seasonClubs, seasonCups, seasons, standings } from "../../src/infra/db/schema/index.js";
+import { IpoSettlementService } from "../../src/modules/ipo/index.js";
 import { createAccount, type TestAccount } from "../support/accounts.js";
 import { expectAdminOnly } from "../support/admin-routes.js";
 import { createTestApp } from "../support/app.js";
@@ -46,6 +47,7 @@ describe("visão geral do admin", () => {
       suspendedClubs: [],
       marketSuspended: false,
       ipoBlockers: [],
+      ipoSettlementFailures: [],
     });
 
     // jogo pendente
@@ -122,5 +124,17 @@ describe("visão geral do admin", () => {
     await setSeason({ status: "ipo_open" });
     expect((await overview()).ipoBlockers).toEqual([]);
     await setSeason({ status: "preparing", offerSize: null, firstKickoff: null });
+  });
+
+  it("liquidação do IPO com erro: a visão geral mostra o clube e a mensagem, e some quando a passada seguinte não falha", async () => {
+    const settlement = app.get(IpoSettlementService);
+    expect((await overview()).ipoSettlementFailures).toEqual([]);
+    const spy = vi.spyOn(settlement, "failures").mockReturnValue([{ ticker: "FLA3", error: "reserva da oferta 7 não cobre o pagamento" }]);
+    try {
+      expect((await overview()).ipoSettlementFailures).toEqual([{ ticker: "FLA3", error: "reserva da oferta 7 não cobre o pagamento" }]);
+    } finally {
+      spy.mockRestore();
+    }
+    expect((await overview()).ipoSettlementFailures).toEqual([]);
   });
 });

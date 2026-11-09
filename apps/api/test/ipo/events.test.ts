@@ -76,8 +76,9 @@ describe("eventos de tempo real do IPO", () => {
     expect(walletChangedEventSchema.parse(f[0]!.data)).toMatchObject({ cash: R(100_000), reserved: R(60_000), club: null });
     const entry = entryAddedEventSchema.parse(f[1]!.data);
     expect(entry).toMatchObject({ kind: "ipo_reserve", cashDelta: 0, reservedCashDelta: R(60_000), sharesDelta: 0, cashAfter: R(100_000) });
-    // a versão do caixa é o id da linha nova do extrato
-    expect((f[0]!.data as { version: number }).version).toBe(entry.id);
+    // a versão é a contagem de linhas do extrato desta carteira (a linha `initial` e a desta oferta), a mesma nos dois eventos
+    expect(entry.version).toBe(2);
+    expect((f[0]!.data as { version: number }).version).toBe(2);
     expect(others).toEqual([]);
   });
 
@@ -95,12 +96,19 @@ describe("eventos de tempo real do IPO", () => {
   it("editar e cancelar avisam com o reservado novo", async () => {
     const mine = watch(meChannel(ana.id));
     await bids.place(anaWallet, "FLA3", { quantity: 1000, maxPrice: R(38), expect: "existing" });
+    // operações de outro jogador no meio não mexem na sequência da Ana: a versão é por carteira
+    await bids.place(brunoWallet, "FLA3", { quantity: 10, maxPrice: R(38), expect: "new" });
+    await bids.place(brunoWallet, "FLA3", { quantity: 20, maxPrice: R(38), expect: "existing" });
+    await bids.cancel(brunoWallet, "FLA3");
     await bids.cancel(anaWallet, "FLA3");
     const reserved = frames(mine)
       .filter((x) => x.type === "wallet.changed")
       .map((x) => (x.data as { reserved: number }).reserved);
     expect(reserved).toEqual([R(38_000), 0]);
     expect(frames(mine).filter((x) => x.type === "entry.added")).toHaveLength(2);
+    // a oferta da Ana foi a 2ª linha; a edição e o cancelamento são a 3ª e a 4ª, sem salto por causa do Bruno
+    expect(frames(mine).filter((x) => x.type === "wallet.changed").map((x) => (x.data as { version: number }).version)).toEqual([3, 4]);
+    expect(frames(mine).filter((x) => x.type === "entry.added").map((x) => (x.data as { version: number }).version)).toEqual([3, 4]);
   });
 
   it("no fechamento, a temporada avisa no canal season, só quando fecha", async () => {

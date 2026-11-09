@@ -363,6 +363,9 @@ describe("liquidação do IPO sob concorrência, contra o Postgres", () => {
           expect(first.skipped).toEqual([]);
           expect(first.failed.map((f) => f.ticker)).toEqual(rest);
           expect(first.pending).toBe(rest.length);
+          // a visão geral do admin mostra os clubes que falharam, com a mensagem do erro
+          expect(failingPass.failures().map((f) => f.ticker)).toEqual(rest);
+          expect(failingPass.failures().every((f) => f.error.length > 0)).toBe(true);
           // Cada falha foi registrada no log, com o clube; nenhuma passou em silêncio.
           expect(logged).toHaveBeenCalledTimes(rest.length);
           rest.forEach((ticker, i) => expect(String(logged.mock.calls[i]![0])).toContain(ticker));
