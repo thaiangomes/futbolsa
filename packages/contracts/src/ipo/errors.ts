@@ -21,3 +21,21 @@ export const IPO_ERROR_MESSAGES = {
 } as const;
 
 export type IpoErrorCode = keyof typeof IPO_ERROR_MESSAGES;
+
+/**
+ * Por que a tarefa não abriu o IPO no horário (proposta 6 do Plano do IPO): a visão geral do admin
+ * mostra a lista. Faltando uma condição, as ofertas não abrem; abrem no minuto seguinte à correção,
+ * com o fechamento mantido 7 dias antes do primeiro jogo, e nunca depois desse fechamento.
+ */
+export const IPO_BLOCKER_MESSAGES = {
+  offer_size_missing: "O IPO não abriu: falta definir o tamanho da oferta.",
+  first_kickoff_missing: "O IPO não abriu: falta a data do primeiro jogo da 1ª rodada.",
+  clubs_missing: "O IPO não abriu: falta confirmar a lista de clubes (os 20 da Série A com a colocação anterior).",
+  cups_not_confirmed: "O IPO não abriu: falta confirmar a tabela de alguma copa.",
+  past_close: "O IPO não abriu e o horário de fechamento já passou: mude a data do primeiro jogo.",
+} as const;
+
+export type IpoBlocker = keyof typeof IPO_BLOCKER_MESSAGES;
+
+/** Os motivos na ordem em que a tela os mostra. */
+export const IPO_BLOCKERS = Object.keys(IPO_BLOCKER_MESSAGES) as [IpoBlocker, ...IpoBlocker[]];
