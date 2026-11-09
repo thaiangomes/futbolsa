@@ -183,6 +183,23 @@ describe("registro do admin (record)", () => {
     );
     expect(await rowsOf(admin.id)).toHaveLength(1);
   });
+
+  it("nenhum e-mail aparece no motivo: o admin recebe 400 com a explicação e nada é gravado", async () => {
+    const admin = await createAccount(database.db, { role: "admin" });
+    for (const [action, reason] of [
+      ["season.update", "pedido de ana@exemplo.com por fora"],
+      ["suspension.set", "denúncia enviada por bia@exemplo.com.br"],
+    ] as const) {
+      await expect(
+        withTransaction(database.db, (tx) => log.record(tx, { actorId: admin.id, action, reason })),
+        reason,
+      ).rejects.toMatchObject({ code: "reason_has_email", status: 400, message: ADMIN_ERROR_MESSAGES.reason_has_email });
+    }
+    expect(await rowsOf(admin.id)).toHaveLength(0);
+    // um apelido com arroba não é e-mail
+    await withTransaction(database.db, (tx) => log.record(tx, { actorId: admin.id, action: "season.update", reason: "pedido de @ana_10" }));
+    expect(await rowsOf(admin.id)).toHaveLength(1);
+  });
 });
 
 describe("registro do admin (listLog)", () => {
