@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, notInArray, sql } from "drizzle-orm";
 import {
   ADMIN_ERROR_MESSAGES,
   COMMON_ERROR_MESSAGES,
@@ -166,10 +166,16 @@ export class SeasonsService {
       if (ids.some((clubId) => !byId.get(clubId)?.ticker)) throw invalid("clubs"); // todo clube listado tem ticker
 
       const before = await this.clubsOf(tx.db, id);
-      await tx.db.delete(seasonClubs).where(eq(seasonClubs.seasonId, id));
-      await tx.db.insert(seasonClubs).values(
-        body.clubs.map((c) => ({ seasonId: id, clubId: c.clubId, division: c.division, prevPlacement: c.prevPlacement })),
-      );
+      // Só sai quem deixou a lista; quem continua muda apenas a divisão e a colocação anterior. Apagar e
+      // inserir de novo zeraria a suspensão (`suspended_reason`), a banda e os preços de quem já tinha.
+      await tx.db.delete(seasonClubs).where(and(eq(seasonClubs.seasonId, id), notInArray(seasonClubs.clubId, ids)));
+      await tx.db
+        .insert(seasonClubs)
+        .values(body.clubs.map((c) => ({ seasonId: id, clubId: c.clubId, division: c.division, prevPlacement: c.prevPlacement })))
+        .onConflictDoUpdate({
+          target: [seasonClubs.seasonId, seasonClubs.clubId],
+          set: { division: sql`excluded.division`, prevPlacement: sql`excluded.prev_placement` },
+        });
       const after = await this.clubsOf(tx.db, id);
       const compact = (rows: typeof after) => rows.map((r) => ({ clubId: r.club.id, division: r.division, prevPlacement: r.prevPlacement }));
       await this.log.record(tx, {
