@@ -79,6 +79,14 @@ export const trades = futbolsa.table(
       .notNull()
       .references(() => wallets.id),
     withHouse: boolean("with_house").notNull().default(false),
+    /**
+     * O preço exibido antes do negócio (nos negócios de um leilão, o de antes do leilão, em todos). O alerta de
+     * trapaça do admin conta o negócio que sai 5% ou mais longe dele. `trades` não se edita: a coluna nasce com
+     * o primeiro negócio (P12 do Plano do livro de ofertas e formador).
+     */
+    priceBefore: money("price_before").notNull(),
+    /** O negócio saiu no fim de um leilão do túnel de preço. */
+    inAuction: boolean("in_auction").notNull(),
   },
   (t) => [
     index("trades_club_at_idx").on(t.clubId, t.at),
