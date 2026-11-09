@@ -188,3 +188,18 @@ body{margin:0}
 .ipo-result{grid-template-columns:190px minmax(0,2.6fr) minmax(0,1.4fr)}
 .ipo-cells-4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .ipo-cells-4 .ipo-v{font-size:14px}
+/* IPO no celular (390 px): cartões empilhados, formulário em coluna e alvos de toque grandes */
+@media (max-width:760px){
+  .ipo-list{gap:10px}
+  .ipo-card{grid-template-columns:minmax(0,1fr);gap:12px;padding:14px}
+  .ipo-result{grid-template-columns:minmax(0,1fr)}
+  .ipo-cells,.ipo-cells-4{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .ipo-cells .ipo-cell:last-child:nth-child(odd){grid-column:1/-1}
+  .ipo-v{overflow-wrap:anywhere}
+  .ipo-actions{justify-content:stretch}
+  .ipo-actions .btn{flex:1}
+  .ipo-form{grid-template-columns:minmax(0,1fr)}
+  .ipo-form .input{font-size:16px}
+  .ipo-form-actions .btn{flex:1}
+  .ipo-touch{min-height:44px}
+}
