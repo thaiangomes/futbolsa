@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { ClubRef, CupView, SeasonView } from "@futbolsa/contracts";
 import type { AdminApi } from "./api";
 import { COMPETITION_LABELS, formatCents, formatInstant } from "./forms";
+import { brasiliaInputToIso, isoToBrasiliaInput } from "./season/dates";
 import { PostponeIpo } from "./season/postpone-ipo";
 import { Card, ErrorNote, LoadState, useAction, useLoader } from "./ui";
 
@@ -12,12 +13,14 @@ const opened = (s: SeasonView) => s.status !== "preparing";
 /** Oferta e data do primeiro jogo; as datas do IPO saem dela. Nada muda depois da abertura do IPO. */
 function OfferCard({ season, admin, onDone }: { season: SeasonView; admin: AdminApi; onDone(): Promise<void> }) {
   const [offer, setOffer] = useState(season.offerSize?.toString() ?? "");
-  const [kickoff, setKickoff] = useState(season.firstKickoff ? season.firstKickoff.slice(0, 16) : "");
+  // O campo é em hora de Brasília (-03:00), na ida e na volta, como o de adiar o fechamento do IPO.
+  const [kickoff, setKickoff] = useState(season.firstKickoff ? isoToBrasiliaInput(season.firstKickoff) : "");
   const action = useAction();
   const locked = opened(season);
   const offerOk = /^[1-9]\d*$/.test(offer);
+  const kickoffIso = brasiliaInputToIso(kickoff);
   const save = async () => {
-    if (await action.run(() => admin.patchSeason(season.id, { offerSize: Number(offer), ...(kickoff ? { firstKickoff: new Date(`${kickoff}:00Z`).toISOString() } : {}) }))) await onDone();
+    if (await action.run(() => admin.patchSeason(season.id, { offerSize: Number(offer), ...(kickoffIso ? { firstKickoff: kickoffIso } : {}) }))) await onDone();
   };
   return (
     <Card title="Oferta e datas do IPO">

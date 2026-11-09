@@ -27,6 +27,9 @@ export type ClubRef = z.infer<typeof clubRefSchema>;
 /** Erros das rotas do admin, com a mensagem que a tela mostra. */
 export const ADMIN_ERROR_MESSAGES = {
   reason_required: "Explique o motivo: ele fica no registro do admin.",
+  import_failed: "A fonte de resultados falhou nesta importação. Tente de novo em instantes; o detalhe ficou no log do servidor.",
+  reason_has_email:
+    "Tire o e-mail do motivo: o registro do admin não se apaga e não guarda e-mail. Use o apelido do jogador.",
   season_closed: "A temporada está encerrada: os resultados dela não aceitam mais correção.",
   ipo_opened: "O IPO já abriu: a oferta, a lista de clubes e as datas não mudam mais.",
   season_locked: "Os valores da temporada foram travados na abertura do IPO e não mudam mais.",

@@ -1,11 +1,13 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { type CompetitionCode, type ImportKind, type RunImportBody } from "@futbolsa/contracts";
+import { ADMIN_ERROR_MESSAGES, type CompetitionCode, type ImportKind, type RunImportBody } from "@futbolsa/contracts";
 import { Clock } from "../../../infra/clock/index.js";
-import { DB, type Database } from "../../../infra/db/index.js";
+import { DB, type Database, withTransaction } from "../../../infra/db/index.js";
 import { matches } from "../../../infra/db/schema/index.js";
+import { DomainError } from "../../../infra/http/index.js";
 import { COMPETITIONS } from "../../../infra/db/schema/values.js";
 import { currentSeason, type SeasonRow } from "../current-season.js";
+import { AdminLogService } from "../log/index.js";
 import { StandingsService } from "../standings/standings.service.js";
 import { ImportService, type ImportReport } from "./import.service.js";
 import { ResultSourceRegistry } from "./sources/registry.js";
@@ -40,6 +42,7 @@ export class ImportRunner {
     private readonly imports: ImportService,
     private readonly standings: StandingsService,
     private readonly sources: ResultSourceRegistry,
+    private readonly log: AdminLogService,
   ) {}
 
   /** Calendário: roda nas competições cuja última importação tem mais de 24 horas (ou nunca houve). */
@@ -75,10 +78,37 @@ export class ImportRunner {
     });
   }
 
-  /** `POST /admin/imports/run`: importa na hora, sem esperar os 15 minutos. Devolve o erro da fonte em vez de lançar. */
-  async runNow(body: RunImportBody): Promise<ImportReport[]> {
+  /**
+   * `POST /admin/imports/run`: importa na hora, sem esperar os 15 minutos. Devolve o erro da fonte em vez de lançar.
+   * Diferente das importações agendadas, é uma ação do admin: vai para o registro (Admin, critério 33) com o pedido
+   * e o resumo de cada etapa, depois de importar (cada etapa grava na transação dela).
+   */
+  async runNow(actorId: string, body: RunImportBody): Promise<ImportReport[]> {
     const season = await currentSeason(this.db);
-    if (!season) return [];
+    const reports = season ? await this.runNowIn(season, body) : [];
+    await withTransaction(this.db, (tx) =>
+      this.log.record(tx, {
+        actorId,
+        action: "import.run",
+        ...(season ? { targetType: "season", targetId: String(season.id) } : {}),
+        after: {
+          request: { competition: body.competition ?? null, kind: body.kind ?? null },
+          reports: reports.map((r) => ({
+            competition: r.competition,
+            kind: r.kind,
+            inserted: r.inserted,
+            updated: r.updated,
+            unchanged: r.unchanged,
+            clubsCreated: r.clubsCreated,
+            error: r.error?.code ?? null,
+          })),
+        },
+      }),
+    );
+    return reports;
+  }
+
+  private async runNowIn(season: SeasonRow, body: RunImportBody): Promise<ImportReport[]> {
     const competitions = body.competition ? [body.competition] : COMPETITIONS;
     const now = this.clock.now();
     const reports: ImportReport[] = [];
@@ -127,9 +157,14 @@ export class ImportRunner {
     try {
       return await run();
     } catch (error) {
-      const message = (error as Error).message;
-      this.logger.error(`${kind} de ${competition} falhou: ${message}`);
-      return { competition, kind, inserted: 0, updated: 0, unchanged: 0, clubsCreated: [], error: message };
+      // O detalhe (resposta da fonte, endereço, SQL) fica só no log do servidor; o relatório leva código e
+      // mensagem genérica, como as respostas de erro da API. Recusa nossa (DomainError) já tem mensagem pública.
+      this.logger.error(`${kind} de ${competition} falhou: ${(error as Error).message}`, (error as Error).stack);
+      const reported =
+        error instanceof DomainError
+          ? { code: error.code, message: error.message }
+          : { code: "import_failed", message: ADMIN_ERROR_MESSAGES.import_failed };
+      return { competition, kind, inserted: 0, updated: 0, unchanged: 0, clubsCreated: [], error: reported };
     }
   }
 

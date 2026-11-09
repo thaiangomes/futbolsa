@@ -148,7 +148,7 @@ export function MatchesScreen({ admin }: { admin: AdminApi }) {
     const ok = await importing.run(async () => {
       const res = await admin.runImport(competition ? { competition } : {});
       const failed = res.reports.filter((r) => r.error);
-      setReport(failed.length ? `Falhou: ${failed.map((r) => `${COMPETITION_LABELS[r.competition]} (${r.error})`).join("; ")}` : `Importado: ${res.reports.length} etapa(s) sem erro.`);
+      setReport(failed.length ? `Falhou: ${failed.map((r) => `${COMPETITION_LABELS[r.competition]} (${r.error!.message})`).join("; ")}` : `Importado: ${res.reports.length} etapa(s) sem erro.`);
     });
     if (ok) await reloadAll();
   };

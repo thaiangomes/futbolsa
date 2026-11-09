@@ -1,9 +1,10 @@
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { CompetitionCode } from "@futbolsa/contracts";
+import { Logger } from "@nestjs/common";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { ADMIN_ERROR_MESSAGES, type CompetitionCode } from "@futbolsa/contracts";
 import { FixedClock } from "../../src/infra/clock/index.js";
-import { matches, standings } from "../../src/infra/db/schema/index.js";
+import { adminLog, matches, standings } from "../../src/infra/db/schema/index.js";
 import { AdminLogService } from "../../src/modules/admin/log/index.js";
 import { ImportRunner } from "../../src/modules/admin/results/import-runner.js";
 import { ImportService } from "../../src/modules/admin/results/import.service.js";
@@ -19,6 +20,8 @@ import { useTestDatabase } from "../support/db.js";
 import { seedSeason } from "../support/fixtures.js";
 
 const HOUR = 3_600_000;
+/** O relatório mostra só o código e a mensagem genérica; o texto da fonte fica no log do servidor. */
+const IMPORT_FAILED = { code: "import_failed", message: ADMIN_ERROR_MESSAGES.import_failed };
 
 /** Uma fonte de mentira: guarda as chamadas e devolve o que o teste mandou. */
 class FakeSource implements ResultSource {
@@ -72,8 +75,9 @@ describe("tarefas de resultados", () => {
     ({ seasonId } = await seedSeason(database.db));
     const events = new MatchesEvents();
     const imports = new ImportService(database.db, clock, events, new NoopMarketPort());
-    const standingsService = new StandingsService(database.db, clock, new AdminLogService(clock, database.db));
-    runner = new ImportRunner(database.db, clock, imports, standingsService, new ResultSourceRegistry(() => source));
+    const log = new AdminLogService(clock, database.db);
+    const standingsService = new StandingsService(database.db, clock, log);
+    runner = new ImportRunner(database.db, clock, imports, standingsService, new ResultSourceRegistry(() => source), log);
   });
   beforeEach(async () => {
     source.matchCalls.length = 0;
@@ -148,7 +152,7 @@ describe("tarefas de resultados", () => {
     source.failFor.add("brasileirao-a");
     source.results.set("libertadores", [game("l1", "libertadores", new Date(clock.now().getTime() - 3 * HOUR), { status: "finished", homeGoals: 1, awayGoals: 0 })]);
     const reports = await runner.runScores();
-    expect(reports.find((r) => r.competition === "brasileirao-a")).toMatchObject({ error: expect.stringContaining("fora do ar") });
+    expect(reports.find((r) => r.competition === "brasileirao-a")).toMatchObject({ error: IMPORT_FAILED });
     expect(reports.find((r) => r.competition === "libertadores")).toMatchObject({ error: null, updated: 1 });
     expect(await database.db.select().from(matches)).toHaveLength(2);
     // a classificação não é chamada depois de uma falha dos placares
@@ -164,13 +168,18 @@ describe("tarefas de resultados", () => {
   });
 
   it("importar na hora força a competição pedida e devolve o erro da fonte em vez de lançar", async () => {
+    const admin = await createAccount(database.db, { role: "admin" });
+    const serverLog = vi.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
     source.failFor.add("brasileirao-b");
-    const reports = await runner.runNow({ competition: "brasileirao-b", kind: "calendar" });
+    const reports = await runner.runNow(admin.id, { competition: "brasileirao-b", kind: "calendar" });
     expect(reports).toEqual([
-      expect.objectContaining({ competition: "brasileirao-b", kind: "calendar", error: expect.stringContaining("fora do ar") }),
+      expect.objectContaining({ competition: "brasileirao-b", kind: "calendar", error: IMPORT_FAILED }),
     ]);
+    // o detalhe da fonte vai só para o log do servidor
+    expect(serverLog).toHaveBeenCalledWith(expect.stringContaining("fonte fora do ar em brasileirao-b"), expect.any(String));
+    serverLog.mockRestore();
     source.failFor.clear();
-    const ok = await runner.runNow({ competition: "copa-do-brasil", kind: "scores" });
+    const ok = await runner.runNow(admin.id, { competition: "copa-do-brasil", kind: "scores" });
     expect(ok.map((r) => r.kind)).toEqual(["scores"]);
     expect(source.matchCalls.at(-1)!.range).toBeDefined();
   });
@@ -229,7 +238,8 @@ describe("POST /admin/imports/run", () => {
       payload: { competition: "sulamericana" },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().reports).toEqual([expect.objectContaining({ competition: "sulamericana", error: expect.stringContaining("fora do ar") })]);
+    expect(res.json().reports).toEqual([expect.objectContaining({ competition: "sulamericana", error: IMPORT_FAILED })]);
+    expect(res.body).not.toContain("fora do ar");
   });
 
   it("o corpo vazio importa todas as competições", async () => {
@@ -239,6 +249,31 @@ describe("POST /admin/imports/run", () => {
     expect(res.statusCode).toBe(200);
     const competitions = new Set((res.json().reports as Array<{ competition: string }>).map((r) => r.competition));
     expect(competitions.size).toBe(5);
+  });
+
+  it("admin 33: importar na hora fica no registro do admin, com o pedido e o resumo de cada etapa", async () => {
+    const admin = await createAccount(database.db, { role: "admin" });
+    source.failFor.add("libertadores");
+    const res = await app.inject({
+      method: "POST",
+      url: "/admin/imports/run",
+      headers: bearer(admin.token),
+      payload: { competition: "libertadores", kind: "calendar" },
+    });
+    source.failFor.clear();
+    expect(res.statusCode).toBe(200);
+    const rows = await database.db.select().from(adminLog).where(eq(adminLog.actorId, admin.id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      action: "import.run",
+      targetType: "season",
+      before: null,
+      after: {
+        request: { competition: "libertadores", kind: "calendar" },
+        reports: [expect.objectContaining({ competition: "libertadores", kind: "calendar", inserted: 0, error: "import_failed" })],
+      },
+    });
+    expect(rows[0]!.targetId).toMatch(/^\d+$/);
   });
 
   it("não existe jogo cadastrado fora da temporada: nada foi gravado", async () => {

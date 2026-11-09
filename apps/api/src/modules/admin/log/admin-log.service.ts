@@ -57,6 +57,10 @@ export class AdminLogService {
     }
     // O registro não se apaga, e a exclusão de conta precisa apagar o e-mail: nenhum e-mail entra
     // no antes nem no depois. Quem chama guarda ids, apelidos ou o e-mail embaralhado.
+    // O motivo é texto livre do admin: e-mail ali é engano de quem digitou, então volta 400 com a explicação.
+    if (reason && containsEmail(reason)) {
+      throw new DomainError("reason_has_email", 400, ADMIN_ERROR_MESSAGES.reason_has_email);
+    }
     if (containsEmail(entry.before) || containsEmail(entry.after)) {
       throw new Error(
         `O registro do admin não guarda e-mail (ação "${entry.action}"): use o id, o apelido ou o e-mail embaralhado por emailFingerprint.`,

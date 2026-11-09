@@ -190,4 +190,17 @@ describe("regras e copas da temporada", () => {
   it("temporada que não existe volta 404", async () => {
     expect((await call("GET", "/admin/seasons/999999/rules")).statusCode).toBe(404);
   });
+
+  it("duas primeiras consultas ao mesmo tempo dão 200 com os mesmos valores, gravados uma vez só (20 repetições)", async () => {
+    for (let i = 0; i < 20; i++) {
+      // temporada antiga, sem valores: as duas consultas tentam criá-los ao mesmo tempo
+      const [season] = await database.db.insert(seasons).values({ year: 2100 + i, status: "closed" }).returning();
+      const url = `/admin/seasons/${season!.id}/rules`;
+      const [first, second] = await Promise.all([call("GET", url), call("GET", url)]);
+      expect([first.statusCode, second.statusCode], `repetição ${i}: ${first.body} ${second.body}`).toEqual([200, 200]);
+      expect(second.json()).toEqual(first.json());
+      expect(await database.db.select().from(seasonRules).where(eq(seasonRules.seasonId, season!.id))).toHaveLength(1);
+      expect(await database.db.select().from(seasonCups).where(eq(seasonCups.seasonId, season!.id))).toHaveLength(3);
+    }
+  });
 });

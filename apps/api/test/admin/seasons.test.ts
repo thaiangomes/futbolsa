@@ -152,6 +152,21 @@ describe("preparar a temporada", () => {
     await database.db.delete(clubs).where(eq(clubs.id, other!.id));
   });
 
+  it("confirmar de novo não mexe na suspensão nem nos preços de um clube que continua listado", async () => {
+    await call("PUT", `/admin/seasons/${seasonId}/clubs`, { clubs: twenty() });
+    const fla = clubIds.get("FLA3")!;
+    const kept = { suspendedReason: "estádio interditado", bandCenter: 2000, bandFloor: 1500, bandCeiling: 2500, ipoPrice: 2100, totalShares: 3000, lastPrice: 2150 };
+    await database.db.update(seasonClubs).set(kept).where(eq(seasonClubs.clubId, fla));
+    // a nova lista muda a divisão e a colocação dos outros, e o FLA3 continua nela
+    const next = twenty().map((c, i) => (i === 0 ? c : { ...c, prevPlacement: 21 - i }));
+    const res = await call("PUT", `/admin/seasons/${seasonId}/clubs`, { clubs: next });
+    expect(res.statusCode).toBe(200);
+    const [row] = await database.db.select().from(seasonClubs).where(eq(seasonClubs.clubId, fla));
+    expect(row).toMatchObject({ ...kept, division: "A", prevPlacement: 1 });
+    const [moved] = await database.db.select().from(seasonClubs).where(eq(seasonClubs.clubId, next[1]!.clubId));
+    expect(moved!.prevPlacement).toBe(20);
+  });
+
   it("os 20 clubes da Série A são exigidos, sem repetir", async () => {
     const list = twenty();
     const nineteen = await call("PUT", `/admin/seasons/${seasonId}/clubs`, { clubs: list.slice(0, 19) });
