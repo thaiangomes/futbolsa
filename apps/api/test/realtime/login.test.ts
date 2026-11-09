@@ -12,6 +12,7 @@ import { createAccount } from "../support/accounts.js";
 import { strangerKeys, TOKEN_T0, tokenFor } from "../support/auth.js";
 import { useTestDatabase } from "../support/db.js";
 import { startApp, TestClient, WEB_ORIGIN, type RunningApp } from "../support/ws-client.js";
+import { entryAddedData, walletChangedData } from "../support/events.js";
 
 /** O login do WebSocket de ponta a ponta: token do Supabase de teste, banco e contas de verdade. */
 describe("login do tempo real com as contas da F5 (T12)", () => {
@@ -44,7 +45,7 @@ describe("login do tempo real com as contas da F5 (T12)", () => {
       data: { role: "player" },
     });
     expect(await client.ask({ type: "subscribe", channel: "me" })).toMatchObject({ type: "subscribed" });
-    bus.publish(meChannel(ana.id), "wallet.changed", { cash: 100_000_00 });
+    bus.publish(meChannel(ana.id), "wallet.changed", walletChangedData(100_000_00));
     expect(await client.next()).toMatchObject({ type: "wallet.changed", channel: "me", data: { cash: 100_000_00 } });
   });
 
@@ -60,7 +61,7 @@ describe("login do tempo real com as contas da F5 (T12)", () => {
     const client = await open();
     expect(await client.ask({ type: "auth", token: bloq.token })).toMatchObject({ data: { role: "player" } });
     expect(await client.ask({ type: "subscribe", channel: "me" })).toMatchObject({ type: "subscribed" });
-    bus.publish(meChannel(bloq.id), "entry.added", { n: 1 });
+    bus.publish(meChannel(bloq.id), "entry.added", entryAddedData(1));
     expect(await client.next()).toMatchObject({ type: "entry.added" });
   });
 

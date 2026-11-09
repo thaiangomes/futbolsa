@@ -4,6 +4,7 @@ import { RealtimeAuthenticator } from "../../src/infra/realtime/authenticator.js
 import { EventBus } from "../../src/infra/realtime/bus.js";
 import { FakeRealtimeAuthenticator } from "../../src/infra/realtime/fake-authenticator.js";
 import { startApp, TestClient, WEB_ORIGIN, type RunningApp } from "../support/ws-client.js";
+import { seasonStatusData } from "../support/events.js";
 
 describe("protocolo do gateway (T5)", () => {
   let running: RunningApp;
@@ -41,7 +42,7 @@ describe("protocolo do gateway (T5)", () => {
         expect(reply).toMatchObject({ type: "subscribed", channel: "system", seq: 0, data: { channel, mode: "live" } });
         expect(reply.data.seq).toBe(bus.currentSeq(channel as "season"));
       }
-      bus.publish("season", "season.status", { status: "ipo_open" });
+      bus.publish("season", "season.status", seasonStatusData("ipo_open"));
       bus.publish("prices", "price", { ticker: "FLA3", price: 100 });
       bus.publish("rankings", "rankings.live", { top: [] });
       bus.publish("club:FLA3", "trade", { id: "n1" });

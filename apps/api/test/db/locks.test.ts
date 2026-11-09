@@ -197,6 +197,17 @@ describe("T6: travas em ordem", () => {
     });
   });
 
+  it("sabe se a temporada está travada: antes da trava não, depois sim (compartilhada ou exclusiva), outra temporada não", async () => {
+    for (const mode of ["share", "update"] as const) {
+      await withTransaction(t.db, async (tx) => {
+        expect(tx.locks.isSeasonLocked(seasonId)).toBe(false);
+        await lockSeason(tx, seasonId, mode);
+        expect(tx.locks.isSeasonLocked(seasonId)).toBe(true);
+        expect(tx.locks.isSeasonLocked(seasonId + 1)).toBe(false);
+      });
+    }
+  });
+
   it("F12, P3: eventos de pagamento em ordem de id, entre os clubes e as carteiras", async () => {
     await withTransaction(t.db, async (tx) => {
       await lockSeason(tx, seasonId, "share");

@@ -4,11 +4,13 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { FixedClock } from "../../src/infra/clock/index.js";
 import { clubs, ipoBids, seasonClubs, seasons, walletEntries, wallets } from "../../src/infra/db/schema/index.js";
 import { DomainError } from "../../src/infra/http/index.js";
-import { IpoBidsService } from "../../src/modules/ipo/index.js";
+import { IpoBidsService, IpoEvents } from "../../src/modules/ipo/index.js";
 import { PortfolioLedger } from "../../src/modules/portfolio/index.js";
 import { useTestDatabase } from "../support/db.js";
 import { INITIAL_CASH, openPlayerWallets, rng, seedSeason } from "../support/fixtures.js";
 import { assertLedgerConsistent } from "../support/invariants.js";
+
+const noEvents = { seasonStatus: () => {}, posted: () => {} } as unknown as IpoEvents;
 
 /** Cada cenário roda 20 vezes, cada vez com carteiras novas, como os testes das travas da F4. */
 const ROUNDS = 20;
@@ -33,7 +35,7 @@ describe("ofertas do IPO sob concorrência, contra o Postgres", () => {
       .set({ status: "ipo_open", ipoOpensAt: new Date("2027-03-28T19:00:00Z"), ipoClosesAt: new Date("2027-04-04T19:00:00Z") })
       .where(eq(seasons.id, seasonId));
     // O serviço como a aplicação monta, com o pool de conexões do arquivo: cada transação pega a sua.
-    bids = new IpoBidsService(t.db, new PortfolioLedger(), clock);
+    bids = new IpoBidsService(t.db, new PortfolioLedger(), clock, noEvents);
   });
 
   /** O código da recusa de regra; qualquer outro erro (deadlock, trava fora de ordem) faz o teste falhar. */

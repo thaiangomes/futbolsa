@@ -4,6 +4,7 @@ import { RealtimeAuthenticator } from "../../src/infra/realtime/authenticator.js
 import { EventBus, meChannel } from "../../src/infra/realtime/bus.js";
 import { FakeRealtimeAuthenticator } from "../../src/infra/realtime/fake-authenticator.js";
 import { startApp, TestClient, WEB_ORIGIN, type RunningApp } from "../support/ws-client.js";
+import { entryAddedData, walletChangedData } from "../support/events.js";
 
 describe("o canal me é privado (T5)", () => {
   let running: RunningApp;
@@ -40,7 +41,7 @@ describe("o canal me é privado (T5)", () => {
     const visitante = await open(undefined);
     expect(await visitante.ask({ type: "subscribe", channel: "me" })).toMatchObject({ data: { code: "unauthorized" } });
 
-    bus.publish(meChannel("ana"), "wallet.changed", { cash: 123_400 });
+    bus.publish(meChannel("ana"), "wallet.changed", walletChangedData(123_400));
 
     for (const conn of [ana1, ana2]) {
       expect(await conn.next()).toMatchObject({ type: "wallet.changed", channel: "me", data: { cash: 123_400 } });
@@ -51,9 +52,9 @@ describe("o canal me é privado (T5)", () => {
   it("C9: o seq do me é por pessoa", async () => {
     const ana = await open("tok-ana", "me");
     const beto = await open("tok-beto", "me");
-    bus.publish(meChannel("ana"), "entry.added", { n: 1 });
-    bus.publish(meChannel("ana"), "entry.added", { n: 2 });
-    bus.publish(meChannel("beto"), "entry.added", { n: 1 });
+    bus.publish(meChannel("ana"), "entry.added", entryAddedData(1));
+    bus.publish(meChannel("ana"), "entry.added", entryAddedData(2));
+    bus.publish(meChannel("beto"), "entry.added", entryAddedData(1));
     const [a1, a2] = [(await ana.next()) as { seq: number }, (await ana.next()) as { seq: number }];
     const b1 = (await beto.next()) as { seq: number };
     expect(a2.seq).toBe(a1.seq + 1);
@@ -81,15 +82,15 @@ describe("o canal me é privado (T5)", () => {
   it("C10: o jogador bloqueado assina o me e recebe", async () => {
     const bloq = await open("tok-bloq");
     expect(await bloq.ask({ type: "subscribe", channel: "me" })).toMatchObject({ type: "subscribed" });
-    bus.publish(meChannel("bloq"), "wallet.changed", { cash: 1 });
+    bus.publish(meChannel("bloq"), "wallet.changed", walletChangedData(1));
     expect(await bloq.next()).toMatchObject({ type: "wallet.changed" });
   });
 
   it("o admin só vê o próprio me, como qualquer pessoa", async () => {
     const adm = await open("tok-adm", "me");
-    bus.publish(meChannel("ana"), "wallet.changed", { cash: 9 });
+    bus.publish(meChannel("ana"), "wallet.changed", walletChangedData(9));
     expect(await adm.quiet()).toBe(true);
-    bus.publish(meChannel("adm"), "wallet.changed", { cash: 7 });
+    bus.publish(meChannel("adm"), "wallet.changed", walletChangedData(7));
     expect(await adm.next()).toMatchObject({ data: { cash: 7 } });
   });
 
@@ -107,6 +108,6 @@ describe("o canal me é privado (T5)", () => {
     const ana = await open("tok-ana", "me");
     await ana.close();
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(() => bus.publish(meChannel("ana"), "entry.added", {})).not.toThrow();
+    expect(() => bus.publish(meChannel("ana"), "entry.added", entryAddedData(1))).not.toThrow();
   });
 });

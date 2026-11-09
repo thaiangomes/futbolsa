@@ -8,6 +8,7 @@ import { bots, clubs, ipoBids, seasonClubs, users, wallets } from "../../infra/d
 import { currentSeason } from "../admin/current-season.js";
 import { PortfolioLedger } from "../portfolio/index.js";
 import { ipoError } from "./errors.js";
+import { IpoEvents } from "./events.js";
 
 type BidRow = typeof ipoBids.$inferSelect;
 
@@ -39,6 +40,7 @@ export class IpoBidsService {
     @Inject(DB) private readonly db: Database,
     private readonly ledger: PortfolioLedger,
     private readonly clock: Clock,
+    private readonly events: IpoEvents,
   ) {}
 
   /**
@@ -97,15 +99,17 @@ export class IpoBidsService {
       let after = wallet!;
       // Só o preço acima do teto mudou: a oferta muda (e o desempate), a reserva não.
       if (check.delta !== 0) {
-        ({ wallet: after } = await this.ledger.post(tx, {
+        const posted = await this.ledger.post(tx, {
           walletId,
           at: now,
           kind: "ipo_reserve",
           reservedCashDelta: check.delta,
           ref: { type: "ipo_bid", id: bid!.id },
-        }));
+        });
+        after = posted.wallet;
+        // O aviso sai depois do COMMIT: a tela do dono atualiza o caixa e o extrato sem recarregar.
+        this.events.posted(tx, posted);
       }
-      // O `wallet.changed` e o `entry.added` (tempo real) entram aqui com `tx.afterCommit`, na A10.
       return { ticker, bid: bidView(bid!), cash: cashView(after) };
     });
   }
@@ -148,14 +152,15 @@ export class IpoBidsService {
   private async release(tx: Tx, bid: BidRow, at: Date): Promise<WalletRow | undefined> {
     await tx.db.update(ipoBids).set({ status: "cancelled", reserved: 0, updatedAt: at }).where(eq(ipoBids.id, bid.id));
     if (bid.reserved === 0) return undefined;
-    const { wallet } = await this.ledger.post(tx, {
+    const posted = await this.ledger.post(tx, {
       walletId: bid.walletId,
       at,
       kind: "ipo_reserve",
       reservedCashDelta: -bid.reserved,
       ref: { type: "ipo_bid", id: bid.id },
     });
-    return wallet;
+    this.events.posted(tx, posted);
+    return posted.wallet;
   }
 
   /**

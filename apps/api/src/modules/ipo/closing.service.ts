@@ -7,6 +7,7 @@ import { seasons } from "../../infra/db/schema/index.js";
 import { currentSeason } from "../admin/current-season.js";
 import { AdminLogService } from "../admin/log/index.js";
 import { ipoError } from "./errors.js";
+import { IpoEvents } from "./events.js";
 
 /** O que uma passada da tarefa de fechamento fez. */
 export type IpoCloseResult =
@@ -30,6 +31,7 @@ export class IpoClosingService {
     @Inject(DB) private readonly db: Database,
     private readonly clock: Clock,
     private readonly log: AdminLogService,
+    private readonly events: IpoEvents,
   ) {}
 
   /**
@@ -46,8 +48,8 @@ export class IpoClosingService {
       const season = await lockSeason(tx, candidate.id, "update");
       if (season.status !== "ipo_open" || !season.ipoClosesAt) return { status: "idle" } as const;
       if (now.getTime() < season.ipoClosesAt.getTime()) return { status: "idle" } as const;
-      await tx.db.update(seasons).set({ status: "ipo_closed" }).where(eq(seasons.id, season.id));
-      // O evento `season.status` (tempo real) entra aqui com `tx.afterCommit`, na A10.
+      const [closed] = await tx.db.update(seasons).set({ status: "ipo_closed" }).where(eq(seasons.id, season.id)).returning();
+      this.events.seasonStatus(tx, closed!);
       return { status: "closed", seasonId: season.id, closedAt: season.ipoClosesAt } as const;
     });
   }
@@ -103,7 +105,8 @@ export class IpoClosingService {
       after: { ipoClosesAt: updated!.ipoClosesAt!.toISOString(), tradingOpensAt: updated!.tradingOpensAt!.toISOString() },
       reason,
     });
-    // O evento `season.status` com as datas novas (tempo real) entra aqui com `tx.afterCommit`, na A10.
+    // As datas novas chegam a quem está com a tela do período de ofertas aberta, depois do COMMIT.
+    this.events.seasonStatus(tx, updated!);
     return updated!;
   }
 }
