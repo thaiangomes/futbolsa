@@ -21,6 +21,7 @@ const STATUS: Record<IpoErrorCode, number> = {
   negative_cash: 422,
   no_wallet: 409,
   ipo_close_earlier: 422,
+  ipo_close_too_late: 422,
   ipo_not_ready: 409,
 };
 

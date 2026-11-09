@@ -108,7 +108,7 @@ export class IpoBidsService {
         });
         after = posted.wallet;
         // O aviso sai depois do COMMIT: a tela do dono atualiza o caixa e o extrato sem recarregar.
-        this.events.posted(tx, posted);
+        await this.events.posted(tx, posted);
       }
       return { ticker, bid: bidView(bid!), cash: cashView(after) };
     });
@@ -159,7 +159,7 @@ export class IpoBidsService {
       reservedCashDelta: -bid.reserved,
       ref: { type: "ipo_bid", id: bid.id },
     });
-    this.events.posted(tx, posted);
+    await this.events.posted(tx, posted);
     return posted.wallet;
   }
 

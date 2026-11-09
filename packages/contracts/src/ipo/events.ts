@@ -15,8 +15,10 @@ export type SeasonStatusEvent = z.infer<typeof seasonStatusEventSchema>;
 
 /**
  * `wallet.changed`, no canal `me` (só o dono): o caixa, o reservado e, quando o movimento mexeu num
- * clube, as ações dele. `version` é o id da última linha do extrato: o cliente ignora o que for mais
- * velho que o que já mostra.
+ * clube, as ações dele. `version` é a contagem de linhas do extrato **desta carteira** (1, 2, 3...): o
+ * cliente ignora o que for mais velho que o que já mostra. É por carteira, e não o id do extrato do jogo
+ * todo, para ninguém estimar pelo salto dos números quantas operações os outros fizeram (IPO por
+ * bookbuilding, critério 15).
  */
 export const walletChangedEventSchema = z.strictObject({
   cash: z.number().int(),
@@ -26,9 +28,9 @@ export const walletChangedEventSchema = z.strictObject({
 });
 export type WalletChangedEvent = z.infer<typeof walletChangedEventSchema>;
 
-/** `entry.added`, no canal `me`: uma linha nova do extrato da carteira. */
+/** `entry.added`, no canal `me`: uma linha nova do extrato da carteira, com a mesma `version` do `wallet.changed`. */
 export const entryAddedEventSchema = z.strictObject({
-  id: z.number().int(),
+  version: z.number().int(),
   at: z.string(),
   kind: z.string(),
   ticker: z.string().nullable(),

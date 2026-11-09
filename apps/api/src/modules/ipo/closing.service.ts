@@ -58,7 +58,8 @@ export class IpoClosingService {
    * Adia o fechamento das ofertas para `newClosesAt`, dentro da transação de quem chama (o `PATCH
    * /admin/seasons/:id` da F7). Só com as ofertas abertas e antes do horário de fechamento atual, pelo
    * relógio lido depois da trava: antes da abertura é `ipo_not_open`; fechado (mesmo com a tarefa ainda
-   * sem rodar) é `ipo_closed`; antecipar é `ipo_close_earlier`. A negociação passa a abrir às 10h de
+   * sem rodar) é `ipo_closed`; antecipar é `ipo_close_earlier`; adiar a ponto de a negociação só abrir
+   * depois do primeiro jogo é `ipo_close_too_late` (decisão do Thaian em 2026-11-09). A negociação passa a abrir às 10h de
    * Brasília do dia seguinte ao novo fechamento (critério 28). Grava no registro do admin o antes e o
    * depois (`season.ipo.postpone`, motivo aceito e não exigido). Devolve a temporada depois da mudança.
    *
@@ -90,6 +91,9 @@ export class IpoClosingService {
       if (newClosesAt.getTime() < season.ipoClosesAt.getTime()) throw ipoError("ipo_close_earlier");
       throw error;
     }
+    // O limite do adiamento: a negociação precisa abrir antes do primeiro jogo (o mercado existe para ser
+    // jogado antes de a bola rolar). O primeiro jogo não muda depois da abertura do IPO, então é o gravado.
+    if (season.firstKickoff && dates.tradingOpensAt >= season.firstKickoff.getTime()) throw ipoError("ipo_close_too_late");
 
     const [updated] = await tx.db
       .update(seasons)

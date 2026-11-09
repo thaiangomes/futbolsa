@@ -1,7 +1,8 @@
 import { Injectable } from "@nestjs/common";
+import { eq, sql } from "drizzle-orm";
 import { entryAddedEventSchema, seasonStatusEventSchema, walletChangedEventSchema } from "@futbolsa/contracts";
 import type { Tx } from "../../infra/db/index.js";
-import type { seasons } from "../../infra/db/schema/index.js";
+import { type seasons, walletEntries } from "../../infra/db/schema/index.js";
 import { EventBus, meChannel } from "../../infra/realtime/index.js";
 import type { PostResult } from "../portfolio/ledger/post.js";
 
@@ -38,18 +39,24 @@ export class IpoEvents {
    * O resultado de um `post` numa carteira de jogador: o caixa e o reservado novos, as ações do clube (quando
    * o movimento tem clube) e a linha do extrato. `ticker` é o do clube do movimento, se houver.
    */
-  posted(tx: Tx, result: PostResult, ticker?: string): void {
+  async posted(tx: Tx, result: PostResult, ticker?: string): Promise<void> {
     const userId = result.wallet.userId;
     if (!userId) return;
     const { entry, wallet, position } = result;
+    // A versão é a contagem de linhas do extrato desta carteira (a carteira está travada, então a contagem
+    // não anda no meio): o id do extrato é uma sequência do jogo todo e deixaria estimar a atividade dos outros.
+    const [{ n: version }] = (await tx.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(walletEntries)
+      .where(eq(walletEntries.walletId, wallet.id))) as [{ n: number }];
     const changed = {
       cash: wallet.cash,
       reserved: wallet.reservedCash,
       club: ticker && position ? { ticker, shares: position.shares } : null,
-      version: entry.id,
+      version,
     };
     const added = {
-      id: entry.id,
+      version,
       at: entry.at.toISOString(),
       kind: entry.kind,
       ticker: ticker ?? null,

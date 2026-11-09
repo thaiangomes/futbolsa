@@ -13,5 +13,10 @@ export const overviewSchema = z.strictObject({
    * preparação e o horário de abertura já passado.
    */
   ipoBlockers: z.array(z.enum(IPO_BLOCKERS)),
+  /**
+   * Clubes cuja liquidação do IPO deu erro na última passada da tarefa (com a mensagem). Vazia quando está
+   * tudo certo; enquanto houver clube aqui, a negociação não abre e as contas excluídas esperam.
+   */
+  ipoSettlementFailures: z.array(z.strictObject({ ticker: z.string(), error: z.string() })),
 });
 export type Overview = z.infer<typeof overviewSchema>;

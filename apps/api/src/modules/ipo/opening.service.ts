@@ -24,6 +24,9 @@ export type IpoOpenResult =
 
 type Executor = Database | DrizzleTx;
 
+/** Até quanto depois do horário previsto uma abertura ainda conta como no horário (a tarefa roda a cada minuto). */
+const OPENING_TOLERANCE_MS = 5 * 60_000;
+
 /**
  * Abre as ofertas do IPO na data (IPO por bookbuilding, critério 1; Admin, critério 19), sem ação do
  * admin: a tarefa de cada minuto (A7) chama `openIfDue` com o relógio da API. Numa transação só, com
@@ -70,7 +73,10 @@ export class IpoOpeningService {
         .update(seasons)
         .set({
           status: "ipo_open",
-          ipoOpensAt: new Date(dates.opensAt),
+          // Abertura no horário (a tarefa roda a cada minuto, então um pequeno atraso é normal): o horário
+          // previsto. Abertura atrasada porque faltava algo: o horário real, para a tela e o `GET /me` não
+          // mostrarem uma abertura no passado que não aconteceu (decisão do Thaian em 2026-11-09).
+          ipoOpensAt: new Date(now.getTime() - dates.opensAt > OPENING_TOLERANCE_MS ? now.getTime() : dates.opensAt),
           ipoClosesAt: new Date(dates.closesAt),
           tradingOpensAt: new Date(dates.tradingOpensAt),
         })

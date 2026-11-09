@@ -6,7 +6,7 @@ import { Clock } from "../../infra/clock/index.js";
 import { DB, type Database } from "../../infra/db/index.js";
 import { seasonCups } from "../../infra/db/schema/index.js";
 import { CUP_COMPETITIONS } from "../../infra/db/schema/values.js";
-import { IpoOpeningService } from "../ipo/index.js";
+import { IpoOpeningService, IpoSettlementService } from "../ipo/index.js";
 import { currentSeason } from "./current-season.js";
 import { PendingService } from "./results/pending.service.js";
 import { StandingsService } from "./standings/standings.service.js";
@@ -21,6 +21,7 @@ export class OverviewService {
     private readonly standings: StandingsService,
     private readonly suspension: SuspensionService,
     private readonly ipoOpening: IpoOpeningService,
+    private readonly ipoSettlement: IpoSettlementService,
     private readonly clock: Clock,
   ) {}
 
@@ -45,6 +46,7 @@ export class OverviewService {
       suspendedClubs: suspension.clubs.map((c) => c.ticker),
       marketSuspended: suspension.market !== null,
       ipoBlockers,
+      ipoSettlementFailures: [...this.ipoSettlement.failures()],
     };
   }
 }

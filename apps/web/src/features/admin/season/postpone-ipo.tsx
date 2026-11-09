@@ -22,6 +22,12 @@ export function PostponeIpo({ season, admin, onDone }: { season: SeasonView; adm
 
   const newCloseIso = brasiliaInputToIso(value);
   const earlier = newCloseIso !== null && season.ipoClosesAt !== null && Date.parse(newCloseIso) < Date.parse(season.ipoClosesAt);
+  // O limite: a negociação precisa abrir antes do primeiro jogo (a API recusa com `ipo_close_too_late`).
+  const tooLate =
+    newCloseIso !== null &&
+    !earlier &&
+    season.firstKickoff !== null &&
+    Date.parse(tradingOpensAfter(newCloseIso)) >= Date.parse(season.firstKickoff);
   const reasonOk = reason === "" || adminReasonSchema.safeParse(reason).success;
 
   const submit = async () => {
@@ -54,13 +60,14 @@ export function PostponeIpo({ season, admin, onDone }: { season: SeasonView; adm
               {!reasonOk && <span className="hint err">Use de 3 a 500 caracteres.</span>}
             </div>
           </div>
-          {newCloseIso && !earlier && (
+          {newCloseIso && !earlier && !tooLate && (
             <div className="kv" data-testid="nova-abertura">
               <span>Nova abertura da negociação</span>
               <span>{formatInstant(tradingOpensAfter(newCloseIso))}</span>
             </div>
           )}
           {earlier && <span className="hint err">{IPO_ERROR_MESSAGES.ipo_close_earlier}</span>}
+          {tooLate && <span className="hint err" data-testid="tarde-demais">{IPO_ERROR_MESSAGES.ipo_close_too_late}</span>}
           <ErrorNote message={action.error} />
           {done && (
             <div className="note note-ok" role="status" data-testid="adiado">

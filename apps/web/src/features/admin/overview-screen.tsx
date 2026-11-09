@@ -1,5 +1,6 @@
 "use client";
 
+import { IPO_BLOCKER_MESSAGES } from "@futbolsa/contracts";
 import { useChannel } from "../../realtime/react";
 import type { AdminApi } from "./api";
 import { COMPETITION_LABELS } from "./forms";
@@ -30,6 +31,22 @@ export function OverviewScreen({ admin }: { admin: AdminApi }) {
       href: "/admin/suspensao",
     },
   ];
+  // O IPO que não abriu no horário (falta oferta, primeiro jogo, clubes ou tabela de copa) e a liquidação com erro só
+  // aparecem quando há o que mostrar (proposta 6 do Plano do IPO e decisão do Thaian em 2026-11-09).
+  if (o.ipoBlockers.length > 0) {
+    items.push({
+      ok: false,
+      text: o.ipoBlockers.map((b) => IPO_BLOCKER_MESSAGES[b]).join(" "),
+      href: "/admin/temporada",
+    });
+  }
+  if (o.ipoSettlementFailures.length > 0) {
+    items.push({
+      ok: false,
+      text: `A liquidação do IPO está com erro em ${o.ipoSettlementFailures.map((f) => `${f.ticker} (${f.error})`).join("; ")}. A negociação só abre depois de liquidar todos os clubes.`,
+      href: "/admin/temporada",
+    });
+  }
   return (
     <Card title="O que pede atenção">
       <ul className="stack-s" style={{ listStyle: "none", margin: 0, padding: 0 }}>
