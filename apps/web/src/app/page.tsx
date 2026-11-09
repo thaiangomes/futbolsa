@@ -23,6 +23,9 @@ export default function Home() {
       <p>
         API: {erro ? `fora do ar (${erro})` : health ? `${health.status} (preço mínimo ${health.minPrice} centavos)` : "consultando…"}
       </p>
+      <nav aria-label="Telas do jogo">
+        <a href="/ipo">IPO dos clubes</a>
+      </nav>
       <RealtimeStatusLine />
     </main>
   );
