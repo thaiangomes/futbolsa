@@ -8,7 +8,7 @@ import { useDom } from "../../../test-support/dom";
 import type { AdminApi } from "../api";
 import { ACTION_LABELS } from "../forms";
 import { SeasonScreen } from "../season-screen";
-import { brasiliaInputToIso, tradingOpensAfter } from "./dates";
+import { brasiliaInputToIso, isoToBrasiliaInput, tradingOpensAfter } from "./dates";
 import { PostponeIpo } from "./postpone-ipo";
 
 /** O exemplo da especificação: primeiro jogo em 2027-04-11 às 16h, abre 03-28 às 16h, fecha 04-04 às 16h, negociação 04-05 às 10h. */
@@ -167,5 +167,32 @@ describe("preparar a temporada: o cartão de adiar entra na tela", () => {
   it("em preparação, não tem", async () => {
     await dom.render(createElement(SeasonScreen, { admin: admin({ ...open, status: "preparing", ipoClosesAt: null }) }));
     expect(dom.$("[data-testid=adiar-ipo]")).toBeNull();
+  });
+});
+
+describe("preparar a temporada: o primeiro jogo é em horário de Brasília", () => {
+  const dom = useDom();
+  const preparing: SeasonView = {
+    ...open, status: "preparing", ipoOpensAt: null, ipoClosesAt: null, tradingOpensAt: null,
+  };
+  const rules = { aPerPoint: 10, bPerPoint: 5, aPlacement: [500], promotionPerShare: 200, promotionSlots: 4, buybackMultipleBp: 15000, lockedAt: null };
+  const admin = (patchSeason: (id: number, body: unknown) => Promise<SeasonView>) =>
+    fake({ currentSeason: async () => ({ season: preparing, clubs: [] }), knownClubs: async () => ({ clubs: [] }), rules: async () => ({ rules, cups: [] }), patchSeason });
+
+  it("o ida e volta entre o campo e o ISO usa -03:00", () => {
+    expect(isoToBrasiliaInput("2027-04-11T19:00:00.000Z")).toBe("2027-04-11T16:00");
+    expect(isoToBrasiliaInput("2027-04-12T01:30:00.000Z")).toBe("2027-04-11T22:30");
+    for (const local of ["2027-04-11T16:00", "2027-04-11T23:59", "2027-04-12T00:00", "2027-12-31T21:30"]) {
+      expect(isoToBrasiliaInput(brasiliaInputToIso(local)!)).toBe(local);
+    }
+  });
+
+  it("o campo mostra 16h para o jogo das 19h UTC e envia a hora digitada como Brasília", async () => {
+    const patchSeason = vi.fn(async () => preparing);
+    await dom.render(createElement(SeasonScreen, { admin: admin(patchSeason) }));
+    expect(dom.$<HTMLInputElement>("#primeiro").value).toBe("2027-04-11T16:00");
+    await dom.type("#primeiro", "2027-04-18T16:00");
+    await dom.click(dom.button("Salvar"));
+    expect(patchSeason).toHaveBeenCalledWith(preparing.id, { offerSize: 3000, firstKickoff: "2027-04-18T19:00:00.000Z" });
   });
 });

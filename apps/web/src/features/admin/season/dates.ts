@@ -19,6 +19,14 @@ export function brasiliaInputToIso(value: string): string | null {
 }
 
 /**
+ * O contrário de `brasiliaInputToIso`: um instante ISO no valor de um campo `datetime-local` em hora de Brasília
+ * (`2027-04-11T19:00:00.000Z` vira `2027-04-11T16:00`), para o campo mostrar o que o rótulo promete.
+ */
+export function isoToBrasiliaInput(iso: string): string {
+  return new Date(Date.parse(iso) + BRASILIA_OFFSET_MS).toISOString().slice(0, 16);
+}
+
+/**
  * Quando a negociação abre depois de um fechamento: 10h de Brasília do dia seguinte. É a conta de
  * `postponeClose` do motor (`@futbolsa/engine`), que o site não importa; o teste confere as duas.
  */
