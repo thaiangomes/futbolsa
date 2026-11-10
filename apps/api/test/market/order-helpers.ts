@@ -1,11 +1,14 @@
 import { and, eq, sql } from "drizzle-orm";
+import { remainderRelease } from "@futbolsa/engine";
 import { expect } from "vitest";
 import type { Database } from "../../src/infra/db/client.js";
-import { lockWallets, withTransaction } from "../../src/infra/db/index.js";
+import { lockClubs, lockWallets, type TransactionOptions, withTransaction } from "../../src/infra/db/index.js";
 import { bots, orders, positions, seasonClubs, wallets } from "../../src/infra/db/schema/index.js";
 import {
+  ORDER_REF,
   OrderService,
   PostgresMatchingEngine,
+  updateOrderProgress,
   type PlaceOrderAccepted,
   type PlaceOrderAttempt,
   type PlaceOrderInput,
@@ -87,6 +90,68 @@ export async function syncTotalShares(db: Database, seasonId: number): Promise<v
       join futbolsa.wallets w on w.id = p.wallet_id
       where w.season_id = sc.season_id and p.club_id = sc.club_id), 0)
     where sc.season_id = ${seasonId}`);
+}
+
+/**
+ * Cancela uma ordem aberta direto no banco, enquanto o cancelamento de verdade (T6) não existe: trava o clube e
+ * depois a carteira, como ele fará, marca a ordem como cancelada pelo jogador e devolve a reserva do que faltava
+ * executar. Devolve se cancelou (`false` se a ordem já não estava aberta). `beforeClubLock` é a barreira dos
+ * testes de concorrência: a transação já começou e espera ali antes de pedir o clube.
+ */
+export async function cancelDirect(
+  db: Database,
+  o: { seasonId: number; ticker: string; orderId: number; at: Date },
+  options: TransactionOptions & { beforeClubLock?: () => Promise<void> } = {},
+): Promise<boolean> {
+  return withTransaction(
+    db,
+    async (tx) => {
+      if (options.beforeClubLock) {
+        await tx.db.execute(sql`select 1`);
+        await options.beforeClubLock();
+      }
+      await lockClubs(tx, o.seasonId, [o.ticker]);
+      const [row] = await tx.db.select().from(orders).where(eq(orders.id, o.orderId));
+      if (!row || row.status !== "open") return false;
+      await lockWallets(tx, [row.walletId]);
+      const release = remainderRelease(
+        { side: row.side as "buy" | "sell", type: row.type as "limit" | "market", limitPrice: row.limitPrice ?? undefined },
+        row.quantity - row.filled,
+      );
+      await updateOrderProgress(tx, row.id, { filled: row.filled, status: "cancelled", reservedCash: 0, at: o.at, cancelReason: "player" });
+      await post(tx, {
+        walletId: row.walletId,
+        at: o.at,
+        kind: "order_release",
+        clubId: row.clubId,
+        reservedCashDelta: release.reservedCash,
+        reservedSharesDelta: release.reservedShares,
+        openOrdersDelta: -1,
+        ref: { type: ORDER_REF, id: row.id },
+      });
+      return true;
+    },
+    options,
+  );
+}
+
+/** As ordens abertas de um clube, da mais antiga para a mais nova. */
+export async function openOrderIds(db: Database, clubId: number): Promise<number[]> {
+  const rows = await db.select({ id: orders.id }).from(orders).where(and(eq(orders.clubId, clubId), eq(orders.status, "open"))).orderBy(orders.id);
+  return rows.map((r) => r.id);
+}
+
+/**
+ * O estado do túnel e do leilão de um clube gravado à mão: o que o fim do leilão (L5), a suspensão (L7) ou a virada
+ * do dia deixariam, sem o teste ter de montá-los. Só muda as colunas passadas.
+ */
+export async function setTunnelState(
+  db: Database,
+  seasonId: number,
+  clubId: number,
+  state: Partial<{ tunnelRef: number | null; tunnelRefDay: Date | null; auctionOpenedAt: Date | null; auctionUntil: Date | null; lastPrice: number; ipoPrice: number }>,
+): Promise<void> {
+  await db.update(seasonClubs).set(state).where(and(eq(seasonClubs.seasonId, seasonId), eq(seasonClubs.clubId, clubId)));
 }
 
 /** O preço exibido de um clube gravado à mão (o preço "andou" sem o teste ter de montar os negócios). */

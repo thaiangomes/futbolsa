@@ -693,6 +693,41 @@ describe("ordem nova no Postgres", () => {
     expect(await price("FLA3")).toBe(4000);
   }));
 
+  it("afterWalletsLocked: a conferência de quem chama roda com a carteira travada e antes de qualquer gravação, e a recusa dela para a ordem (é onde a rota recusa a conta bloqueada)", scene(async () => {
+    const ana = await player();
+    const bruno = await holder("FLA3", 10);
+    await ready();
+    accepted(await service.place(o.sellLimit(bruno, "FLA3", 10, 4000)));
+    const before = await rowCounts(db);
+
+    const seen: boolean[] = [];
+    const blocked = await service.place(o.buyLimit(ana, "FLA3", 10, 4000), {
+      hooks: {
+        afterWalletsLocked: async (tx, wallet) => {
+          seen.push(wallet.id === ana && tx.locks.isWalletLocked(ana));
+          return { ok: false, code: "account_blocked" };
+        },
+      },
+    });
+    expect(blocked).toEqual({ ok: false, code: "account_blocked" });
+    expect(seen).toEqual([true]);
+    expect(await rowCounts(db)).toEqual(before);
+
+    // a ordem que o motor já recusa antes de travar a carteira nem chega à conferência
+    let calls = 0;
+    const count = {
+      afterWalletsLocked: async () => {
+        calls++;
+        return undefined;
+      },
+    };
+    expect(rejected(await service.place(o.buyLimit(ana, "FLA3", 1, 4801), { hooks: count })).code).toBe("price_out_of_band");
+    expect(calls).toBe(0);
+    // sem recusa, a ordem segue
+    expect(accepted(await service.place(o.buyLimit(ana, "FLA3", 10, 4000), { hooks: count })).trades).toHaveLength(1);
+    expect(calls).toBe(1);
+  }));
+
   it("o OrderService fala com o casamento só pela porta MatchingEngine: outra implementação entra sem mudar quem chama", async () => {
     // o que a F16 faria com um serviço dedicado que guarda o livro na memória
     class ClosedEngine extends MatchingEngine {
