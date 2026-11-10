@@ -16,7 +16,7 @@ import {
 } from "../../src/modules/market/index.js";
 import { PortfolioLedger } from "../../src/modules/portfolio/index.js";
 import { post } from "../../src/modules/portfolio/ledger/index.js";
-import { createUser, openWallets, sleep, T0 } from "../support/fixtures.js";
+import { createUser, deferred, openWallets, sleep, T0 } from "../support/fixtures.js";
 import {
   assertBookNotCrossed,
   assertLedgerConsistent,
@@ -176,6 +176,27 @@ export async function rolledBack(db: Database, body: (inner: Database) => Promis
   } catch (error) {
     if (!(error instanceof RolledBack)) throw error;
   }
+}
+
+/**
+ * Uma barreira para `n` transações concorrentes: cada uma chama e espera; quando a última chega, todas seguem
+ * juntas. Se alguma não chegar em 10 segundos, o teste falha em vez de ficar parado.
+ */
+export function barrier(n: number): () => Promise<void> {
+  let arrived = 0;
+  const gate = deferred();
+  return async () => {
+    if (++arrived >= n) gate.resolve();
+    let timer: NodeJS.Timeout | undefined;
+    const late = new Promise<never>((_, fail) => {
+      timer = setTimeout(() => fail(new Error(`a barreira esperava ${n} transações e só ${arrived} chegaram`)), 10_000);
+    });
+    try {
+      await Promise.race([gate.promise, late]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
 }
 
 /**

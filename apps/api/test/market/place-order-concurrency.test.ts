@@ -135,25 +135,32 @@ describe("ordens ao mesmo tempo, contra o Postgres", () => {
 
   /**
    * Ordens ao mesmo tempo: cada transação começa, espera as outras na barreira e só então manda a ordem. Serve às
-   * ordens do mesmo clube, que disputam a trava dele.
+   * ordens do mesmo clube, que disputam a trava dele. Quem começa primeiro costuma pegar a trava primeiro, então
+   * cada chamada começa pela ponta contrária à da chamada anterior: as rodadas cobrem as duas ordens de chegada. Os
+   * resultados voltam na ordem das entradas.
    */
-  const together = (inputs: PlaceOrderInput[]): Promise<PlaceOrderResult[]> => {
+  let flips = 0;
+  const together = async (inputs: PlaceOrderInput[]): Promise<PlaceOrderResult[]> => {
     const arrive = barrier(inputs.length);
-    return Promise.all(
-      inputs.map((input) =>
-        withTransaction(
+    const order = inputs.map((_, index) => index);
+    if (flips++ % 2 === 1) order.reverse();
+    const results: PlaceOrderResult[] = [];
+    await Promise.all(
+      order.map(async (index) => {
+        results[index] = await withTransaction(
           db,
           async (tx) => {
             await tx.db.execute(sql`select 1`);
             await arrive();
-            const attempt = await service.placeOrder(tx, input);
+            const attempt = await service.placeOrder(tx, inputs[index]!);
             if (isAuctionExpired(attempt)) throw new Error("nenhum clube deste arquivo entra em leilão");
             return attempt;
           },
           transaction,
-        ),
-      ),
+        );
+      }),
     );
+    return results;
   };
 
   /**
@@ -206,6 +213,7 @@ describe("ordens ao mesmo tempo, contra o Postgres", () => {
   });
 
   it("2. uma compra e uma venda que se cruzam chegando juntas: sai um negócio só e o livro termina sem cruzar", async () => {
+    const arrivedSecond = { buy: 0, sell: 0 };
     for (let round = 0; round < ROUNDS; round++) {
       const before = await tradesIn("COR3");
       // nas rodadas ímpares a compra paga até R$ 40,10: o negócio sai pelo preço de quem chegou antes ao livro
@@ -218,12 +226,16 @@ describe("ordens ao mesmo tempo, contra o Postgres", () => {
       expect(done[0]).toMatchObject({ quantity: 10, buyerWalletId: buyer2, sellerWalletId: seller2, buyOrderId: buy!.order.id, sellOrderId: sell!.order.id });
       // quem chegou depois é quem fez o negócio, pelo preço da ordem que já estava no livro
       expect(done[0]!.price).toBe(sell!.trades.length === 1 ? bid : 4000);
+      arrivedSecond[sell!.trades.length === 1 ? "sell" : "buy"]++;
       expect(await tradesIn("COR3")).toBe(before + 1);
       expect(await orderRow(db, buy!.order.id)).toMatchObject({ status: "filled", filled: 10, reservedCash: 0 });
       expect(await orderRow(db, sell!.order.id)).toMatchObject({ status: "filled", filled: 10 });
       expect(await openOrdersIn("COR3")).toBe(0);
     }
     expect(await walletOf(db, buyer2)).toMatchObject({ reservedCash: 0, openOrders: 0 });
+    // as duas ordens de chegada aconteceram: a compra no livro esperando a venda, e a venda esperando a compra
+    expect(arrivedSecond.buy).toBeGreaterThan(0);
+    expect(arrivedSecond.sell).toBeGreaterThan(0);
     expect(retries).toBe(0);
     await assertMarketInvariants(db, seasonId, cashBefore);
   });
