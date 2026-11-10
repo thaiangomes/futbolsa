@@ -1,8 +1,9 @@
 import "reflect-metadata";
+import { Test } from "@nestjs/testing";
 import { asc, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/infra/db/client.js";
-import { lockClubs, withTransaction } from "../../src/infra/db/index.js";
+import { DB, lockClubs, type Tx, withTransaction } from "../../src/infra/db/index.js";
 import { seasonClubs, trades } from "../../src/infra/db/schema/index.js";
 import {
   AuctionCloser,
@@ -10,8 +11,11 @@ import {
   displayedPrice,
   isAuctionExpired,
   isInAuction,
+  MatchingEngine,
   OrderService,
   rebuildTunnelReference,
+  type PlaceOrderAttempt,
+  type PlaceOrderInput,
   type PostgresMatchingEngine,
 } from "../../src/modules/market/index.js";
 import { useTestDatabase } from "../support/db.js";
@@ -441,6 +445,33 @@ describe("ordem com túnel de preço e abertura do leilão", () => {
     await expect(new OrderService(db, engine, stuck).place(o.buyLimit(ana, "FLA3", 1, 4200, twoSecondsLater))).rejects.toThrow(/continua vencido/);
     expect(stuck.calls).toBe(1);
   }));
+
+  it("a costura da L5: o Nest entrega ao OrderService o AuctionCloser registrado no módulo; sem registro, o serviço sobe sem ele", async () => {
+    // um motor que encontra o leilão vencido na primeira tentativa e, depois de fechado, responde
+    class ExpiredOnce extends MatchingEngine {
+      attempts = 0;
+      async place(_tx: Tx, input: PlaceOrderInput): Promise<PlaceOrderAttempt> {
+        if (this.attempts++ === 0) return { ok: false, auctionExpired: true, seasonId: input.seasonId, ticker: input.ticker, until: T1540 };
+        return { ok: false, code: "market_closed" };
+      }
+    }
+    const closed: string[] = [];
+    class Closer extends AuctionCloser {
+      async closeAuction(_seasonId: number, ticker: string): Promise<void> {
+        closed.push(ticker);
+      }
+    }
+    const input = orderInputs({ seasonId, now: T1540 }).buyLimit(1, "FLA3", 1, 4000);
+    const base = [OrderService, { provide: DB, useValue: t.db }, { provide: MatchingEngine, useClass: ExpiredOnce }];
+
+    const wired = await Test.createTestingModule({ providers: [...base, { provide: AuctionCloser, useClass: Closer }] }).compile();
+    expect(await wired.get(OrderService).place(input)).toEqual({ ok: false, code: "market_closed" });
+    expect(closed).toEqual(["FLA3"]);
+
+    const bare = await Test.createTestingModule({ providers: base }).compile();
+    await expect(bare.get(OrderService).place(input)).rejects.toThrow(/AuctionCloser/);
+    expect(closed).toEqual(["FLA3"]);
+  });
 
   // ------------------------------------------------------------------ o que a F14 pediu
 

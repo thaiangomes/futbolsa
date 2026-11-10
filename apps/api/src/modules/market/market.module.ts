@@ -14,6 +14,10 @@ import { OrderService } from "./orders/order.service.js";
  * Mercado secundário (F9: livro de ofertas e formador de mercado). Por enquanto, o motor de ordens: a porta
  * `MatchingEngine` ligada à implementação do Postgres e o `OrderService`, a entrada das ordens de jogadores, bots
  * e da casa. As rotas, o cancelamento, os eventos e o formador chegam nas tarefas seguintes.
+ *
+ * Túnel de preço: a ordem que sairia do túnel abre o leilão (L4). Quem fecha o leilão vencido é o `AuctionCloser`
+ * (`state/tunnel-state.ts`), que o `OrderService` recebe como dependência opcional: a L5 o liga aqui com
+ * `{ provide: AuctionCloser, useClass: … }`. Enquanto ele não existe, a ordem que encontra um leilão vencido é erro.
  */
 @Module({
   imports: [PortfolioModule, AdminLogModule, RealtimeModule],
