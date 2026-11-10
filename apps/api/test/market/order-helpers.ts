@@ -7,9 +7,9 @@ import {
   OrderService,
   PostgresMatchingEngine,
   type PlaceOrderAccepted,
+  type PlaceOrderAttempt,
   type PlaceOrderInput,
   type PlaceOrderRejected,
-  type PlaceOrderResult,
 } from "../../src/modules/market/index.js";
 import { PortfolioLedger } from "../../src/modules/portfolio/index.js";
 import { post } from "../../src/modules/portfolio/ledger/index.js";
@@ -129,14 +129,16 @@ export async function waitForBlocked(db: Database, count = 1): Promise<void> {
 }
 
 /** A ordem foi aceita: devolve o resultado já com o tipo certo. */
-export function accepted(result: PlaceOrderResult): PlaceOrderAccepted {
-  if (!result.ok) throw new Error(`a ordem devia ser aceita e foi recusada: ${result.code}${result.reason ? ` (${result.reason})` : ""}`);
-  return result;
+export function accepted(result: PlaceOrderAttempt): PlaceOrderAccepted {
+  if (result.ok) return result;
+  if ("auctionExpired" in result) throw new Error(`a ordem devia ser aceita e encontrou o leilão de ${result.ticker} vencido`);
+  throw new Error(`a ordem devia ser aceita e foi recusada: ${result.code}${result.reason ? ` (${result.reason})` : ""}`);
 }
 
 /** A ordem foi recusada: devolve a recusa. */
-export function rejected(result: PlaceOrderResult): PlaceOrderRejected {
+export function rejected(result: PlaceOrderAttempt): PlaceOrderRejected {
   if (result.ok) throw new Error(`a ordem devia ser recusada e foi aceita (ordem ${result.order.id})`);
+  if ("auctionExpired" in result) throw new Error(`a ordem devia ser recusada e encontrou o leilão de ${result.ticker} vencido`);
   return result;
 }
 

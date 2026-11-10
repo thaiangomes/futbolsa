@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/infra/db/client.js";
 import { lockClubs, lockSeason, withTransaction } from "../../src/infra/db/index.js";
 import { orders, trades } from "../../src/infra/db/schema/index.js";
-import type { OrderService, PlaceOrderInput, PlaceOrderResult } from "../../src/modules/market/index.js";
+import { isAuctionExpired, type OrderService, type PlaceOrderInput, type PlaceOrderResult } from "../../src/modules/market/index.js";
 import { useTestDatabase } from "../support/db.js";
 import { deferred, openPlayerWallets, rng } from "../support/fixtures.js";
 import { totalCash } from "../support/invariants.js";
@@ -146,7 +146,9 @@ describe("ordens ao mesmo tempo, contra o Postgres", () => {
           async (tx) => {
             await tx.db.execute(sql`select 1`);
             await arrive();
-            return service.placeOrder(tx, input);
+            const attempt = await service.placeOrder(tx, input);
+            if (isAuctionExpired(attempt)) throw new Error("nenhum clube deste arquivo entra em leilão");
+            return attempt;
           },
           transaction,
         ),
@@ -315,8 +317,9 @@ describe("ordens ao mesmo tempo, contra o Postgres", () => {
       const house = random() < 0.12;
       const wallet = house ? treasury : pick(crowd);
       const make = pick([o.buyLimit, o.sellLimit, o.buyLimit, o.sellLimit, o.buyMarket, o.sellMarket]);
-      // em volta de R$ 40,00, para as ordens se cruzarem; a casa cota mais longe e não é recusada pela faixa
-      const limit = 3950 + Math.floor(random() * 11) * 10 + (house ? pick([-900, 0, 900]) : 0);
+      // em volta de R$ 40,00, para as ordens se cruzarem; a casa cota mais longe, mas dentro do túnel de 10%
+      // (os leilões sob concorrência ficam com `tunnel-concurrency.test.ts`)
+      const limit = 3950 + Math.floor(random() * 11) * 10 + (house ? pick([-300, 0, 300]) : 0);
       inputs.push(make(wallet, pick(STRESS_TICKERS), 1 + Math.floor(random() * 20), limit, house ? { actor: "house" } : {}));
     }
     const before = (await Promise.all(STRESS_TICKERS.map(tradesIn))).reduce((a, b) => a + b, 0);

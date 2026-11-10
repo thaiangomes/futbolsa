@@ -1,6 +1,6 @@
 import type { OrderRejectCode } from "@futbolsa/contracts";
 import type { Cents } from "@futbolsa/engine";
-import type { Tx } from "../../../infra/db/index.js";
+import type { Tx, WalletRow } from "../../../infra/db/index.js";
 import type { OrderCancelReason, OrderStatus } from "../../../infra/db/schema/index.js";
 import type { PostResult } from "../../portfolio/ledger/index.js";
 
@@ -15,10 +15,14 @@ import type { PostResult } from "../../portfolio/ledger/index.js";
 export abstract class MatchingEngine {
   /**
    * Uma ordem nova, dentro da transação de quem chama. Devolve o que foi gravado ou a recusa; **nunca** lança por
-   * regra do jogo. Na recusa nada foi gravado, mas as travas já tomadas (o clube e, às vezes, as carteiras) ficam
-   * até o fim da transação.
+   * regra do jogo. Na recusa nenhuma ordem, negócio ou linha do extrato foi gravada (só a referência do túnel pode
+   * ter virado para o dia novo), mas as travas já tomadas (o clube e, às vezes, as carteiras) ficam até o fim da
+   * transação.
+   *
+   * Se o leilão do clube venceu e ainda não foi fechado, devolve `AuctionExpired` sem gravar nada: quem chama
+   * termina a transação, fecha o leilão numa transação própria e manda a ordem de novo (P10 do plano).
    */
-  abstract place(tx: Tx, input: PlaceOrderInput, hooks?: MatchingHooks): Promise<PlaceOrderResult>;
+  abstract place(tx: Tx, input: PlaceOrderInput, hooks?: MatchingHooks): Promise<PlaceOrderAttempt>;
 }
 
 /**
@@ -44,13 +48,20 @@ export interface PlaceOrderInput {
   now: Date;
 }
 
-/** Pontos de pausa para os testes de concorrência. Sem eles, nada muda em produção. */
+/** Pontos de extensão do `place`. Sem eles, nada muda. */
 export interface MatchingHooks {
   /**
-   * Depois da leitura sem trava da própria carteira e do livro, e antes de travar as carteiras: o teste segura
-   * a transação aqui para outra passar na frente e mudar o caixa.
+   * Só para os testes de concorrência: depois da leitura sem trava da própria carteira e do livro, e antes de
+   * travar as carteiras. O teste segura a transação aqui para outra passar na frente e mudar o caixa.
    */
   afterReadBeforeLock?: () => Promise<void>;
+  /**
+   * A conferência de quem chama, com a carteira de quem manda **já travada** e antes de qualquer gravação: devolve
+   * uma recusa, e a ordem para ali, ou nada, e ela segue. É onde a rota recusa a conta bloqueada (`account_blocked`):
+   * quem bloqueia trava a carteira antes de cancelar as ordens dela, então a situação lida depois desta trava é a
+   * que vale; lida antes, uma ordem poderia passar por um bloqueio que confirma no meio.
+   */
+  afterWalletsLocked?: (tx: Tx, wallet: WalletRow) => Promise<PlaceOrderRejected | undefined>;
 }
 
 /** Uma ordem como ficou gravada em `orders`. */
@@ -112,9 +123,12 @@ export interface PlaceOrderAccepted {
   club: { clubId: number; ticker: string; price: Cents; priceBefore: Cents };
   /** O caixa de quem mandou, depois da ordem. */
   cash: CashView;
-  /** Túnel de preço (L4): a ordem abriu um leilão e entrou inteira nele. */
+  /**
+   * A ordem abriu um leilão: algum negócio dela sairia do túnel de preço, então nada executou, o clube entrou em
+   * leilão por 3 horas e ela ficou inteira no livro, com a reserva (critério 39).
+   */
   openedAuction: boolean;
-  /** Túnel de preço (L4): o leilão do clube depois da ordem (`until` vazio se parado pela suspensão). */
+  /** O leilão do clube depois da ordem (`until` é quando ele termina; vazio se parado pela suspensão). Nulo fora de leilão. */
   auction: { until: Date | null } | null;
 }
 
@@ -128,3 +142,24 @@ export interface PlaceOrderRejected {
 
 /** Recusa não é exceção: quem chama decide o que responder (e a rota guarda a recusa na chave de idempotência). */
 export type PlaceOrderResult = PlaceOrderAccepted | PlaceOrderRejected;
+
+/**
+ * O leilão do clube venceu e ainda não foi fechado (o fim do leilão roda numa tarefa a cada 5 segundos, e a ordem
+ * chegou antes dela). A ordem não entra num leilão vencido: nada foi gravado, e quem chama fecha o leilão numa
+ * transação própria (`AuctionCloser`) e manda a ordem de novo. Não é recusa: o jogador não vê este estado.
+ */
+export interface AuctionExpired {
+  ok: false;
+  auctionExpired: true;
+  seasonId: number;
+  ticker: string;
+  /** Quando o leilão terminou. */
+  until: Date;
+}
+
+/** O que uma tentativa dentro de uma transação devolve: o resultado da ordem ou o aviso do leilão vencido. */
+export type PlaceOrderAttempt = PlaceOrderResult | AuctionExpired;
+
+export function isAuctionExpired(attempt: PlaceOrderAttempt): attempt is AuctionExpired {
+  return !attempt.ok && "auctionExpired" in attempt;
+}

@@ -283,16 +283,21 @@ describe("ordem nova no Postgres", () => {
   }));
 
   it("livro 8: depois de um negócio a R$ 48,00 a compra limitada a R$ 57,00 é aceita: o limite passou a ir de R$ 38,40 a R$ 57,60", scene(async () => {
-    const bruno = await holder("FLA3", 10);
+    const bruno = await holder("FLA3", 20);
     const [carla, ana] = [await player(), await player()];
     await ready();
-    accepted(await service.place(o.sellLimit(bruno, "FLA3", 10, 4800)));
-    expect(accepted(await service.place(o.buyLimit(carla, "FLA3", 10, 4800))).trades).toHaveLength(1);
+    // Com o túnel de 10% em volta do preço das 0h, o negócio a R$ 48,00 não sai direto de R$ 40,00: o preço sobe a
+    // R$ 44,00 num dia e a R$ 48,00 no seguinte (ou de uma vez, num leilão). O limite de 20% anda com cada negócio.
+    accepted(await service.place(o.sellLimit(bruno, "FLA3", 10, 4400)));
+    expect(accepted(await service.place(o.buyLimit(carla, "FLA3", 10, 4400))).trades).toHaveLength(1);
+    const nextDay = { now: new Date(NOW.getTime() + 24 * 60 * 60 * 1000) };
+    accepted(await service.place(o.sellLimit(bruno, "FLA3", 10, 4800, nextDay)));
+    expect(accepted(await service.place(o.buyLimit(carla, "FLA3", 10, 4800, nextDay))).trades.map((x) => x.price)).toEqual([4800]);
     expect(await price("FLA3")).toBe(4800);
 
-    expect(rejected(await service.place(o.buyLimit(ana, "FLA3", 1, 5761))).code).toBe("price_out_of_band");
-    expect(rejected(await service.place(o.buyLimit(ana, "FLA3", 1, 3839))).code).toBe("price_out_of_band");
-    expect(accepted(await service.place(o.buyLimit(ana, "FLA3", 1, 5700))).order).toMatchObject({ status: "open", reservedCash: 5700 });
+    expect(rejected(await service.place(o.buyLimit(ana, "FLA3", 1, 5761, nextDay))).code).toBe("price_out_of_band");
+    expect(rejected(await service.place(o.buyLimit(ana, "FLA3", 1, 3839, nextDay))).code).toBe("price_out_of_band");
+    expect(accepted(await service.place(o.buyLimit(ana, "FLA3", 1, 5700, nextDay))).order).toMatchObject({ status: "open", reservedCash: 5700 });
   }));
 
   it("livro 10: com o preço em R$ 0,55, a venda a R$ 0,49 é recusada pelo piso e a de R$ 0,50 é aceita", scene(async () => {
@@ -305,19 +310,23 @@ describe("ordem nova no Postgres", () => {
   }));
 
   it("livro 11: a venda de Ana a R$ 47,00 continua no livro quando o preço cai a R$ 35,00, e a compra de Bruno a R$ 47,00 é recusada", scene(async () => {
-    const [ana, davi] = [await holder("FLA3", 10), await holder("FLA3", 5)];
+    const [ana, davi] = [await holder("FLA3", 10), await holder("FLA3", 10)];
     const [bruno, carla] = [await player(), await player()];
     await ready();
     const sale = accepted(await service.place(o.sellLimit(ana, "FLA3", 10, 4700)));
-    // o preço cai a R$ 35,00 com um negócio entre Carla e Davi
-    accepted(await service.place(o.buyLimit(carla, "FLA3", 5, 3500)));
-    expect(accepted(await service.place(o.sellLimit(davi, "FLA3", 5, 3500))).trades.map((t) => t.price)).toEqual([3500]);
+    // O preço cai a R$ 35,00 com negócios entre Carla e Davi: a R$ 36,00 hoje (a beira do túnel de R$ 40,00) e a
+    // R$ 35,00 amanhã, com a referência nova.
+    accepted(await service.place(o.buyLimit(carla, "FLA3", 5, 3600)));
+    expect(accepted(await service.place(o.sellLimit(davi, "FLA3", 5, 3600))).trades.map((t) => t.price)).toEqual([3600]);
+    const nextDay = { now: new Date(NOW.getTime() + 24 * 60 * 60 * 1000) };
+    accepted(await service.place(o.buyLimit(carla, "FLA3", 5, 3500, nextDay)));
+    expect(accepted(await service.place(o.sellLimit(davi, "FLA3", 5, 3500, nextDay))).trades.map((t) => t.price)).toEqual([3500]);
     expect(await price("FLA3")).toBe(3500);
 
     expect(await orderRow(db, sale.order.id)).toMatchObject({ status: "open", filled: 0, limitPrice: 4700 });
     // o limite foi a R$ 42,00: Bruno não alcança mais a venda de Ana
-    expect(rejected(await service.place(o.buyLimit(bruno, "FLA3", 10, 4700))).code).toBe("price_out_of_band");
-    expect(accepted(await service.place(o.buyLimit(bruno, "FLA3", 10, 4200))).trades).toEqual([]);
+    expect(rejected(await service.place(o.buyLimit(bruno, "FLA3", 10, 4700, nextDay))).code).toBe("price_out_of_band");
+    expect(accepted(await service.place(o.buyLimit(bruno, "FLA3", 10, 4200, nextDay))).trades).toEqual([]);
   }));
 
   it("livro 13: com uma venda aberta a R$ 42,00, a compra limitada a R$ 42,00 e a compra a mercado são recusadas; a R$ 41,99 é aceita", scene(async () => {
@@ -355,7 +364,7 @@ describe("ordem nova no Postgres", () => {
     await ready();
     for (let i = 0; i < 50; i++) {
       const ticker = TICKERS[i % TICKERS.length]!;
-      accepted(await service.place(o.buyLimit(ana, ticker, 1, 3200 + i)));
+      accepted(await service.place(o.buyLimit(ana, ticker, 1, 3600 + i)));
     }
     expect(await walletOf(db, ana)).toMatchObject({ openOrders: 50 });
 
@@ -409,6 +418,7 @@ describe("ordem nova no Postgres", () => {
     await giveShares(db, treasury, club("FLA3"), 600);
     await giveCash(db, treasury, 1_000_000);
     const [ana, bruno] = [await holder("FLA3", 1_200), await holder("FLA3", 1_200)];
+    await setDisplayedPrice(db, seasonId, club("FLA3"), 4200);
     await ready();
     expect((await clubRow(db, seasonId, club("FLA3"))).totalShares).toBe(3_000);
     const house = { actor: "house" as const };

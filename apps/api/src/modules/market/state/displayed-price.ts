@@ -1,4 +1,4 @@
-import { and, desc, eq, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { dayStart, type Cents } from "@futbolsa/engine";
 import type { Database, DrizzleTx } from "../../../infra/db/index.js";
 import { clubs, seasonClubs, trades } from "../../../infra/db/schema/index.js";
@@ -31,12 +31,26 @@ export function changeBp(current: Cents, reference: Cents): number {
 /**
  * O último negócio do clube até `at` (inclusive). Único ponto que lê os negócios para o preço do passado, para a
  * anulação de trapaça da F14 acrescentar o filtro dos negócios anulados num lugar só. Usa `trades_club_at_idx`.
+ * Com `only`, olha só os negócios desde um instante (`since`, inclusive) ou só os de leilão: é como a referência
+ * do túnel acha o último leilão de hoje (`rebuildTunnelReference`).
  */
-export async function lastTradeUntil(db: Db, clubId: number, at: Date): Promise<{ price: Cents; at: Date } | null> {
+export async function lastTradeUntil(
+  db: Db,
+  clubId: number,
+  at: Date,
+  only: { since?: Date; inAuction?: boolean } = {},
+): Promise<{ price: Cents; at: Date } | null> {
   const [row] = await db
     .select({ price: trades.price, at: trades.at })
     .from(trades)
-    .where(and(eq(trades.clubId, clubId), lte(trades.at, at)))
+    .where(
+      and(
+        eq(trades.clubId, clubId),
+        lte(trades.at, at),
+        only.since ? gte(trades.at, only.since) : undefined,
+        only.inAuction === undefined ? undefined : eq(trades.inAuction, only.inAuction),
+      ),
+    )
     .orderBy(desc(trades.at), desc(trades.id))
     .limit(1);
   return row ?? null;

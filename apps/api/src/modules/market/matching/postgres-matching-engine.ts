@@ -1,9 +1,11 @@
 import { Injectable } from "@nestjs/common";
 import { and, eq } from "drizzle-orm";
 import {
+  breachesTunnel,
   entryReservation,
   matchOrder,
   remainderRelease,
+  tunnelBand,
   validateOrder,
   type Cents,
   type IncomingOrder,
@@ -21,13 +23,15 @@ import type { PostResult } from "../../portfolio/ledger/index.js";
 import { insertOrderRow, myOpenOrdersInClub, readOppositeSide, setClubPrice, type BookOrder } from "../book/book-repo.js";
 import { displayedPriceOf } from "../state/displayed-price.js";
 import { tradingGate } from "../state/gate.js";
+import { auctionExpired, auctionOf, isInAuction, openAuction, rollTunnel } from "../state/tunnel-state.js";
 import {
   MatchingEngine,
   type MatchingHooks,
   type OrderRecord,
+  type PlaceOrderAccepted,
+  type PlaceOrderAttempt,
   type PlaceOrderInput,
   type PlaceOrderRejected,
-  type PlaceOrderResult,
   type TradeRecord,
 } from "./matching-engine.js";
 import { ORDER_REF, settleTrade } from "./settle.js";
@@ -64,20 +68,30 @@ interface Reach {
  * 2. lê a temporada **depois** dessa trava, sem travá-la (a temporada vem antes dos clubes na ordem das travas; a
  *    suspensão do mercado todo e o fim da negociação travam todos os clubes, então quem esperou pelo clube já vê
  *    o que eles gravaram) e passa pela porta do horário e da suspensão;
- * 3. lê **sem trava** a própria carteira, as ações do clube e as próprias ordens abertas no clube (estas só mudam
- *    com o clube travado);
- * 4. confere a ordem (`validateOrder` do motor) com o preço exibido da linha travada;
- * 5. lê o outro lado do livro, em páginas, só até o preço e a quantidade da ordem;
+ * 3. túnel de preço: se o leilão do clube venceu, sai sem gravar nada (`AuctionExpired`: quem chama fecha o leilão e
+ *    repete, P10); senão, a referência do túnel vira para o dia novo de Brasília (P9), e essa é a única gravação
+ *    que pode ficar de uma ordem recusada;
+ * 4. lê **sem trava** a própria carteira, as ações do clube e as próprias ordens abertas no clube (estas só mudam
+ *    com o clube travado) e confere a ordem (`validateOrder` do motor) com o preço exibido da linha travada, o
+ *    leilão e o túnel. A ordem recusada nunca abre leilão;
+ * 5. fora de leilão, lê o outro lado do livro, em páginas, só até o preço e a quantidade da ordem;
  * 6. junta os donos de **todas** as ordens que o preço e a quantidade alcançam, sem cortar pelo caixa livre (P1),
- *    e trava de uma vez a própria carteira e essas contrapartes (a tesouraria por último);
+ *    e trava de uma vez a própria carteira e essas contrapartes (a tesouraria por último). Em leilão não há
+ *    contraparte: trava só a própria carteira;
  * 7. relê a própria carteira, já travada: se o caixa, as ações ou as ordens abertas mudaram, confere de novo; e
  *    casa (`matchOrder`) com o caixa de agora. O casamento só alcança carteiras já travadas, porque nunca vai
- *    além do preço e da quantidade do passo 6;
+ *    além do preço e da quantidade do passo 6. Em leilão a ordem não casa. Fora dele, se algum negócio sairia do
+ *    túnel, nenhum sai: o clube entra em leilão por 3 horas e a ordem fica inteira no livro (critério 39);
  * 8. grava: a ordem, a reserva da entrada, cada negócio com as duas linhas do extrato, o andamento das ordens do
  *    livro, a sobra (aberta, se limitada; cancelada com `market_remainder`, se a mercado) e o preço do clube.
  *
- * Nada é gravado antes do passo 8: a recusa, em qualquer passo, devolve o código sem ter mexido em nada. Candles e
- * eventos do WebSocket não são daqui (T7): o resultado traz os negócios, as ordens e as linhas do extrato.
+ * Nenhuma ordem, negócio ou linha do extrato é gravada antes do passo 8: a recusa, em qualquer passo, devolve o
+ * código sem ter mexido no caixa, nas ações nem no livro. Candles e eventos do WebSocket não são daqui (T7): o
+ * resultado traz os negócios, as ordens e as linhas do extrato.
+ *
+ * Os negócios daqui gravam `in_auction` falso; os do leilão saem no fim dele (`closeAuction`, L5). As ordens
+ * abertas de temporadas passadas não entram no livro porque o fim da negociação cancela todas (`endTrading`): as
+ * leituras do livro filtram só pelo clube.
  */
 @Injectable()
 export class PostgresMatchingEngine extends MatchingEngine {
@@ -88,7 +102,7 @@ export class PostgresMatchingEngine extends MatchingEngine {
     super();
   }
 
-  async place(tx: Tx, input: PlaceOrderInput, hooks?: MatchingHooks): Promise<PlaceOrderResult> {
+  async place(tx: Tx, input: PlaceOrderInput, hooks?: MatchingHooks): Promise<PlaceOrderAttempt> {
     // 1. O clube travado: o livro e o preço exibido dele não mudam mais nesta transação.
     const club = (await lockClubs(tx, input.seasonId, [input.ticker]))[0]!;
 
@@ -107,9 +121,17 @@ export class PostgresMatchingEngine extends MatchingEngine {
     if (!gate.open) return gate.code === "club_suspended" ? reject(gate.code, gate.reason) : reject(gate.code);
     const at = instantOf(input.now, club.lastTradeAt);
 
-    // (L4) Túnel de preço: o leilão vencido fecha antes, e a referência do dia vira aqui, com o clube travado.
+    // 3. O túnel de preço. A ordem não entra num leilão vencido: sai sem gravar nada, e quem chama fecha o leilão
+    //    numa transação própria e manda a ordem de novo (fechar aqui travaria as carteiras dos negócios do leilão
+    //    depois das que a ordem já tivesse travado, fora da ordem). Depois, a referência do túnel vira para o dia
+    //    novo: nenhum negócio saiu antes de ela virar, então o preço exibido lido agora é o das 0h.
+    if (auctionExpired(club, at)) {
+      return { ok: false, auctionExpired: true, seasonId: input.seasonId, ticker: club.ticker, until: club.auctionUntil! };
+    }
+    const inAuction = isInAuction(club);
+    const tunnel = tunnelBand(await rollTunnel(tx, club, at));
 
-    // 3. A própria carteira, sem trava: as contrapartes ainda não são conhecidas, e todas as carteiras são
+    // 4. A própria carteira, sem trava: as contrapartes ainda não são conhecidas, e todas as carteiras são
     //    travadas juntas, em ordem de id, no passo 6.
     const request = requestOf(input);
     const displayedPrice = displayedPriceOf(club);
@@ -123,51 +145,82 @@ export class PostgresMatchingEngine extends MatchingEngine {
       openOrders: account.wallet.openOrders,
       myOpenOrders,
       isHouse: input.actor === "house",
+      // Em leilão a ordem a mercado é recusada (`club_in_auction`). Fora dele, o túnel aperta o teto e o piso da
+      // ordem a mercado: ela executa só dentro do túnel e o resto é cancelado, sem abrir leilão (D1).
+      inAuction,
+      tunnel: inAuction ? undefined : tunnel,
     });
 
-    // 4. As recusas da especificação que não dependem do casamento.
+    // As recusas da especificação que não dependem do casamento.
     let validation = validate(request, state(before));
     if (!validation.ok) return reject(validation.code);
+    // A casa não tem a faixa de 20%, mas a ordem a mercado dela também para no túnel (D1).
+    const marketLimit = (v: { marketPriceLimit?: Cents }): Cents | undefined =>
+      v.marketPriceLimit ?? (request.type === "market" && !inAuction ? (request.side === "buy" ? tunnel.max : tunnel.min) : undefined);
 
-    // 5 e 6. O outro lado até onde o preço e a quantidade alcançam, e os donos dessas ordens (P1).
+    // 5 e 6. O outro lado até onde o preço e a quantidade alcançam, e os donos dessas ordens (P1). Em leilão
+    //        nada casa: a limitada entra no livro como está, mesmo cruzando, e espera o preço único.
     const incoming: IncomingOrder = { id: INCOMING_ID, accountId: String(input.walletId), ...request };
-    const reach = await this.readReach(tx, club.clubId, request, validation.marketPriceLimit);
-    const widest = matchOrder(reach.resting, incoming, {
-      selfTrade: "reject",
-      availableCash: NO_CASH_LIMIT,
-      marketPriceLimit: validation.marketPriceLimit,
-    });
-    if (widest.status === "rejected") return reject("self_trade");
-    const counterparties = new Set(widest.fills.map((f) => reach.byId.get(f.restingId)!.walletId));
+    let reach: Reach = { resting: [], byId: new Map() };
+    const counterparties = new Set<number>();
+    if (!inAuction) {
+      reach = await this.readReach(tx, club.clubId, request, marketLimit(validation));
+      const widest = matchOrder(reach.resting, incoming, {
+        selfTrade: "reject",
+        availableCash: NO_CASH_LIMIT,
+        marketPriceLimit: marketLimit(validation),
+      });
+      if (widest.status === "rejected") return reject("self_trade");
+      for (const fill of widest.fills) counterparties.add(reach.byId.get(fill.restingId)!.walletId);
+    }
 
     if (hooks?.afterReadBeforeLock) await hooks.afterReadBeforeLock();
 
     const locked = await lockWallets(tx, [input.walletId, ...counterparties]);
     const houseWallets = new Set(locked.filter((w) => w.ownerType === "treasury").map((w) => w.id));
+    const own = locked.find((w) => w.id === input.walletId)!;
 
-    // (T5) A recusa da conta bloqueada entra aqui, com a carteira travada: quem bloqueia trava a carteira antes
-    // de cancelar as ordens dela, então depois desta trava a situação lida é a que vale.
+    // A conferência de quem chama, com a carteira travada (a rota recusa aqui a conta bloqueada).
+    if (hooks?.afterWalletsLocked) {
+      const refusal = await hooks.afterWalletsLocked(tx, own);
+      if (refusal) return refusal;
+    }
 
     // 7. A própria carteira de novo, agora travada. As contrapartes não precisam: o que as ordens delas prendem
     //    (caixa ou ações) só é solto com o clube travado.
-    const account = await this.readAccount(tx, input, club.clubId, locked.find((w) => w.id === input.walletId));
+    const account = await this.readAccount(tx, input, club.clubId, own);
     if (changed(before, account)) {
       validation = validate(request, state(account));
       if (!validation.ok) return reject(validation.code);
     }
-    const match = matchOrder(reach.resting, incoming, {
-      selfTrade: "reject",
-      availableCash: account.wallet.cash - account.wallet.reservedCash,
-      marketPriceLimit: validation.marketPriceLimit,
-    });
-    if (match.status === "rejected") return reject("self_trade");
 
-    // (L4) Túnel de preço: `breachesTunnel(match.fills, túnel)` entra aqui, entre o casamento e a gravação. Se
-    // algum negócio sairia do túnel, os negócios são descartados, o clube entra em leilão e a ordem é gravada
-    // inteira, aberta, pela mesma `record` (com `match` sem negócios).
+    let match = unmatched(request);
+    let openedAuction = false;
+    let auction = auctionOf(club);
+    if (!inAuction) {
+      match = matchOrder(reach.resting, incoming, {
+        selfTrade: "reject",
+        availableCash: account.wallet.cash - account.wallet.reservedCash,
+        marketPriceLimit: marketLimit(validation),
+      });
+      if (match.status === "rejected") return reject("self_trade");
 
-    // 8. Só agora o banco muda.
-    return this.record(tx, { input, at, request, club, displayedPrice, account, reach, match, houseWallets });
+      // A ordem que executaria alguma parte fora do túnel não executa nada: o clube entra em leilão e ela entra
+      // inteira nele, com a reserva (critério 39; a cotação da casa também, D2). As carteiras das contrapartes
+      // ficam travadas sem uso até o COMMIT, o que não muda a ordem das travas.
+      if (breachesTunnel(match.fills, tunnel)) {
+        if (request.type !== "limit") throw new Error("ordem a mercado com negócio fora do túnel: o teto dela devia ser o do túnel");
+        auction = { until: await openAuction(tx, club, at) };
+        openedAuction = true;
+        match = unmatched(request);
+      }
+    } else if (request.type !== "limit") {
+      throw new Error("ordem a mercado passou pela conferência com o clube em leilão");
+    }
+
+    // 8. Só agora o livro, o caixa e as ações mudam.
+    const recorded = await this.record(tx, { input, at, request, club, displayedPrice, account, reach, match, houseWallets });
+    return { ...recorded, openedAuction, auction };
   }
 
   /**
@@ -229,7 +282,7 @@ export class PostgresMatchingEngine extends MatchingEngine {
       match: MatchResult;
       houseWallets: ReadonlySet<number>;
     },
-  ): Promise<PlaceOrderResult> {
+  ): Promise<PlaceOrderAccepted> {
     const { input, at, request, club, match } = r;
     const limitPrice = request.type === "limit" ? request.limitPrice! : null;
     const buying = request.side === "buy";
@@ -365,6 +418,11 @@ export class PostgresMatchingEngine extends MatchingEngine {
  */
 function instantOf(now: Date, lastTradeAt: Date | null): Date {
   return lastTradeAt !== null && lastTradeAt.getTime() > now.getTime() ? lastTradeAt : now;
+}
+
+/** A ordem que entra no livro sem nenhum negócio: em leilão, ou a que abriu o leilão. Só a limitada. */
+function unmatched(request: OrderRequestShape): MatchResult {
+  return { status: "resting", fills: [], remaining: request.quantity, rests: true };
 }
 
 function reject(code: PlaceOrderRejected["code"], reason?: string): PlaceOrderRejected {
