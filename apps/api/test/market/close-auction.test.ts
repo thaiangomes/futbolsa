@@ -1,22 +1,41 @@
 import "reflect-metadata";
+import { SchedulerRegistry } from "@nestjs/schedule";
+import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { and, asc, eq } from "drizzle-orm";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  bookEventSchema,
+  candleEventSchema,
+  orderUpdatedEventSchema,
+  priceEventSchema,
+  tradeEventSchema,
+  walletChangedEventSchema,
+} from "@futbolsa/contracts";
 import { clearAuction, type AuctionOrder } from "@futbolsa/engine";
+import { FixedClock } from "../../src/infra/clock/index.js";
 import type { Database } from "../../src/infra/db/client.js";
 import { candles, orders, seasonClubs, seasons, trades, walletEntries } from "../../src/infra/db/schema/index.js";
+import { AUCTION_CLOSE_EVERY_MS, MarketJobs } from "../../src/infra/jobs/market-jobs.js";
+import { EventBus, meChannel, type BusEvent } from "../../src/infra/realtime/index.js";
 import {
+  AuctionCloser,
+  BookPublisher,
   CancelService,
   CloseAuctionAdapter,
   CloseAuctionService,
   displayedPrice,
+  isInAuction,
   OrderService,
   PostgresMatchingEngine,
   type AuctionClosed,
   type CloseAuctionResult,
 } from "../../src/modules/market/index.js";
 import { PortfolioLedger } from "../../src/modules/portfolio/index.js";
+import { createAccount, type TestAccount } from "../support/accounts.js";
+import { createTestApp } from "../support/app.js";
+import { withTestAuth } from "../support/auth.js";
 import { useTestDatabase } from "../support/db.js";
-import { rng } from "../support/fixtures.js";
+import { deferred, openWallets, rng, sleep } from "../support/fixtures.js";
 import {
   assertBookNotCrossed,
   assertLedgerConsistent,
@@ -25,7 +44,7 @@ import {
   assertSharesConserved,
   totalCash,
 } from "../support/invariants.js";
-import { marketSeason } from "./helpers.js";
+import { MARKET_TICKERS, marketSeason, type MarketSeason } from "./helpers.js";
 import {
   accepted,
   assertMarketInvariants,
@@ -45,8 +64,8 @@ import {
 } from "./order-helpers.js";
 
 // L5 do Plano do livro de ofertas e formador: o fim do leilão (`closeAuction`), pelo serviço, no banco (Livro de
-// ofertas e formador de mercado, "Túnel de preço e leilão", critérios 40, 42 e 44; D4; P10). A tarefa de 5 em 5
-// segundos, a costura no Nest e os eventos estão em `close-auction-job.test.ts`; as corridas, em
+// ofertas e formador de mercado, "Túnel de preço e leilão", critérios 40, 42 e 44; D4; P10); depois, na aplicação, a
+// costura do `AuctionCloser` no Nest, os eventos e a tarefa `auction-close` de 5 em 5 segundos. As corridas estão em
 // `close-auction-concurrency.test.ts`.
 
 /** Um instante pelo relógio de Brasília. */
@@ -500,4 +519,197 @@ describe("fim do leilão", () => {
       expect(stats.noTrade).toBeGreaterThan(0);
       expect(stats.orders).toBeGreaterThan(300);
     }), 120_000);
+});
+
+describe("fim do leilão na aplicação: a costura P10, os eventos e a tarefa auction-close", () => {
+  const database = useTestDatabase(12);
+  const clock = new FixedClock(brt("2027-04-06", "12:00"));
+  let app: NestFastifyApplication;
+  let bus: EventBus;
+  let s: MarketSeason;
+  let ana: { account: TestAccount; wallet: number };
+  let bruno: { account: TestAccount; wallet: number };
+
+  const OPENED = brt("2027-04-06", "12:00");
+  const UNTIL = brt("2027-04-06", "15:00");
+  const frames = (events: BusEvent[]) => events.map((e) => JSON.parse(e.frame) as { type: string; data: Record<string, unknown> });
+  const watch = (stream: Parameters<EventBus["subscribe"]>[0]) => {
+    const got: BusEvent[] = [];
+    bus.subscribe(stream, (e) => got.push(e));
+    return got;
+  };
+  /** O barramento limita `book` a 4 por segundo e `price` a 1 por segundo: o último de uma rajada sai no fim da janela. */
+  const windowEnd = () => sleep(1_100);
+  const clubOf = (ticker: string) => s.clubIds.get(ticker)!;
+  const rowOf = (ticker: string) => clubRow(database.db, s.seasonId, clubOf(ticker));
+  /**
+   * Um clube em leilão das 12h às 15h, com referência e preço exibido em R$ 40,00. O último negócio sai da linha: os
+   * testes reaproveitam o mesmo dia, e as ordens das 13h não podem parecer posteriores ao fechamento do teste anterior.
+   */
+  const inAuction = (ticker: string, until = UNTIL) =>
+    database.db
+      .update(seasonClubs)
+      .set({ lastPrice: 4000, lastTradeAt: null, tunnelRef: 4000, tunnelRefDay: TODAY, auctionOpenedAt: OPENED, auctionUntil: until })
+      .where(and(eq(seasonClubs.seasonId, s.seasonId), eq(seasonClubs.clubId, clubOf(ticker))));
+  /** No leilão, a venda de Bruno (10 a R$ 39,00) e a compra de Ana (10 a R$ 41,00): o preço único é R$ 39,00 (D3). */
+  const crossing = async (ticker: string) => {
+    const orders = app.get(OrderService);
+    const input = orderInputs({ seasonId: s.seasonId, now: brt("2027-04-06", "13:00") });
+    const sale = accepted(await orders.place(input.sellLimit(bruno.wallet, ticker, 10, 3900)));
+    const purchase = accepted(await orders.place(input.buyLimit(ana.wallet, ticker, 10, 4100)));
+    expect([sale.trades, purchase.trades]).toEqual([[], []]);
+    return { sale, purchase };
+  };
+  const auctionTrades = async (ticker: string) =>
+    database.db.select().from(trades).where(and(eq(trades.clubId, clubOf(ticker)), eq(trades.inAuction, true))).orderBy(asc(trades.id));
+
+  beforeAll(async () => {
+    app = await createTestApp({ db: database.db, clock, override: withTestAuth(clock) });
+    bus = app.get(EventBus, { strict: false });
+    s = await marketSeason(database.db);
+    await openTreasury(database.db, s.seasonId);
+    const accounts = [await createAccount(database.db, { nickname: "ana_leilao" }), await createAccount(database.db, { nickname: "bruno_leilao" })];
+    const [anaWallet, brunoWallet] = (await openWallets(database.db, s.seasonId, accounts.map((a) => ({ type: "user" as const, userId: a.id })))) as [number, number];
+    ana = { account: accounts[0]!, wallet: anaWallet };
+    bruno = { account: accounts[1]!, wallet: brunoWallet };
+    for (const ticker of MARKET_TICKERS) await giveShares(database.db, bruno.wallet, clubOf(ticker), 100);
+  });
+  afterAll(() => app?.close());
+
+  it("o MarketModule liga o AuctionCloser ao fim do leilão de verdade: a ordem pelo OrderService da aplicação, às 15h00min02s, fecha o leilão vencido antes e casa depois (P10)", async () => {
+    expect(app.get(AuctionCloser)).toBeInstanceOf(CloseAuctionAdapter);
+    expect(app.get(CloseAuctionService)).toBeInstanceOf(CloseAuctionService);
+    await inAuction("SPT3");
+    await crossing("SPT3");
+    const arrival = later(UNTIL, 2_000);
+
+    const r = accepted(await app.get(OrderService).place(orderInputs({ seasonId: s.seasonId, now: arrival }).sellLimit(bruno.wallet, "SPT3", 5, 3800)));
+
+    expect((await auctionTrades("SPT3")).map((x) => [x.quantity, x.price, x.at])).toEqual([[10, 3900, arrival]]);
+    expect(r).toMatchObject({ trades: [], openedAuction: false, auction: null });
+    expect(await rowOf("SPT3")).toMatchObject({ lastPrice: 3900, tunnelRef: 3900, auctionOpenedAt: null, auctionUntil: null });
+  });
+
+  it("depois do COMMIT: trade de cada negócio, os candles, order.updated e wallet.changed só para os donos, e o livro e o preço republicados sem o leilão", async () => {
+    await inAuction("FLA3");
+    const { sale, purchase } = await crossing("FLA3");
+    const publisher = app.get(BookPublisher);
+    await publisher.idle();
+    await windowEnd();
+    const club = watch("club:FLA3");
+    const prices = watch("prices");
+    const anaMe = watch(meChannel(ana.account.id));
+    const brunoMe = watch(meChannel(bruno.account.id));
+
+    const r = closed(await app.get(CloseAuctionService).closeAuction(s.seasonId, "FLA3", UNTIL));
+    await publisher.idle();
+    await windowEnd();
+
+    const clubFrames = frames(club);
+    const published = clubFrames.filter((f) => f.type === "trade").map((f) => tradeEventSchema.parse(f.data));
+    expect(published).toEqual([{ id: r.trades[0]!.id, at: UNTIL.toISOString(), price: 3900, quantity: 10 }]);
+    const sticks = clubFrames.filter((f) => f.type === "candle").map((f) => candleEventSchema.parse(f.data));
+    expect(sticks.map((c) => [c.interval, c.close, c.volume])).toEqual([
+      ["15m", 3900, 10],
+      ["1d", 3900, 10],
+    ]);
+    expect(bookEventSchema.parse(clubFrames.filter((f) => f.type === "book").at(-1)!.data)).toEqual({ bids: [], asks: [], auction: null });
+    expect(priceEventSchema.parse(frames(prices).at(-1)!.data)).toMatchObject({ ticker: "FLA3", price: 3900, auction: null });
+    expect(JSON.stringify(clubFrames)).not.toMatch(/wallet|buyer|seller|userId/i);
+
+    const anaFrames = frames(anaMe);
+    expect(anaFrames.filter((f) => f.type === "order.updated").map((f) => orderUpdatedEventSchema.parse(f.data))).toEqual([
+      expect.objectContaining({ id: purchase.order.id, status: "filled", filled: 10, reservedCash: 0 }),
+    ]);
+    expect(walletChangedEventSchema.parse(anaFrames.filter((f) => f.type === "wallet.changed").at(-1)!.data)).toMatchObject({
+      reserved: 0,
+      club: { ticker: "FLA3", shares: 10 },
+    });
+    const brunoOrders = frames(brunoMe).filter((f) => f.type === "order.updated").map((f) => orderUpdatedEventSchema.parse(f.data));
+    expect(brunoOrders).toEqual([expect.objectContaining({ id: sale.order.id, side: "sell", status: "filled", filled: 10 })]);
+    // a ordem de um não vai para o canal do outro
+    expect(anaFrames.some((f) => f.type === "order.updated" && f.data.id === sale.order.id)).toBe(false);
+
+    // o leilão sem negócio publica só o livro e o preço, já sem o leilão
+    await inAuction("COR3");
+    const quiet = watch("club:COR3");
+    expect(closed(await app.get(CloseAuctionService).closeAuction(s.seasonId, "COR3", UNTIL)).noTrade).toBe("no_cross");
+    await publisher.idle();
+    await windowEnd();
+    expect(frames(quiet).map((f) => f.type)).toEqual(["book"]);
+    expect(bookEventSchema.parse(frames(quiet)[0]!.data).auction).toBeNull();
+  });
+
+  it("a tarefa auction-close fecha os leilões vencidos da temporada atual e ignora os que não venceram e os clubes fora de leilão", async () => {
+    await inAuction("FLA3");
+    await crossing("FLA3");
+    await inAuction("PAL3");
+    await inAuction("SPT3", brt("2027-04-06", "18:00"));
+    await setTunnelState(database.db, s.seasonId, clubOf("COR3"), { auctionOpenedAt: null, auctionUntil: null });
+    // a API ficou fora das 14h às 16h: o leilão que venceu às 15h fecha na primeira passada, com o horário dela
+    const back = brt("2027-04-06", "16:00");
+    clock.set(back);
+    const tradesBefore = (await auctionTrades("FLA3")).length;
+
+    expect(await app.get(MarketJobs).closeAuctions()).toEqual({ skipped: false, closed: ["FLA3", "PAL3"], unchanged: [], failed: [] });
+
+    const fla = await auctionTrades("FLA3");
+    expect(fla.slice(tradesBefore).map((x) => [x.quantity, x.price, x.at])).toEqual([[10, 3900, back]]);
+    expect(await rowOf("PAL3")).toMatchObject({ auctionOpenedAt: null, tunnelRef: 4000, tunnelRefDay: TODAY });
+    expect(await rowOf("SPT3")).toMatchObject({ auctionOpenedAt: OPENED, auctionUntil: brt("2027-04-06", "18:00") });
+    // a passada seguinte não encontra nada
+    expect(await app.get(MarketJobs).closeAuctions()).toEqual({ skipped: false, closed: [], unchanged: [], failed: [] });
+    await setTunnelState(database.db, s.seasonId, clubOf("SPT3"), { auctionOpenedAt: null, auctionUntil: null });
+  });
+
+  it("na tarefa, um clube que falha não segura os outros; e uma passada não começa enquanto a anterior roda", async () => {
+    clock.set(brt("2027-04-06", "16:00"));
+    for (const ticker of ["COR3", "FLA3", "PAL3"]) await inAuction(ticker);
+    class Flaky extends CloseAuctionService {
+      override closeAuction(seasonId: number, ticker: string, now: Date): Promise<CloseAuctionResult> {
+        if (ticker === "FLA3") return Promise.reject(new Error("falha de teste"));
+        return super.closeAuction(seasonId, ticker, now);
+      }
+    }
+    const flaky = new MarketJobs(new SchedulerRegistry(), clock, new Flaky(database.db, new PortfolioLedger()));
+    expect(await flaky.closeAuctions()).toEqual({ skipped: false, closed: ["COR3", "PAL3"], unchanged: [], failed: [{ ticker: "FLA3", error: "falha de teste" }] });
+    expect(isInAuction(await rowOf("FLA3"))).toBe(true);
+
+    // sem sobreposição: com a passada presa no FLA3, a seguinte é pulada; solta, ela termina
+    const entered = deferred();
+    const release = deferred();
+    class Slow extends CloseAuctionService {
+      override async closeAuction(seasonId: number, ticker: string, now: Date): Promise<CloseAuctionResult> {
+        entered.resolve();
+        await release.promise;
+        return super.closeAuction(seasonId, ticker, now);
+      }
+    }
+    const slow = new MarketJobs(new SchedulerRegistry(), clock, new Slow(database.db, new PortfolioLedger()));
+    const first = slow.closeAuctions();
+    await entered.promise;
+    expect(await slow.closeAuctions()).toEqual({ skipped: true });
+    release.resolve();
+    expect(await first).toEqual({ skipped: false, closed: ["FLA3"], unchanged: [], failed: [] });
+    expect(await slow.closeAuctions()).toMatchObject({ skipped: false, closed: [] });
+  });
+
+  it("a tarefa auction-close é registrada a cada 5 segundos, e não sobe com JOBS_ENABLED=false", () => {
+    const previous = process.env.JOBS_ENABLED;
+    try {
+      const off = new SchedulerRegistry();
+      process.env.JOBS_ENABLED = "false";
+      new MarketJobs(off, clock, app.get(CloseAuctionService)).onApplicationBootstrap();
+      expect(off.getIntervals()).toEqual([]);
+
+      const on = new SchedulerRegistry();
+      process.env.JOBS_ENABLED = "true";
+      new MarketJobs(on, clock, app.get(CloseAuctionService)).onApplicationBootstrap();
+      expect(on.getIntervals()).toEqual(["auction-close"]);
+      expect(AUCTION_CLOSE_EVERY_MS).toBe(5_000);
+      on.deleteInterval("auction-close");
+    } finally {
+      process.env.JOBS_ENABLED = previous;
+    }
+  });
 });
