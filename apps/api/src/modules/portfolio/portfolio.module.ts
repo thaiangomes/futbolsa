@@ -1,5 +1,6 @@
 import { Injectable, Module } from "@nestjs/common";
 import type { Tx } from "../../infra/db/transaction.js";
+import { recordTrade } from "./candles/record-trade.js";
 import { openWallet, post, type Movement, type OpenWallet } from "./ledger/index.js";
 
 /**
@@ -14,6 +15,11 @@ export class PortfolioLedger {
 
   openWallet(tx: Tx, options: OpenWallet) {
     return openWallet(tx, options);
+  }
+
+  /** Atualiza os candles de 15 minutos e do dia com um negócio (o `market` chama a cada negócio). */
+  recordTrade(tx: Tx, trade: Parameters<typeof recordTrade>[1]) {
+    return recordTrade(tx, trade);
   }
 }
 
