@@ -294,6 +294,27 @@ describe("ordem com túnel de preço e abertura do leilão", () => {
     expect(isInAuction(await row("FLA3"))).toBe(false);
   }));
 
+  it("D1: a ordem a mercado cuja primeira oferta está do OUTRO lado do túnel não executa nada, não abre leilão e não dá erro (achado do stress da T16)", scene(async () => {
+    const bruno = await holder("FLA3", 50);
+    const carla = await player();
+    const ana = await holder("PAL3", 100);
+    const davi = await player();
+    await ready();
+    // uma limitada fora do túnel (R$ 36,00 a R$ 44,00) mas dentro dos 20%: fica aberta no livro
+    accepted(await service.place(o.sellLimit(bruno, "FLA3", 10, 3550)));
+    const buy = accepted(await service.place(o.buyMarket(davi, "FLA3", 5)));
+    expect(buy.trades).toEqual([]);
+    expect(buy.order).toMatchObject({ status: "cancelled", cancelReason: "market_remainder", filled: 0 });
+    expect(buy).toMatchObject({ openedAuction: false, auction: null });
+    expect(isInAuction(await row("FLA3"))).toBe(false);
+    // o simétrico, noutro clube: uma compra parada acima do teto, e a venda a mercado não a alcança
+    accepted(await service.place(o.buyLimit(carla, "PAL3", 10, 4450)));
+    const sell = accepted(await service.place(o.sellMarket(ana, "PAL3", 5)));
+    expect(sell.trades).toEqual([]);
+    expect(sell.order).toMatchObject({ status: "cancelled", cancelReason: "market_remainder", filled: 0 });
+    expect(isInAuction(await row("PAL3"))).toBe(false);
+  }));
+
   it("a cotação da casa que executaria fora do túnel abre o leilão e entra nele (D2); a ordem a mercado da casa também para no túnel", scene(async () => {
     await giveCash(db, treasury, 1_000_000);
     const davi = await holder("FLA3", 10);
