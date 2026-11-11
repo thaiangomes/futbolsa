@@ -147,6 +147,18 @@ describe("eventos do mercado", () => {
     expect(frames(anaMe).every((f) => f.type !== "order.updated" || (f.data as { side: string }).side === "buy" || true)).toBe(true);
   });
 
+  it("compra a mercado cancelada inteira, sem nenhuma linha no extrato, ainda avisa o dono com order.updated (achado da T17)", async () => {
+    const anaMe = watch(meChannel(ana.id));
+    const brunoMe = watch(meChannel(bruno.id));
+    // o SPT3 não tem nenhuma venda no livro: a compra a mercado não executa e é cancelada
+    const result = await orders.place({ ...input(anaWallet, "buy", 5, 4000), ticker: "SPT3", type: "market" as never, limitPrice: undefined } as never);
+    expect(result).toMatchObject({ ok: true });
+    const updated = frames(anaMe).filter((f) => f.type === "order.updated").map((f) => orderUpdatedEventSchema.parse(f.data));
+    expect(updated).toHaveLength(1);
+    expect(updated[0]).toMatchObject({ ticker: "SPT3", status: "cancelled", cancelReason: "market_remainder", filled: 0 });
+    expect(frames(brunoMe)).toEqual([]);
+  });
+
   it("carteira da casa e de bot não publica no me (só o público)", async () => {
     const club = watch("club:FLA3");
     await database.db.update(positions).set({ shares: 10 }).where(eq(positions.walletId, brunoWallet));
