@@ -4,7 +4,7 @@ import { RealtimeAuthenticator } from "../../src/infra/realtime/authenticator.js
 import { EventBus, meChannel } from "../../src/infra/realtime/bus.js";
 import { FakeRealtimeAuthenticator } from "../../src/infra/realtime/fake-authenticator.js";
 import { startApp, TestClient, WEB_ORIGIN, type RunningApp } from "../support/ws-client.js";
-import { entryAddedData, walletChangedData } from "../support/events.js";
+import { entryAddedData, walletChangedData, orderUpdatedData } from "../support/events.js";
 
 describe("o canal me é privado (T5)", () => {
   let running: RunningApp;
@@ -68,14 +68,14 @@ describe("o canal me é privado (T5)", () => {
   });
 
   it("C9: retomar o me traz só os eventos da própria pessoa", async () => {
-    bus.publish(meChannel("ana"), "order.updated", { o: 1 });
-    bus.publish(meChannel("beto"), "order.updated", { o: 2 });
+    bus.publish(meChannel("ana"), "order.updated", orderUpdatedData(1));
+    bus.publish(meChannel("beto"), "order.updated", orderUpdatedData(2));
     const antes = bus.currentSeq(meChannel("ana"));
-    bus.publish(meChannel("ana"), "order.updated", { o: 3 });
+    bus.publish(meChannel("ana"), "order.updated", orderUpdatedData(3));
     const ana = await open("tok-ana");
     const reply = await ana.ask({ type: "subscribe", channel: "me", since: antes });
     expect(reply).toMatchObject({ data: { mode: "resumed", seq: antes + 1 } });
-    expect(await ana.next()).toMatchObject({ type: "order.updated", data: { o: 3 } });
+    expect(await ana.next()).toMatchObject({ type: "order.updated", data: { id: 3 } });
     expect(await ana.quiet()).toBe(true);
   });
 

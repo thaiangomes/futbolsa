@@ -4,7 +4,7 @@ import { RealtimeAuthenticator } from "../../src/infra/realtime/authenticator.js
 import { EventBus } from "../../src/infra/realtime/bus.js";
 import { FakeRealtimeAuthenticator } from "../../src/infra/realtime/fake-authenticator.js";
 import { startApp, TestClient, WEB_ORIGIN, type RunningApp } from "../support/ws-client.js";
-import { seasonStatusData } from "../support/events.js";
+import { seasonStatusData, priceData, tradeData } from "../support/events.js";
 
 describe("protocolo do gateway (T5)", () => {
   let running: RunningApp;
@@ -43,9 +43,9 @@ describe("protocolo do gateway (T5)", () => {
         expect(reply.data.seq).toBe(bus.currentSeq(channel as "season"));
       }
       bus.publish("season", "season.status", seasonStatusData("ipo_open"));
-      bus.publish("prices", "price", { ticker: "FLA3", price: 100 });
+      bus.publish("prices", "price", priceData(100));
       bus.publish("rankings", "rankings.live", { top: [] });
-      bus.publish("club:FLA3", "trade", { id: "n1" });
+      bus.publish("club:FLA3", "trade", tradeData(1));
       const recebidos = [await client.next(), await client.next(), await client.next(), await client.next()] as Array<{
         type: string;
         channel: string;
@@ -164,13 +164,13 @@ describe("protocolo do gateway (T5)", () => {
     it("C15: quem não assinou o canal não recebe nada, e depois de unsubscribe nada mais chega", async () => {
       const client = await open();
       await client.ask({ type: "subscribe", channel: "club:FLA3" });
-      bus.publish("club:PAL1", "trade", { id: "x" });
+      bus.publish("club:PAL1", "trade", tradeData(90));
       expect(await client.quiet()).toBe(true);
-      bus.publish("club:FLA3", "trade", { id: "a" });
-      expect(await client.next()).toMatchObject({ type: "trade", data: { id: "a" } });
+      bus.publish("club:FLA3", "trade", tradeData(10));
+      expect(await client.next()).toMatchObject({ type: "trade", data: { id: 10 } });
       client.send({ type: "unsubscribe", channel: "club:FLA3" });
       await new Promise((resolve) => setTimeout(resolve, 50));
-      bus.publish("club:FLA3", "trade", { id: "b" });
+      bus.publish("club:FLA3", "trade", tradeData(11));
       expect(await client.quiet()).toBe(true);
     });
 
@@ -178,26 +178,26 @@ describe("protocolo do gateway (T5)", () => {
       const client = await open();
       await client.ask({ type: "subscribe", channel: "club:SAN3" });
       await client.ask({ type: "subscribe", channel: "club:SAN3" });
-      bus.publish("club:SAN3", "trade", { id: "u" });
+      bus.publish("club:SAN3", "trade", tradeData(91));
       expect(await client.next()).toMatchObject({ type: "trade" });
       expect(await client.quiet()).toBe(true);
     });
 
     it("C16: reconexão com since reenvia só o que faltou, depois do subscribed, e segue ao vivo", async () => {
-      for (let i = 1; i <= 4; i++) bus.publish("club:COR3", "trade", { i });
+      for (let i = 1; i <= 4; i++) bus.publish("club:COR3", "trade", tradeData(i));
       const atual = bus.currentSeq("club:COR3");
       const client = await open();
       const reply = await client.ask({ type: "subscribe", channel: "club:COR3", since: atual - 2 });
       expect(reply).toMatchObject({ type: "subscribed", data: { seq: atual, mode: "resumed" } });
-      expect(await client.next()).toMatchObject({ type: "trade", seq: atual - 1, data: { i: 3 } });
-      expect(await client.next()).toMatchObject({ type: "trade", seq: atual, data: { i: 4 } });
-      bus.publish("club:COR3", "trade", { i: 5 });
+      expect(await client.next()).toMatchObject({ type: "trade", seq: atual - 1, data: { id: 3 } });
+      expect(await client.next()).toMatchObject({ type: "trade", seq: atual, data: { id: 4 } });
+      bus.publish("club:COR3", "trade", tradeData(5));
       expect(await client.next()).toMatchObject({ type: "trade", seq: atual + 1 });
       expect(await client.quiet()).toBe(true);
     });
 
     it("C17: since impossível (maior que o atual) dá resync e não reenvia nada", async () => {
-      bus.publish("club:VAS3", "trade", { i: 1 });
+      bus.publish("club:VAS3", "trade", tradeData(1));
       const client = await open();
       const reply = await client.ask({ type: "subscribe", channel: "club:VAS3", since: bus.currentSeq("club:VAS3") + 500 });
       expect(reply).toMatchObject({ type: "subscribed", data: { mode: "resync" } });
