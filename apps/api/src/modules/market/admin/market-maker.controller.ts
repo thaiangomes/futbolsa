@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Patch } from "@nestjs/common";
-import { type MarketMakerBody, marketMakerBodySchema, type MarketMakerState } from "@futbolsa/contracts";
+import { type MarketMakerBody, marketMakerBodySchema, type MarketMakerState, type MarketMakerView } from "@futbolsa/contracts";
 import { AdminOnly, CurrentUser, type ResolvedUser } from "../../../infra/auth-adapter/index.js";
 import { ZodValidationPipe } from "../../../infra/http/index.js";
 import { MarketMakerAdminService } from "./market-maker.service.js";
@@ -11,8 +11,8 @@ export class MarketMakerAdminController {
   constructor(private readonly service: MarketMakerAdminService) {}
 
   @Get()
-  state(): Promise<MarketMakerState> {
-    return this.service.state();
+  view(): Promise<MarketMakerView> {
+    return this.service.view();
   }
 
   @Patch()

@@ -8,6 +8,7 @@ import {
   currentSeasonResponseSchema,
   knownClubsResponseSchema,
   marketMakerStateSchema,
+  marketMakerViewSchema,
   type MarketMakerBody,
   listMatchesResponseSchema,
   overviewSchema,
@@ -71,7 +72,7 @@ export function adminApi(api: ApiClient) {
     suspend: (reason: string, ticker?: string) => api.request(suspensionStateSchema, "/admin/suspensions", { method: "POST", body: { reason, ...(ticker ? { ticker } : {}) } }),
     resume: (ticker?: string) => api.request(suspensionStateSchema, ticker ? `/admin/suspensions/${ticker}` : "/admin/suspensions", { method: "DELETE" }),
 
-    marketMaker: () => api.request(marketMakerStateSchema, "/admin/market-maker"),
+    marketMaker: () => api.request(marketMakerViewSchema, "/admin/market-maker"),
     updateMarketMaker: (body: MarketMakerBody) => api.request(marketMakerStateSchema, "/admin/market-maker", { method: "PATCH", body }),
 
     log: (query: Partial<AdminLogQuery> = {}) => api.request(adminLogResponseSchema, `/admin/log${queryString(query)}`),

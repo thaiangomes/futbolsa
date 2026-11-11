@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { adminReasonSchema } from "./common.js";
+import { adminReasonSchema, isoInstantSchema } from "./common.js";
 
 /**
  * `PATCH /admin/market-maker` (livro 34): muda os percentuais da quantidade da casa e os mínimos por lado, com
@@ -33,6 +33,31 @@ export const marketMakerStateSchema = z.strictObject({
   mmLotBp: z.number().int(),
 });
 export type MarketMakerState = z.infer<typeof marketMakerStateSchema>;
+
+/** Como cada clube está para a casa cotar: negociando, em jogo, em leilão ou suspenso (o clube ou o mercado todo). */
+export const marketMakerClubStatusSchema = z.enum(["trading", "in_match", "auction", "suspended"]);
+export type MarketMakerClubStatus = z.infer<typeof marketMakerClubStatusSchema>;
+
+/** O que a tesouraria tem em cada clube (ações livres = ações menos as presas em ordens abertas). */
+export const marketMakerTreasurySchema = z.strictObject({
+  cash: z.number().int(),
+  freeCash: z.number().int(),
+  clubs: z.array(
+    z.strictObject({
+      ticker: z.string(),
+      totalShares: z.number().int(),
+      freeShares: z.number().int(),
+      status: marketMakerClubStatusSchema,
+      /** Fim do leilão em andamento; nulo fora de leilão ou com o leilão parado pela suspensão. */
+      auctionUntil: isoInstantSchema.nullable(),
+    }),
+  ),
+});
+export type MarketMakerTreasury = z.infer<typeof marketMakerTreasurySchema>;
+
+/** A resposta de `GET /admin/market-maker`: os valores em vigor e a tesouraria (nula antes de ela existir). */
+export const marketMakerViewSchema = marketMakerStateSchema.extend({ treasury: marketMakerTreasurySchema.nullable() });
+export type MarketMakerView = z.infer<typeof marketMakerViewSchema>;
 
 export const MARKET_MAKER_ERROR_MESSAGES = {
   lot_locked: "O lote do formador só muda antes da abertura do IPO.",

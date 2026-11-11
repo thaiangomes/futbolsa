@@ -1,4 +1,4 @@
-import type { MarketMakerBody, MarketMakerState } from "@futbolsa/contracts";
+import type { MarketMakerBody, MarketMakerState, MarketMakerTreasury } from "@futbolsa/contracts";
 
 /** O que o admin digita na tela do formador (prancha 7l): percentuais em %, mínimos em ações. */
 export interface MarketMakerForm {
@@ -63,4 +63,35 @@ export function changesOf(state: MarketMakerState, form: MarketMakerForm): Omit<
   };
   const changed = Object.fromEntries(Object.entries(next).filter(([k, v]) => v !== state[k as keyof typeof next]));
   return Object.keys(changed).length > 0 ? changed : null;
+}
+
+/** Quantas ações a casa cota por lado: a regra do motor (`quoteSize`), repetida aqui porque o site não importa o motor. */
+export function sideQuantity(totalShares: number, basisPoints: number, minimum: number): { quantity: number; raw: number; usesMinimum: boolean } {
+  const raw = Math.floor((totalShares * basisPoints) / 10_000);
+  const quantity = Math.max(raw, minimum, 1);
+  return { quantity, raw, usesMinimum: raw < minimum || raw < 1 };
+}
+
+/** "10 por lado (0,25% dá 9; vale o mínimo)", como na prancha. */
+export function describeSide(totalShares: number, basisPoints: number, minimum: number): string {
+  const { quantity, raw, usesMinimum } = sideQuantity(totalShares, basisPoints, minimum);
+  const base = `${quantity.toLocaleString("pt-BR")} por lado`;
+  return usesMinimum ? `${base} (${formatPercent(basisPoints)}% dá ${raw.toLocaleString("pt-BR")}; vale o mínimo)` : base;
+}
+
+/** A coluna "A casa cota" do quadro da tesouraria. */
+export function quoteNote(club: Pick<MarketMakerTreasury["clubs"][number], "ticker" | "freeShares" | "status">, freeCash: number): string {
+  if (club.status === "suspended") return "Nada: a casa não cota clube suspenso";
+  const noShares = club.freeShares <= 0;
+  const noCash = freeCash <= 0;
+  const base = noShares && noCash
+    ? "Nada: a tesouraria está sem ações livres e sem caixa"
+    : noShares
+      ? `Só compra: a tesouraria está sem ações livres do ${club.ticker}`
+      : noCash
+        ? "Só vende: a tesouraria está sem caixa livre"
+        : "Compra e venda";
+  if (club.status === "auction") return `${base}; a oferta da casa entra no preço único do leilão`;
+  if (club.status === "in_match") return `${base}, com a quantidade do modo de jogo`;
+  return base;
 }

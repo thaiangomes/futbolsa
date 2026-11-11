@@ -32,7 +32,17 @@ async function type(selector: string, value: string) {
 }
 const click = async (el: Element) => act(async () => (el as HTMLElement).click());
 
-const state = { mmQuantityBp: 25, mmMatchQuantityBp: 6, mmMinSideQty: 10, mmMatchMinSideQty: 3, mmLotBp: 2000 };
+const values = { mmQuantityBp: 25, mmMatchQuantityBp: 6, mmMinSideQty: 10, mmMatchMinSideQty: 3, mmLotBp: 2000 };
+const treasury = {
+  cash: 41_230_000,
+  freeCash: 41_230_000,
+  clubs: [
+    { ticker: "FLA3", totalShares: 3736, freeShares: 212, status: "trading", auctionUntil: null },
+    { ticker: "PAL3", totalShares: 3000, freeShares: 0, status: "trading", auctionUntil: null },
+    { ticker: "CAM3", totalShares: 3736, freeShares: 430, status: "suspended", auctionUntil: null },
+  ],
+};
+const state = { ...values, treasury };
 const seasonOf = (status: string) => ({ season: { id: 1, status }, clubs: [] });
 const fake = (overrides: Partial<Record<keyof AdminApi, unknown>> = {}) =>
   ({ marketMaker: async () => state, currentSeason: async () => seasonOf("trading"), ...overrides }) as unknown as AdminApi;
@@ -54,8 +64,12 @@ describe("formador no admin (livro 34, prancha 7l)", () => {
   });
 
   it("Salvar só liga com mudança, valores válidos e motivo; manda só o que mudou, com o motivo", async () => {
-    const update = vi.fn(async () => ({ ...state, mmQuantityBp: 30, mmMatchMinSideQty: 4 }));
-    await render(createElement(MarketMakerScreen, { admin: fake({ updateMarketMaker: update }) }));
+    let current = state;
+    const update = vi.fn(async () => {
+      current = { ...state, mmQuantityBp: 30, mmMatchMinSideQty: 4 };
+      return values;
+    });
+    await render(createElement(MarketMakerScreen, { admin: fake({ marketMaker: async () => current, updateMarketMaker: update }) }));
     expect(button("Salvar").disabled).toBe(true);
     await type("#pf", "0,30");
     await type("#mj", "4");
@@ -102,5 +116,40 @@ describe("formador no admin (livro 34, prancha 7l)", () => {
     await click(button("Salvar"));
     expect(text()).toContain("Não há temporada em andamento.");
     expect($<HTMLInputElement>("#pf").value).toBe("0,30");
+  });
+
+  it("quadro da tesouraria: caixa, ações livres, situação e o que a casa cota em cada clube", async () => {
+    await render(createElement(MarketMakerScreen, { admin: fake() }));
+    expect(text()).toContain("Tesouraria agora");
+    expect(text()).toContain("R$ 412.300,00");
+    const rows = [...container.querySelectorAll("tbody tr")].map((r) => r.textContent ?? "");
+    const pal = rows.find((r) => r.startsWith("PAL3"))!;
+    expect(pal).toContain("Só compra: a tesouraria está sem ações livres do PAL3");
+    expect(rows.find((r) => r.startsWith("FLA3"))).toContain("Compra e venda");
+    expect(rows.find((r) => r.startsWith("CAM3"))).toContain("Suspenso");
+    expect(rows.find((r) => r.startsWith("CAM3"))).toContain("Nada: a casa não cota clube suspenso");
+  });
+
+  it("prévia num clube: o depois acompanha o que o admin digita, e o clube da prévia pode mudar", async () => {
+    await render(createElement(MarketMakerScreen, { admin: fake() }));
+    expect($("#depois-fora").textContent).toBe("10 por lado (0,25% dá 9; vale o mínimo)");
+    expect($("#depois-jogo").textContent).toBe("3 por lado (0,06% dá 2; vale o mínimo)");
+    await type("#pf", "1");
+    expect($("#depois-fora").textContent).toBe("37 por lado");
+    await type("#pf", "x");
+    expect($("#depois-fora").textContent).toBe("—");
+    const select = $<HTMLSelectElement>("#previa-clube");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, "PAL3");
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(text()).toContain("com 3.000 ações");
+  });
+
+  it("sem tesouraria (antes da abertura do IPO) a tela mostra só os percentuais", async () => {
+    await render(createElement(MarketMakerScreen, { admin: fake({ marketMaker: async () => ({ ...values, treasury: null }) }) }));
+    expect(text()).not.toContain("Tesouraria agora");
+    expect($("#previa-clube")).toBeNull();
+    expect($<HTMLInputElement>("#pf").value).toBe("0,25");
   });
 });

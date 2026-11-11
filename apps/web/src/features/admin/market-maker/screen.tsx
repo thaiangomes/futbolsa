@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import type { AdminApi } from "../api";
-import { reasonFeedback } from "../forms";
+import { formatCents, formatInstant, reasonFeedback } from "../forms";
 import { Card, ErrorNote, LoadState, ReasonField, useAction, useLoader } from "../ui";
-import { changesOf, type MarketMakerForm, formErrors, formOf, formatPercent } from "./form";
+import { changesOf, describeSide, type MarketMakerForm, formErrors, formOf, formatPercent, parseMinimum, parsePercent, quoteNote } from "./form";
 
 /**
  * Percentuais da quantidade que a casa cota por lado, no modo de jogo e fora dele (prancha 7l; livro de ofertas,
  * critério 34). Vale na reposição seguinte, com motivo no registro do admin. O lote do IPO é só lido: trava na
- * abertura do IPO. Falta a tabela da tesouraria da prancha: a API ainda não devolve as ações livres por clube.
+ * abertura do IPO. Embaixo, a tesouraria agora: ações livres, situação e o que a casa consegue cotar em cada clube.
  */
 export function MarketMakerScreen({ admin }: { admin: AdminApi }) {
   const loader = useLoader(() => admin.marketMaker());
@@ -18,6 +18,7 @@ export function MarketMakerScreen({ admin }: { admin: AdminApi }) {
   const [edit, setEdit] = useState<MarketMakerForm | null>(null);
   const [reason, setReason] = useState("");
   const [saved, setSaved] = useState(false);
+  const [previewTicker, setPreviewTicker] = useState<string | null>(null);
   const state = loader.data;
   if (!state) return <LoadState loader={loader} />;
 
@@ -30,12 +31,21 @@ export function MarketMakerScreen({ admin }: { admin: AdminApi }) {
   const changes = changesOf(state, form);
   const reasonOk = reasonFeedback(reason).ok;
   const canSave = !!changes && reasonOk && !action.busy;
+  const treasury = state.treasury;
+  const preview = treasury ? (treasury.clubs.find((c) => c.ticker === previewTicker) ?? treasury.clubs[0] ?? null) : null;
+  const next = {
+    quantityBp: parsePercent(form.quantity),
+    matchQuantityBp: parsePercent(form.matchQuantity),
+    minSide: parseMinimum(form.minSide),
+    matchMinSide: parseMinimum(form.matchMinSide),
+  };
+  const after = Object.values(next).every((v) => v !== null) ? (next as { [K in keyof typeof next]: number }) : null;
   const lotLocked = season.data?.season ? season.data.season.status !== "preparing" : false;
   const hint = !changes ? "Mude um dos números para salvar." : !reasonOk ? "Sem motivo, a mudança é recusada." : "Confira o depois antes de salvar.";
 
   const save = async () => {
     if (!changes) return;
-    if (await action.run(async () => loader.set(await admin.updateMarketMaker({ ...changes, reason })))) {
+    if (await action.run(async () => { await admin.updateMarketMaker({ ...changes, reason }); await loader.reload(); })) {
       setEdit(null);
       setReason("");
       setSaved(true);
@@ -53,6 +63,7 @@ export function MarketMakerScreen({ admin }: { admin: AdminApi }) {
   );
 
   return (
+    <div className="stack">
     <div className="g-main-aside">
       <Card title="Quantas ações a casa cota por lado" right={<span className="xs muted">Vale na reposição seguinte, para todos os clubes</span>}>
         <form className="stack" onSubmit={(e) => { e.preventDefault(); if (canSave) void save(); }}>
@@ -67,6 +78,37 @@ export function MarketMakerScreen({ admin }: { admin: AdminApi }) {
             {field("minSide", "mf", "Mínimo fora de jogo", String(state.mmMinSideQty), false)}
             {field("matchMinSide", "mj", "Mínimo no modo de jogo", String(state.mmMatchMinSideQty), false)}
           </div>
+          {preview && (
+            <div className="card" style={{ background: "var(--panel2)" }}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>
+                      Num clube de{" "}
+                      <select id="previa-clube" aria-label="Clube da prévia" value={preview.ticker} onChange={(e) => setPreviewTicker(e.target.value)}>
+                        {treasury!.clubs.map((c) => <option key={c.ticker} value={c.ticker}>{c.ticker}</option>)}
+                      </select>{" "}
+                      com {preview.totalShares.toLocaleString("pt-BR")} ações
+                    </th>
+                    <th className="r">Agora</th>
+                    <th className="r">Depois</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Fora de jogo</td>
+                    <td className="r">{describeSide(preview.totalShares, state.mmQuantityBp, state.mmMinSideQty)}</td>
+                    <td className="r b" id="depois-fora">{after ? describeSide(preview.totalShares, after.quantityBp, after.minSide) : "—"}</td>
+                  </tr>
+                  <tr>
+                    <td>No modo de jogo</td>
+                    <td className="r">{describeSide(preview.totalShares, state.mmMatchQuantityBp, state.mmMatchMinSideQty)}</td>
+                    <td className="r b" id="depois-jogo">{after ? describeSide(preview.totalShares, after.matchQuantityBp, after.matchMinSide) : "—"}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
           {message && <div className="note note-err" role="alert"><div>{message}</div></div>}
           <ReasonField value={reason} onChange={(v) => { setReason(v); setSaved(false); }} label="Motivo (obrigatório; fica no registro com o antes e o depois)" />
           <ErrorNote message={action.error} />
@@ -103,5 +145,36 @@ export function MarketMakerScreen({ admin }: { admin: AdminApi }) {
         </Card>
       </aside>
     </div>
+    {treasury && (
+      <Card title="Tesouraria agora" right={<span className="xs muted">Caixa da tesouraria: {formatCents(treasury.cash)} · o que a casa consegue cotar em cada clube</span>}>
+        <div className="scroll-x">
+          <table className="tbl">
+            <thead>
+              <tr><th>Clube</th><th className="r">Ações livres na tesouraria</th><th>Situação</th><th>A casa cota</th></tr>
+            </thead>
+            <tbody>
+              {treasury.clubs.map((c) => (
+                <tr key={c.ticker}>
+                  <td className="b">{c.ticker}</td>
+                  <td className="r">{c.freeShares.toLocaleString("pt-BR")}</td>
+                  <td><span className={STATUS_CHIP[c.status]}>{statusLabel(c)}</span></td>
+                  <td className="small">{quoteNote(c, treasury.freeCash)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    )}
+    </div>
   );
+}
+
+const STATUS_CHIP = { trading: "chip chip-up", in_match: "chip chip-live", auction: "chip chip-live", suspended: "chip chip-down" } as const;
+
+function statusLabel(c: { status: keyof typeof STATUS_CHIP; auctionUntil: string | null }): string {
+  if (c.status === "trading") return "Negociando";
+  if (c.status === "in_match") return "Em jogo agora";
+  if (c.status === "suspended") return "Suspenso";
+  return c.auctionUntil ? `Em leilão até ${formatInstant(c.auctionUntil)}` : "Em leilão (parado)";
 }
