@@ -14,3 +14,5 @@ export * from "./maker/fair-value.service.js";
 export * from "./maker/refresh-schedule.js";
 export * from "./book/book-read.service.js";
 export * from "./state/auction-states.js";
+export * from "./realtime/events.js";
+export * from "./realtime/book-publisher.js";

@@ -9,6 +9,8 @@ import { BookReadService } from "./book/book-read.service.js";
 import { MatchingEngine } from "./matching/matching-engine.js";
 import { PostgresMatchingEngine } from "./matching/postgres-matching-engine.js";
 import { OrderService } from "./orders/order.service.js";
+import { BookPublisher } from "./realtime/book-publisher.js";
+import { MarketEvents } from "./realtime/events.js";
 
 /**
  * Mercado secundário (F9: livro de ofertas e formador de mercado). Por enquanto, o motor de ordens: a porta
@@ -22,7 +24,7 @@ import { OrderService } from "./orders/order.service.js";
 @Module({
   imports: [PortfolioModule, AdminLogModule, RealtimeModule],
   controllers: [MarketMakerAdminController, BookController],
-  providers: [{ provide: MatchingEngine, useClass: PostgresMatchingEngine }, OrderService, MarketMakerAdminService, BookReadService],
-  exports: [OrderService],
+  providers: [{ provide: MatchingEngine, useClass: PostgresMatchingEngine }, OrderService, MarketMakerAdminService, BookReadService, BookPublisher, MarketEvents],
+  exports: [OrderService, MarketEvents, BookPublisher],
 })
 export class MarketModule {}

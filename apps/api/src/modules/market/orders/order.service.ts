@@ -9,6 +9,7 @@ import {
   type PlaceOrderResult,
 } from "../matching/matching-engine.js";
 import { AuctionCloser } from "../state/tunnel-state.js";
+import { MarketEvents } from "../realtime/events.js";
 
 /** O que só os testes de concorrência passam ao `place`: as pausas do motor e o contador de repetições. */
 export interface PlaceOptions {
@@ -32,6 +33,8 @@ export class OrderService {
     private readonly engine: MatchingEngine,
     /** Quem fecha o leilão vencido (L5). Opcional: sem ele, a ordem que encontra um leilão vencido é erro. */
     @Optional() private readonly auctions?: AuctionCloser,
+    /** Os avisos de tempo real e os candles (T7). Opcional: sem ele a ordem não publica nem grava candle. */
+    @Optional() private readonly events?: MarketEvents,
   ) {}
 
   /**
@@ -43,8 +46,11 @@ export class OrderService {
    * ter gravado nada: quem chama **termina ou desfaz a transação sem gravar**, fecha o leilão pelo `AuctionCloser`,
    * numa transação própria, e chama de novo numa transação nova. É o que o `place` faz.
    */
-  placeOrder(tx: Tx, input: PlaceOrderInput, hooks?: MatchingHooks): Promise<PlaceOrderAttempt> {
-    return this.engine.place(tx, input, hooks);
+  async placeOrder(tx: Tx, input: PlaceOrderInput, hooks?: MatchingHooks): Promise<PlaceOrderAttempt> {
+    const result = await this.engine.place(tx, input, hooks);
+    // os candles saem na mesma transação do negócio; os avisos saem depois do `COMMIT` (T7)
+    if (result.ok) await this.events?.afterPlace(tx, result);
+    return result;
   }
 
   /**

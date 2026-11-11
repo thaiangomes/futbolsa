@@ -1,6 +1,8 @@
 import { Injectable, Module } from "@nestjs/common";
 import type { Tx } from "../../infra/db/transaction.js";
+import { RealtimeModule } from "../../infra/realtime/index.js";
 import { recordTrade } from "./candles/record-trade.js";
+import { WalletEvents } from "./wallet-events.js";
 import { openWallet, post, type Movement, type OpenWallet } from "./ledger/index.js";
 
 /**
@@ -25,7 +27,8 @@ export class PortfolioLedger {
 
 /** Carteira e gráficos. A F4 traz o `PortfolioLedger`; telas e rotas vêm na F10. */
 @Module({
-  providers: [PortfolioLedger],
-  exports: [PortfolioLedger],
+  imports: [RealtimeModule],
+  providers: [PortfolioLedger, WalletEvents],
+  exports: [PortfolioLedger, WalletEvents],
 })
 export class PortfolioModule {}
