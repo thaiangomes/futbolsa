@@ -1,11 +1,15 @@
-import { Injectable, Logger, type OnApplicationBootstrap } from "@nestjs/common";
+import { Injectable, Logger, Optional, type OnApplicationBootstrap } from "@nestjs/common";
 import { SchedulerRegistry } from "@nestjs/schedule";
 import { Clock } from "../clock/index.js";
 import { CloseAuctionService } from "../../modules/market/auction/close-auction.js";
+import { RefreshJob, type RefreshReport } from "../../modules/market/maker/refresh.job.js";
 import { jobsEnabled } from "./account-jobs.js";
 
 /** O passo da tarefa do fim do leilão: o leilão termina no máximo 5 segundos depois do fim marcado (P10). */
 export const AUCTION_CLOSE_EVERY_MS = 5_000;
+
+/** O passo da tarefa `market-refresh`: a cada minuto, a agenda da reposição da casa (T11). */
+export const MARKET_REFRESH_EVERY_MS = 60_000;
 
 /** O que uma passada da tarefa `auction-close` fez. `skipped` quando a passada anterior ainda rodava. */
 export type AuctionCloseReport =
@@ -39,6 +43,8 @@ export class MarketJobs implements OnApplicationBootstrap {
     private readonly registry: SchedulerRegistry,
     private readonly clock: Clock,
     private readonly auctions: CloseAuctionService,
+    /** A reposição da casa (T11). Opcional para os testes que só montam o fim do leilão. */
+    @Optional() private readonly refresh?: RefreshJob,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -47,6 +53,16 @@ export class MarketJobs implements OnApplicationBootstrap {
       this.closeAuctions().catch((error: unknown) => this.logger.error(`auction-close falhou: ${(error as Error).message}`));
     }, AUCTION_CLOSE_EVERY_MS);
     this.registry.addInterval("auction-close", timer);
+    const refreshTimer = setInterval(() => {
+      this.refreshDue().catch((error: unknown) => this.logger.error(`market-refresh falhou: ${(error as Error).message}`));
+    }, MARKET_REFRESH_EVERY_MS);
+    this.registry.addInterval("market-refresh", refreshTimer);
+  }
+
+  /** Uma passada da reposição da casa: repõe os clubes atrasados pela agenda e os que têm pedido aberto. Sem sobreposição. */
+  refreshDue(): Promise<RefreshReport> {
+    if (!this.refresh) throw new Error("MarketJobs sem a tarefa da reposição");
+    return this.refresh.runDue(this.clock.now());
   }
 
   /** Uma passada: fecha os leilões vencidos, um clube por vez, cada um com o relógio da hora em que fecha. */

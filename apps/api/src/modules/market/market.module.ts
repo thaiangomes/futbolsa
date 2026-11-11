@@ -11,6 +11,7 @@ import { CloseAuctionAdapter, CloseAuctionService } from "./auction/close-auctio
 import { BookController } from "./book/book.controller.js";
 import { BookReadService } from "./book/book-read.service.js";
 import { FairValueService } from "./maker/fair-value.service.js";
+import { RefreshJob } from "./maker/refresh.job.js";
 import { RefreshService, RefreshWaker } from "./maker/refresh.service.js";
 import { MatchingEngine } from "./matching/matching-engine.js";
 import { PostgresMatchingEngine } from "./matching/postgres-matching-engine.js";
@@ -65,6 +66,7 @@ import { AuctionCloser } from "./state/tunnel-state.js";
     MarketEvents,
     FairValueService,
     RefreshService,
+    RefreshJob,
     RefreshWaker,
     { provide: MarketPort, useClass: MarketPortImpl },
     EndTradingService,
@@ -78,6 +80,7 @@ import { AuctionCloser } from "./state/tunnel-state.js";
     AuctionCloser,
     FairValueService,
     RefreshService,
+    RefreshJob,
     RefreshWaker,
     MarketPort,
     EndTradingService,
