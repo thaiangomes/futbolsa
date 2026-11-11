@@ -14,7 +14,8 @@ import { PortfolioLedger } from "../../portfolio/portfolio.module.js";
 import { WalletEvents } from "../../portfolio/wallet-events.js";
 import type { CandleRecord } from "../../portfolio/candles/record-trade.js";
 import type { PostResult } from "../../portfolio/ledger/post.js";
-import type { OrderRecord, PlaceOrderAccepted } from "../matching/matching-engine.js";
+import type { AuctionClosed } from "../auction/close-auction.js";
+import type { OrderRecord, PlaceOrderAccepted, TradeRecord } from "../matching/matching-engine.js";
 import { BookPublisher } from "./book-publisher.js";
 
 /**
@@ -46,17 +47,39 @@ export class MarketEvents {
    * depois do `COMMIT`. Só mexe no banco para os candles; o resto é aviso.
    */
   async afterPlace(tx: Tx, r: PlaceOrderAccepted): Promise<void> {
-    const ticker = r.club.ticker;
     const candles: CandleRecord[] = [];
     for (const t of r.trades) candles.push(...(await this.ledger.recordTrade(tx, { clubId: r.club.clubId, at: t.at, price: t.price, quantity: t.quantity })));
-    for (const post of r.posts) await this.wallets.posted(tx, post, post.entry.clubId === null ? undefined : ticker);
-    const owners = this.ownersOf(r.posts);
     // a ordem nova e as ordens do livro que andaram, uma vez cada (a ordem nova pode estar nas duas listas)
     const changed = new Map<number, OrderRecord>();
     for (const o of [...r.bookOrders, r.order]) changed.set(o.id, o);
+    await this.tradesDone(tx, r.club.ticker, r.trades, candles, [...changed.values()], r.posts);
+  }
+
+  /**
+   * O fim de um leilão (`CloseAuctionService`, L5), dentro da transação dele: os candles já foram gravados lá, um
+   * por negócio, e aqui só se agenda o que sai depois do `COMMIT` com as mesmas peças da ordem nova: `trade` de cada
+   * negócio e os candles como ficaram; `order.updated` das ordens que andaram e `wallet.changed`/`entry.added` de
+   * cada linha do extrato, só para os donos; e o clube marcado para republicar `book` e `price`, que levam o fim do
+   * leilão (P11). Sem negócio, só o clube marcado.
+   */
+  async afterAuction(tx: Tx, r: AuctionClosed): Promise<void> {
+    await this.tradesDone(tx, r.ticker, r.trades, r.candles, r.orders, r.posts);
+  }
+
+  /** O que sai de negócios gravados (da ordem nova ou do leilão), depois do `COMMIT`. */
+  private async tradesDone(
+    tx: Tx,
+    ticker: string,
+    trades: readonly TradeRecord[],
+    candles: readonly CandleRecord[],
+    orders: readonly OrderRecord[],
+    posts: readonly PostResult[],
+  ): Promise<void> {
+    for (const post of posts) await this.wallets.posted(tx, post, post.entry.clubId === null ? undefined : ticker);
+    const owners = this.ownersOf(posts);
     tx.afterCommit(() => {
       const channel = clubChannel(ticker);
-      for (const t of r.trades) this.bus.publish(channel, "trade", { id: t.id, at: t.at.toISOString(), price: t.price, quantity: t.quantity });
+      for (const t of trades) this.bus.publish(channel, "trade", { id: t.id, at: t.at.toISOString(), price: t.price, quantity: t.quantity });
       for (const c of candles) {
         this.bus.publish(channel, "candle", {
           interval: c.interval,
@@ -68,7 +91,7 @@ export class MarketEvents {
           volume: c.volume,
         });
       }
-      for (const o of changed.values()) this.publishOrder(owners.get(o.walletId), o);
+      for (const o of orders) this.publishOrder(owners.get(o.walletId), o);
     });
     this.book.markClubDirty(tx, ticker);
   }

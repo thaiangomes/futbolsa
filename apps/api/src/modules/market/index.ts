@@ -8,6 +8,7 @@ export * from "./book/book-repo.js";
 export * from "./matching/matching-engine.js";
 export * from "./matching/postgres-matching-engine.js";
 export * from "./matching/settle.js";
+export * from "./auction/close-auction.js";
 export * from "./orders/order.service.js";
 export * from "./orders/cancel.service.js";
 export * from "./orders/closure-hook.js";

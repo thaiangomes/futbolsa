@@ -414,9 +414,9 @@ export class PostgresMatchingEngine extends MatchingEngine {
  * antes de esperar a trava do clube; com duas ordens quase juntas, a que leu o relógio primeiro pode pegar a trava
  * depois, e o negócio dela sairia com horário anterior ao do negócio que ela encontrou feito. O preço do passado
  * (`lastTradeUntil`) segue o horário e o `last_price` segue a ordem da trava: os dois só concordam se o horário dos
- * negócios de um clube nunca recuar.
+ * negócios de um clube nunca recuar. O fim do leilão (L5) usa a mesma conta.
  */
-function instantOf(now: Date, lastTradeAt: Date | null): Date {
+export function instantOf(now: Date, lastTradeAt: Date | null): Date {
   return lastTradeAt !== null && lastTradeAt.getTime() > now.getTime() ? lastTradeAt : now;
 }
 

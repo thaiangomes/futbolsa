@@ -88,6 +88,21 @@ export async function openAuction(tx: Tx, club: LockedClub, at: Date): Promise<D
 }
 
 /**
+ * Encerra o leilão do clube travado: limpa as duas colunas do leilão e grava a referência do túnel com o dia de
+ * Brasília de `at`. Com negócio, a referência é o preço único; sem negócio, a mesma de antes, e o dia de hoje faz
+ * ela valer até as 0h seguintes mesmo quando o leilão atravessou a meia-noite (D4). Devolve a referência gravada.
+ */
+export async function endAuction(tx: Tx, club: LockedClub, reference: Cents, at: Date): Promise<Cents> {
+  assertLocked(tx, club);
+  if (!isInAuction(club)) throw new Error(`o clube ${club.ticker} não está em leilão`);
+  await tx.db
+    .update(seasonClubs)
+    .set({ auctionOpenedAt: null, auctionUntil: null, tunnelRef: reference, tunnelRefDay: new Date(dayStart(at.getTime())) })
+    .where(clubRow(club));
+  return reference;
+}
+
+/**
  * Refaz a referência do túnel depois de uma anulação de negócios (pedido da F14, Admin, critérios 39 a 45): o preço
  * do último leilão de hoje ou, sem leilão hoje, o preço exibido às 0h de Brasília; grava `tunnel_ref` e
  * `tunnel_ref_day` e devolve a referência. Os negócios são lidos por `lastTradeUntil`, o ponto único em que a F14
@@ -111,8 +126,9 @@ export async function rebuildTunnelReference(tx: Tx, club: LockedClub, now: Date
 /**
  * Quem fecha um leilão vencido (P10 do plano). A ordem, o cancelamento e a reposição que encontram o leilão vencido
  * saem da transação sem gravar nada, chamam `closeAuction` (que roda numa transação própria e é repetível: leilão já
- * fechado não faz nada) e tentam de novo. Classe abstrata para servir de chave de injeção: a L5 liga a implementação
- * no `MarketModule`; sem ela, quem depende deste ponto o recebe vazio.
+ * fechado não faz nada) e tentam de novo. Classe abstrata para servir de chave de injeção: o `MarketModule` a liga ao
+ * `CloseAuctionService` (`auction/close-auction.ts`, L5) pelo `CloseAuctionAdapter`; sem registro, quem depende
+ * deste ponto o recebe vazio (os testes que montam os serviços à mão).
  */
 export abstract class AuctionCloser {
   abstract closeAuction(seasonId: number, ticker: string, now: Date): Promise<void>;

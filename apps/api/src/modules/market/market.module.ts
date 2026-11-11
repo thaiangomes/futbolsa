@@ -5,6 +5,7 @@ import { RealtimeModule } from "../../infra/realtime/index.js";
 import { PortfolioModule } from "../portfolio/index.js";
 import { MarketMakerAdminController } from "./admin/market-maker.controller.js";
 import { MarketMakerAdminService } from "./admin/market-maker.service.js";
+import { CloseAuctionAdapter, CloseAuctionService } from "./auction/close-auction.js";
 import { BookController } from "./book/book.controller.js";
 import { BookReadService } from "./book/book-read.service.js";
 import { MatchingEngine } from "./matching/matching-engine.js";
@@ -16,6 +17,7 @@ import { OrdersController } from "./orders/orders.controller.js";
 import { PlayerOrdersService } from "./orders/player-orders.service.js";
 import { BookPublisher } from "./realtime/book-publisher.js";
 import { MarketEvents } from "./realtime/events.js";
+import { AuctionCloser } from "./state/tunnel-state.js";
 
 /**
  * Mercado secundário (F9: livro de ofertas e formador de mercado): a porta `MatchingEngine` ligada à implementação do
@@ -25,16 +27,18 @@ import { MarketEvents } from "./realtime/events.js";
  * Na subida, registra no `accounts` o gancho de encerramento das ordens (`MarketClosureHook`), que a exclusão (F5) e
  * o bloqueio (F14) chamam. O `accounts` (global) não importa este módulo: a dependência fica num sentido só.
  *
- * Túnel de preço: a ordem que sairia do túnel abre o leilão (L4). Quem fecha o leilão vencido é o `AuctionCloser`
- * (`state/tunnel-state.ts`), que o `OrderService`, o `PlayerOrdersService` e o `CancelService` recebem como
- * dependência opcional: a L5 o liga aqui com `{ provide: AuctionCloser, useClass: … }`. Enquanto ele não existe, a
- * ordem ou o cancelamento que encontra um leilão vencido é erro.
+ * Túnel de preço: a ordem que sairia do túnel abre o leilão (L4), e o `CloseAuctionService` o fecha (L5). Quem
+ * encontra o leilão vencido (o `OrderService`, o `PlayerOrdersService` e o `CancelService`) recebe o `AuctionCloser`
+ * (`state/tunnel-state.ts`), ligado aqui ao fim do leilão de verdade (P10); a tarefa `auction-close`
+ * (`infra/jobs/market-jobs.ts`) fecha os outros a cada 5 segundos.
  */
 @Module({
   imports: [PortfolioModule, AdminLogModule, RealtimeModule],
   controllers: [MarketMakerAdminController, BookController, OrdersController],
   providers: [
     { provide: MatchingEngine, useClass: PostgresMatchingEngine },
+    CloseAuctionService,
+    { provide: AuctionCloser, useClass: CloseAuctionAdapter },
     OrderService,
     CancelService,
     PlayerOrdersService,
@@ -44,7 +48,7 @@ import { MarketEvents } from "./realtime/events.js";
     BookPublisher,
     MarketEvents,
   ],
-  exports: [OrderService, CancelService, MarketEvents, BookPublisher],
+  exports: [OrderService, CancelService, MarketEvents, BookPublisher, CloseAuctionService, AuctionCloser],
 })
 export class MarketModule implements OnModuleInit {
   constructor(
