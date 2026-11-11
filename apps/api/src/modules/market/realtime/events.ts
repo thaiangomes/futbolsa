@@ -25,6 +25,8 @@ import { BookPublisher } from "./book-publisher.js";
  *   negócio atualizou) e, pelo `BookPublisher` (P3), `book`; `price` no canal `prices`;
  * - canal `me`, só do dono: `order.updated` de cada ordem que mudou, e `wallet.changed` e `entry.added` de cada
  *   carteira mexida (com a `version` da carteira). Carteira de bot ou da tesouraria não publica.
+ *
+ * Quem chama: a ordem nova (`afterPlace`), o fim do leilão (`afterAuction`, L5) e o cancelamento (`ordersChanged`).
  */
 @Injectable()
 export class MarketEvents {
