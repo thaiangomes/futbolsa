@@ -6,7 +6,9 @@ import {
   matchModeEventSchema,
   orderUpdatedEventSchema,
   priceEventSchema,
+  seasonStatusEventSchema,
   tradeEventSchema,
+  type SeasonStatusEvent,
 } from "@futbolsa/contracts";
 import type { Tx } from "../../../infra/db/index.js";
 import { EventBus, meChannel } from "../../../infra/realtime/index.js";
@@ -17,6 +19,14 @@ import type { PostResult } from "../../portfolio/ledger/post.js";
 import type { AuctionClosed } from "../auction/close-auction.js";
 import type { OrderRecord, PlaceOrderAccepted, TradeRecord } from "../matching/matching-engine.js";
 import { BookPublisher } from "./book-publisher.js";
+
+/** As colunas da temporada que o `season.status` leva. */
+export interface SeasonStatusRow {
+  id: number;
+  status: string;
+  ipoClosesAt: Date | null;
+  tradingOpensAt: Date | null;
+}
 
 /**
  * Os eventos de tempo real do mercado (T7), sempre depois do `COMMIT` (`tx.afterCommit`): o cliente que reage ao
@@ -42,6 +52,7 @@ export class MarketEvents {
     bus.registerSchema("candle", candleEventSchema);
     bus.registerSchema("price", priceEventSchema);
     bus.registerSchema("order.updated", orderUpdatedEventSchema);
+    bus.registerSchema("season.status", seasonStatusEventSchema);
   }
 
   /**
@@ -109,6 +120,20 @@ export class MarketEvents {
       for (const o of orders) this.publishOrder(owners.get(o.walletId), o);
     });
     this.book.markClubDirty(tx, ticker);
+  }
+
+  /**
+   * A temporada mudou de estado (o fim da negociação, T14), no canal `season`, com o mesmo esquema que o IPO usa
+   * (`seasonStatusEventSchema`): as datas são as da linha já gravada.
+   */
+  seasonStatus(tx: Tx, season: SeasonStatusRow): void {
+    const data = {
+      seasonId: season.id,
+      status: season.status as SeasonStatusEvent["status"],
+      ipoClosesAt: season.ipoClosesAt?.toISOString() ?? null,
+      tradingOpensAt: season.tradingOpensAt?.toISOString() ?? null,
+    };
+    tx.afterCommit(() => this.bus.publish("season", "season.status", data));
   }
 
   /** O modo de jogo do clube ligou ou desligou (valor absoluto, seguro de repetir). */

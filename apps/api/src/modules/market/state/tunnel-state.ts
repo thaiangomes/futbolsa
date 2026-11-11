@@ -102,6 +102,49 @@ export async function endAuction(tx: Tx, club: LockedClub, reference: Cents, at:
   return reference;
 }
 
+/** O leilão está parado pela suspensão: tem início e não tem fim marcado (D5, critério 45). */
+export function isAuctionPaused(club: AuctionColumns): boolean {
+  return club.auctionOpenedAt !== null && club.auctionUntil === null;
+}
+
+/**
+ * Para a contagem do leilão do clube travado na suspensão (do clube ou do mercado todo; critério 45 e D5): limpa
+ * `auction_until` e mantém o início, que é o estado "leilão parado pela suspensão". Nada executa enquanto ele está
+ * parado, e o fim do leilão não o fecha (`closeAuction` devolve `paused`). Devolve se parou: fora de leilão, já parado
+ * ou já vencido, não faz nada. O vencido terminou antes da suspensão: ele fecha na retomada, com o horário dela (P10),
+ * em vez de ganhar 3 horas a mais.
+ */
+export async function pauseAuction(tx: Tx, club: LockedClub, at: Date): Promise<boolean> {
+  assertLocked(tx, club);
+  if (!isInAuction(club) || club.auctionUntil === null || auctionExpired(club, at)) return false;
+  await tx.db.update(seasonClubs).set({ auctionUntil: null }).where(clubRow(club));
+  return true;
+}
+
+/**
+ * Recomeça o leilão parado do clube travado: `auction_until` = `at` + 3 horas (`AUCTION_DURATION_MS`), contadas de novo
+ * desde a retomada (critério 45: parado às 14h e retomado às 16h, termina às 19h). Quem chama já conferiu que não sobra
+ * suspensão do clube nem do mercado (D5). Devolve o fim novo, ou nulo quando o leilão não estava parado.
+ */
+export async function restartAuction(tx: Tx, club: LockedClub, at: Date): Promise<Date | null> {
+  assertLocked(tx, club);
+  if (!isAuctionPaused(club)) return null;
+  const until = new Date(at.getTime() + AUCTION_DURATION_MS);
+  await tx.db.update(seasonClubs).set({ auctionUntil: until }).where(clubRow(club));
+  return until;
+}
+
+/**
+ * Encerra o leilão do clube travado sem casar (fim da negociação, L7): limpa as duas colunas do leilão e não mexe na
+ * referência do túnel nem no preço. As ordens do leilão são canceladas na mesma transação. Devolve se havia leilão.
+ */
+export async function dropAuction(tx: Tx, club: LockedClub): Promise<boolean> {
+  assertLocked(tx, club);
+  if (!isInAuction(club)) return false;
+  await tx.db.update(seasonClubs).set({ auctionOpenedAt: null, auctionUntil: null }).where(clubRow(club));
+  return true;
+}
+
 /**
  * Refaz a referência do túnel depois de uma anulação de negócios (pedido da F14, Admin, critérios 39 a 45): o preço
  * do último leilão de hoje ou, sem leilão hoje, o preço exibido às 0h de Brasília; grava `tunnel_ref` e

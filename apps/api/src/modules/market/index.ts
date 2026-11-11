@@ -21,6 +21,8 @@ export * from "./maker/fair-value.service.js";
 export * from "./maker/refresh-schedule.js";
 export * from "./maker/quote-input.js";
 export * from "./maker/refresh.service.js";
+export * from "./ports/market-port.js";
+export * from "./ending/end-trading.js";
 export * from "./book/book-read.service.js";
 export * from "./state/auction-states.js";
 export * from "./realtime/events.js";

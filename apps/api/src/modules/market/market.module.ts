@@ -1,6 +1,7 @@
 import { Module, type OnModuleInit } from "@nestjs/common";
 import { AccountClosureHooks } from "../accounts/index.js";
 import { AdminLogModule } from "../admin/log/index.js";
+import { MarketPort } from "../admin/results/ports.js";
 import { DividendsModule } from "../dividends/dividends.module.js";
 import { RealtimeModule } from "../../infra/realtime/index.js";
 import { PortfolioModule } from "../portfolio/index.js";
@@ -18,6 +19,8 @@ import { MarketClosureHook } from "./orders/closure-hook.js";
 import { OrderService } from "./orders/order.service.js";
 import { OrdersController } from "./orders/orders.controller.js";
 import { PlayerOrdersService } from "./orders/player-orders.service.js";
+import { EndTradingService } from "./ending/end-trading.js";
+import { MarketPortImpl } from "./ports/market-port.js";
 import { BookPublisher } from "./realtime/book-publisher.js";
 import { MarketEvents } from "./realtime/events.js";
 import { AuctionCloser } from "./state/tunnel-state.js";
@@ -39,6 +42,11 @@ import { AuctionCloser } from "./state/tunnel-state.js";
  * `FairValueService` (T9), e grava os pedidos de reposição (`requestRefresh`). Depois do COMMIT do pedido, ele chama o
  * `RefreshWaker`, em que a agenda (T11) se inscreve para repor na hora; sem inscrito, o pedido espera a tarefa de cada
  * minuto.
+ *
+ * Suspensão e fim da negociação: a porta `MarketPort` da F7 (T13 e L7) é provida e exportada aqui
+ * (`ports/market-port.ts`); o `ResultsModule` do admin importa este módulo e o reexporta para a suspensão, a
+ * importação e os pagamentos. Este módulo não importa módulos do admin além do `AdminLogModule` (só arquivos), e a
+ * dependência fica num sentido só. O `EndTradingService` (T14) é o fim da negociação que a F15 chama na transação dela.
  */
 @Module({
   imports: [PortfolioModule, AdminLogModule, RealtimeModule, DividendsModule],
@@ -58,6 +66,8 @@ import { AuctionCloser } from "./state/tunnel-state.js";
     FairValueService,
     RefreshService,
     RefreshWaker,
+    { provide: MarketPort, useClass: MarketPortImpl },
+    EndTradingService,
   ],
   exports: [
     OrderService,
@@ -69,6 +79,8 @@ import { AuctionCloser } from "./state/tunnel-state.js";
     FairValueService,
     RefreshService,
     RefreshWaker,
+    MarketPort,
+    EndTradingService,
   ],
 })
 export class MarketModule implements OnModuleInit {
