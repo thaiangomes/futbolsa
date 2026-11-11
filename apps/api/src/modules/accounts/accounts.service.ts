@@ -5,6 +5,7 @@ import type { AuthIdentity, ResolvedUser } from "../../infra/auth-adapter/index.
 import { Clock } from "../../infra/clock/index.js";
 import { DB, type Database, lockSeason, type Tx, withTransaction } from "../../infra/db/index.js";
 import { authIdentities, invites, seasons, users, wallets } from "../../infra/db/schema/index.js";
+import { currentSeason as openSeason } from "../admin/current-season.js";
 import { PortfolioLedger } from "../portfolio/index.js";
 import { AccountsConfig } from "./accounts.config.js";
 import { accountError, mapUniqueViolation } from "./errors.js";
@@ -74,7 +75,9 @@ export class AccountsService {
 
         // A temporada é travada em modo compartilhado antes de criar a conta: assim a abertura
         // do IPO (exclusiva) vê esta conta, ou esta conta vê o IPO já aberto. Nunca as duas falham.
-        const current = await this.currentSeason(tx.db);
+        // Tem de ser a mesma linha que a abertura escolhe (a mais nova não encerrada): travar outra (por exemplo uma
+        // encerrada de ano maior) deixaria a abertura passar por cima deste cadastro, e a conta ficaria sem carteira.
+        const current = await openSeason(tx.db);
         const season = current ? await lockSeason(tx, current.id, "share") : undefined;
 
         const [user] = await tx.db

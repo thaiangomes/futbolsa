@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { IPO_BLOCKER_MESSAGES, meResponseSchema, overviewSchema } from "@futbolsa/contracts";
 import { cupExpected, ipoBand, ipoDates, LIBERTADORES, COPA_DO_BRASIL, type Match, placementPrice, prepareCups } from "@futbolsa/engine";
 import { FixedClock } from "../../src/infra/clock/index.js";
-import { withTransaction } from "../../src/infra/db/index.js";
+import { lockSeason, withTransaction } from "../../src/infra/db/index.js";
 import {
   bots,
   clubs,
@@ -386,7 +386,31 @@ describe("abertura do IPO", () => {
           .from(wallets)
           .innerJoin(users, eq(users.id, wallets.userId))
           .where(and(eq(wallets.seasonId, seasonId), inArray(users.email, people.map((p) => p.email))));
-        expect(rows).toHaveLength(30);
+        if (rows.length !== 30) {
+          // Falha rara só no CI: o diagnóstico completo vai na mensagem para dizer qual lado perdeu a carteira.
+          const emails = people.map((p) => p.email);
+          const have = new Set(rows.map((r) => r.userId));
+          const created = await database.db.select({ id: users.id, email: users.email, status: users.status }).from(users).where(inArray(users.email, emails));
+          const open = await database.db.select({ id: seasons.id, year: seasons.year, status: seasons.status }).from(seasons).where(ne(seasons.status, "closed"));
+          const bySeason = await database.db
+            .select({ seasonId: wallets.seasonId, n: sql<number>`count(*)::int` })
+            .from(wallets)
+            .innerJoin(users, eq(users.id, wallets.userId))
+            .where(inArray(users.email, emails))
+            .groupBy(wallets.seasonId);
+          const diagnostic = {
+            round,
+            seasonId,
+            openedAt: at,
+            credited: (opened as { credited?: number }).credited,
+            signups: results.filter((_, i) => i !== at).map((r) => (r as { statusCode: number }).statusCode).join(","),
+            usersCreated: created.length,
+            usersWithoutWallet: created.filter((u) => !have.has(u.id)).length,
+            seasonsNotClosed: open,
+            walletsBySeason: bySeason,
+          };
+          expect.fail(`carteiras: ${rows.length} de 30. ${JSON.stringify(diagnostic)}`);
+        }
         expect(new Set(rows.map((r) => r.userId)).size).toBe(30);
         for (const r of rows) expect(r.cash).toBe(INITIAL_CASH);
         const entries = await database.db
@@ -397,6 +421,47 @@ describe("abertura do IPO", () => {
         await assertLedgerConsistent(database.db, seasonId);
       }
     }, 240_000);
+
+    it("concorrência 6b: com uma temporada encerrada de ano maior, o cadastro trava a temporada em andamento e espera a abertura", async () => {
+      // A causa da instabilidade da concorrência 6: o cadastro escolhia a temporada de MAIOR ANO, mesmo encerrada, e
+      // travava a linha errada; a abertura (que escolhe a mais nova não encerrada) não esperava por ele.
+      await retireAccounts();
+      const shadow = await prepareSeason(2096);
+      await database.db.update(seasons).set({ status: "closed" }).where(eq(seasons.id, shadow.seasonId));
+      const { seasonId, dates } = await prepareSeason(2095);
+      clock.set(new Date(dates.opensAt));
+      const email = "c6b@exemplo.com";
+      await database.db.insert(invites).values({ email });
+      const token = await tokenFor({ subject: randomUUID(), email, at: clock.now() });
+
+      let release!: () => void;
+      let held!: () => void;
+      const releasing = new Promise<void>((resolve) => (release = resolve));
+      const holding = new Promise<void>((resolve) => (held = resolve));
+      // a "abertura": trava a temporada em modo exclusivo, e só depois de um tempo a abre e solta
+      const opener = withTransaction(database.db, async (tx) => {
+        await lockSeason(tx, seasonId, "update");
+        held();
+        await releasing;
+        await tx.db.update(seasons).set({ status: "ipo_open" }).where(eq(seasons.id, seasonId));
+      });
+      await holding;
+      let settled = false;
+      const signup = app
+        .inject({ method: "POST", url: "/me", headers: bearer(token), payload: { nickname: "c6b", acceptTerms: true } })
+        .then((r) => ((settled = true), r));
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(settled, "o cadastro devia esperar a trava exclusiva da temporada em andamento").toBe(false);
+      release();
+      await opener;
+      expect((await signup).statusCode).toBe(201);
+      const rows = await database.db
+        .select({ cash: wallets.cash })
+        .from(wallets)
+        .innerJoin(users, eq(users.id, wallets.userId))
+        .where(and(eq(wallets.seasonId, seasonId), eq(users.email, email)));
+      expect(rows).toEqual([{ cash: INITIAL_CASH }]);
+    });
 
     it("concorrência 7: duas aberturas ao mesmo tempo, 20 vezes: uma abre, a outra não faz nada, um crédito por conta", async () => {
       for (let round = 0; round < 20; round++) {
