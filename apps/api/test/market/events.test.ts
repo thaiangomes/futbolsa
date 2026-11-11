@@ -154,6 +154,7 @@ describe("eventos do mercado", () => {
     const r = await orders.place({ ...input(treasury, "sell", 5, 4200), actor: "house" });
     expect(r.ok).toBe(true);
     await publisher.idle();
+    await windowEnd();
     expect(frames(club).some((f) => f.type === "book")).toBe(true);
   });
 
