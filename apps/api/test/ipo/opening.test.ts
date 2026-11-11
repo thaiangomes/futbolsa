@@ -386,7 +386,31 @@ describe("abertura do IPO", () => {
           .from(wallets)
           .innerJoin(users, eq(users.id, wallets.userId))
           .where(and(eq(wallets.seasonId, seasonId), inArray(users.email, people.map((p) => p.email))));
-        expect(rows).toHaveLength(30);
+        if (rows.length !== 30) {
+          // Falha rara só no CI: o diagnóstico completo vai na mensagem para dizer qual lado perdeu a carteira.
+          const emails = people.map((p) => p.email);
+          const have = new Set(rows.map((r) => r.userId));
+          const created = await database.db.select({ id: users.id, email: users.email, status: users.status }).from(users).where(inArray(users.email, emails));
+          const open = await database.db.select({ id: seasons.id, year: seasons.year, status: seasons.status }).from(seasons).where(ne(seasons.status, "closed"));
+          const bySeason = await database.db
+            .select({ seasonId: wallets.seasonId, n: sql<number>`count(*)::int` })
+            .from(wallets)
+            .innerJoin(users, eq(users.id, wallets.userId))
+            .where(inArray(users.email, emails))
+            .groupBy(wallets.seasonId);
+          const diagnostic = {
+            round,
+            seasonId,
+            openedAt: at,
+            credited: (opened as { credited?: number }).credited,
+            signups: results.filter((_, i) => i !== at).map((r) => (r as { statusCode: number }).statusCode).join(","),
+            usersCreated: created.length,
+            usersWithoutWallet: created.filter((u) => !have.has(u.id)).length,
+            seasonsNotClosed: open,
+            walletsBySeason: bySeason,
+          };
+          expect.fail(`carteiras: ${rows.length} de 30. ${JSON.stringify(diagnostic)}`);
+        }
         expect(new Set(rows.map((r) => r.userId)).size).toBe(30);
         for (const r of rows) expect(r.cash).toBe(INITIAL_CASH);
         const entries = await database.db
