@@ -12,6 +12,7 @@ export const ADMIN_MENU = [
   { href: "/admin/classificacao", label: "Classificação oficial" },
   { href: "/admin/temporada", label: "Preparar a temporada" },
   { href: "/admin/suspensao", label: "Suspensão" },
+  { href: "/admin/formador", label: "Formador de mercado" },
   { href: "/admin/registro", label: "Registro do admin" },
 ] as const;
 

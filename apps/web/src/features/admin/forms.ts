@@ -47,6 +47,7 @@ export const ACTION_LABELS: Record<string, string> = {
   "import.run": "Importação na hora",
   "suspension.set": "Negociação suspensa",
   "suspension.clear": "Negociação retomada",
+  "market-maker.update": "Percentuais do formador alterados",
   "invite.create": "Convite criado",
   "invite.revoke": "Convite retirado",
   "player.role": "Papel alterado",

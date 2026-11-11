@@ -1,7 +1,7 @@
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { desc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { marketMakerStateSchema } from "@futbolsa/contracts";
+import { marketMakerViewSchema } from "@futbolsa/contracts";
 import { FixedClock } from "../../src/infra/clock/index.js";
 import { adminLog, seasons } from "../../src/infra/db/schema/index.js";
 import { createAccount, type TestAccount } from "../support/accounts.js";
@@ -35,7 +35,7 @@ describe("percentuais do formador (admin)", () => {
   it("os valores em vigor: 0,25% fora de jogo, 0,06% no jogo, mínimos de 10 e 3 e o lote de 20%", async () => {
     const res = await app.inject({ method: "GET", url: "/admin/market-maker", headers: bearer(admin.token) });
     expect(res.statusCode).toBe(200);
-    expect(marketMakerStateSchema.parse(res.json())).toEqual({ mmQuantityBp: 25, mmMatchQuantityBp: 6, mmMinSideQty: 10, mmMatchMinSideQty: 3, mmLotBp: 2000 });
+    expect(marketMakerViewSchema.parse(res.json())).toEqual({ mmQuantityBp: 25, mmMatchQuantityBp: 6, mmMinSideQty: 10, mmMatchMinSideQty: 3, mmLotBp: 2000, treasury: null });
   });
 
   it("livro 34: mudar 0,25% para 1% com motivo grava o valor novo, e o registro do admin guarda antes, depois e motivo", async () => {
