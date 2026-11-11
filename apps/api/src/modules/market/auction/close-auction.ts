@@ -145,7 +145,8 @@ export class CloseAuctionService {
       .innerJoin(clubs, eq(clubs.id, seasonClubs.clubId))
       .where(and(eq(seasonClubs.seasonId, season.id), lte(seasonClubs.auctionUntil, now)))
       .orderBy(asc(clubs.ticker));
-    return rows.map((r) => ({ seasonId: season.id, ticker: r.ticker, until: r.until! }));
+    // clube listado na temporada sempre tem ticker
+    return rows.map((r) => ({ seasonId: season.id, ticker: r.ticker!, until: r.until! }));
   }
 
   private async closeIn(tx: Tx, seasonId: number, ticker: string, now: Date, options: CloseAuctionOptions): Promise<CloseAuctionResult> {
