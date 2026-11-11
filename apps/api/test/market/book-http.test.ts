@@ -34,7 +34,7 @@ describe("livro e lista de clubes (HTTP)", () => {
     ana = await createAccount(database.db);
     // o token vale a partir do instante do relógio de teste (o padrão é 2027-04-01)
     anaToken = await ana.tokenWith({ at: clock.now() });
-    [anaWallet] = await openWallets(database.db, s.seasonId, [{ type: "user", userId: ana.id }], 1_000_000);
+    anaWallet = (await openWallets(database.db, s.seasonId, [{ type: "user", userId: ana.id }], 1_000_000))[0]!;
     others = await tradeWallets(database.db, s.seasonId);
     // negócios: FLA3 a R$ 40,00 antes das 0h de Brasília (03h UTC) e a R$ 42,00 hoje
     await insertTrade(database.db, { seasonId: s.seasonId, clubId: id("FLA3"), at: new Date("2027-04-06T02:00:00Z"), price: 4000, quantity: 10, buyerWalletId: others.buyer, sellerWalletId: others.seller });
