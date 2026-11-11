@@ -7,6 +7,7 @@ import { FixedClock } from "../../src/infra/clock/index.js";
 import type { Database } from "../../src/infra/db/client.js";
 import { lockClubs, withTransaction } from "../../src/infra/db/index.js";
 import { orders, positions, seasonClubs, wallets } from "../../src/infra/db/schema/index.js";
+import { EventBus, meChannel } from "../../src/infra/realtime/index.js";
 import { AccountClosureHooks, AccountDeletionService } from "../../src/modules/accounts/index.js";
 import {
   AuctionCloser,
@@ -328,6 +329,22 @@ describe("cancelar pela rota e pela exclusão da conta", () => {
     expect((await call(ana.account, "DELETE", "/orders/abc")).statusCode).toBe(400);
     expect((await call(ana.account, "DELETE", "/orders/999999999")).statusCode).toBe(404);
     await assertMarketInvariants(database.db, seasonId, cashBefore);
+  });
+
+  it("o cancelamento avisa o dono depois do COMMIT: order.updated cancelada e wallet.changed com a reserva devolvida", async () => {
+    const placed = await call(ana.account, "POST", "/orders", { ticker: "COR3", side: "buy", type: "limit", quantity: 2, limitPrice: 3900 });
+    expect(placed.statusCode).toBe(201);
+    const bus = app.get(EventBus, { strict: false });
+    const frames: Array<{ type: string; data: Record<string, unknown> }> = [];
+    const sub = bus.subscribe(meChannel(ana.account.id), (e) => frames.push(JSON.parse(e.frame)));
+    try {
+      expect((await call(ana.account, "DELETE", `/orders/${placed.json().order.id}`)).statusCode).toBe(200);
+    } finally {
+      sub.unsubscribe();
+    }
+    expect(frames.find((f) => f.type === "order.updated")?.data).toMatchObject({ id: placed.json().order.id, status: "cancelled", cancelReason: "player" });
+    expect(frames.find((f) => f.type === "wallet.changed")?.data).toMatchObject({ cash: RICH, reserved: 0 });
+    expect(JSON.stringify(frames)).not.toMatch(/walletId|wallet_id/);
   });
 
   it("o MarketModule registra o gancho de encerramento das ordens no accounts", async () => {
