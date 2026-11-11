@@ -83,7 +83,7 @@ describe("o mercado em volume, com tudo ao mesmo tempo, contra o Postgres", () =
   /** O que o sorteio fez, por tipo de resultado: o relatório da T16 cita estas contagens. */
   const counts = new Map<string, number>();
   const count = (key: string) => counts.set(key, (counts.get(key) ?? 0) + 1);
-  const closedResult = (prefix: string, r: CloseAuctionResult) => count(r.closed ? `${prefix}: fechou` : `${prefix}: ${r.reason}`);
+  const closedResult = (prefix: string, r: CloseAuctionResult) => void count(r.closed ? `${prefix}: fechou` : `${prefix}: ${r.reason}`);
 
   beforeAll(async () => {
     db = t.db;
@@ -133,7 +133,7 @@ describe("o mercado em volume, com tudo ao mesmo tempo, contra o Postgres", () =
     const before = await row(ticker);
     if (before.auctionOpenedAt !== null) return;
     const ref = before.tunnelRef ?? before.lastPrice;
-    const ask = price((ref * (10_000 + TUNNEL_BP + 125)) / 10_000);
+    const ask = price(((ref ?? 4000) * (10_000 + TUNNEL_BP + 125)) / 10_000);
     accepted(await service.place({ ...o.sellLimit(forcer.seller, ticker, 5, ask), seasonId, now }, { transaction }));
     const [{ n }] = (
       await db.execute(
@@ -158,7 +158,7 @@ describe("o mercado em volume, com tudo ao mesmo tempo, contra o Postgres", () =
   async function burst(random: () => number, now: Date, extra: (() => Promise<void>)[] = []): Promise<void> {
     clock.set(now);
     const prices = new Map<string, number>();
-    for (const ticker of TICKERS) prices.set(ticker, (await row(ticker)).lastPrice);
+    for (const ticker of TICKERS) prices.set(ticker, (await row(ticker)).lastPrice ?? 4000);
     const open = await cancellable();
     const pick = <T>(list: readonly T[]): T => list[Math.floor(random() * list.length)]!;
 
