@@ -12,6 +12,7 @@ import { BookController } from "./book/book.controller.js";
 import { BookReadService } from "./book/book-read.service.js";
 import { FairValueService } from "./maker/fair-value.service.js";
 import { RefreshJob } from "./maker/refresh.job.js";
+import { OpeningJob } from "./opening/opening.job.js";
 import { RefreshService, RefreshWaker } from "./maker/refresh.service.js";
 import { MatchingEngine } from "./matching/matching-engine.js";
 import { PostgresMatchingEngine } from "./matching/postgres-matching-engine.js";
@@ -67,6 +68,7 @@ import { AuctionCloser } from "./state/tunnel-state.js";
     FairValueService,
     RefreshService,
     RefreshJob,
+    OpeningJob,
     RefreshWaker,
     { provide: MarketPort, useClass: MarketPortImpl },
     EndTradingService,
@@ -81,6 +83,7 @@ import { AuctionCloser } from "./state/tunnel-state.js";
     FairValueService,
     RefreshService,
     RefreshJob,
+    OpeningJob,
     RefreshWaker,
     MarketPort,
     EndTradingService,

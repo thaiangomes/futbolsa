@@ -3,6 +3,7 @@ import { SchedulerRegistry } from "@nestjs/schedule";
 import { Clock } from "../clock/index.js";
 import { CloseAuctionService } from "../../modules/market/auction/close-auction.js";
 import { RefreshJob, type RefreshReport } from "../../modules/market/maker/refresh.job.js";
+import { OpeningJob, type OpeningResult } from "../../modules/market/opening/opening.job.js";
 import { jobsEnabled } from "./account-jobs.js";
 
 /** O passo da tarefa do fim do leilão: o leilão termina no máximo 5 segundos depois do fim marcado (P10). */
@@ -45,6 +46,8 @@ export class MarketJobs implements OnApplicationBootstrap {
     private readonly auctions: CloseAuctionService,
     /** A reposição da casa (T11). Opcional para os testes que só montam o fim do leilão. */
     @Optional() private readonly refresh?: RefreshJob,
+    /** A abertura da negociação (T12). Opcional pelo mesmo motivo. */
+    @Optional() private readonly opening?: OpeningJob,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -57,6 +60,16 @@ export class MarketJobs implements OnApplicationBootstrap {
       this.refreshDue().catch((error: unknown) => this.logger.error(`market-refresh falhou: ${(error as Error).message}`));
     }, MARKET_REFRESH_EVERY_MS);
     this.registry.addInterval("market-refresh", refreshTimer);
+    const openingTimer = setInterval(() => {
+      this.openTrading().catch((error: unknown) => this.logger.error(`trading-open falhou: ${(error as Error).message}`));
+    }, MARKET_REFRESH_EVERY_MS);
+    this.registry.addInterval("trading-open", openingTimer);
+  }
+
+  /** Uma passada da abertura da negociação (10h de Brasília do dia seguinte ao fechamento do IPO, liquidação feita). */
+  openTrading(): Promise<OpeningResult> {
+    if (!this.opening) throw new Error("MarketJobs sem a tarefa da abertura");
+    return this.opening.runOnce(this.clock.now());
   }
 
   /** Uma passada da reposição da casa: repõe os clubes atrasados pela agenda e os que têm pedido aberto. Sem sobreposição. */

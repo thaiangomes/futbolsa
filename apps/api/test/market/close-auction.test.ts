@@ -705,10 +705,11 @@ describe("fim do leilão na aplicação: a costura P10, os eventos e a tarefa au
       const on = new SchedulerRegistry();
       process.env.JOBS_ENABLED = "true";
       new MarketJobs(on, clock, app.get(CloseAuctionService)).onApplicationBootstrap();
-      expect(on.getIntervals().sort()).toEqual(["auction-close", "market-refresh"]);
+      expect(on.getIntervals().sort()).toEqual(["auction-close", "market-refresh", "trading-open"]);
       expect(AUCTION_CLOSE_EVERY_MS).toBe(5_000);
       on.deleteInterval("auction-close");
       on.deleteInterval("market-refresh");
+      on.deleteInterval("trading-open");
     } finally {
       process.env.JOBS_ENABLED = previous;
     }
