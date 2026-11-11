@@ -35,9 +35,9 @@ export class FakeRealtime {
     return [...this.handlers].filter(([, set]) => set.size > 0).map(([channel]) => channel);
   }
 
-  /** Entrega um evento aos assinantes do canal (dentro do `act`, para a tela atualizar). */
-  async emit(channel: Channel, type: string, data: unknown): Promise<void> {
-    const event = { type, channel, seq: 1, at: "2027-03-30T12:00:00.000Z", data } as EventEnvelope;
+  /** Entrega um evento aos assinantes do canal (dentro do `act`, para a tela atualizar). `seq` é o do evento no canal. */
+  async emit(channel: Channel, type: string, data: unknown, seq = 1): Promise<void> {
+    const event = { type, channel, seq, at: "2027-03-30T12:00:00.000Z", data } as EventEnvelope;
     await act(async () => {
       for (const h of this.handlers.get(channel) ?? []) h.onEvent(event);
     });
