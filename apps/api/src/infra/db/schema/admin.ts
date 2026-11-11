@@ -102,12 +102,26 @@ export const seasonClubs = futbolsa.table(
     lastPrice: money("last_price"),
     lastTradeAt: instant("last_trade_at"),
     mmRefreshedAt: instant("mm_refreshed_at"),
+    /**
+     * Referência do túnel de preço: o preço exibido às 0h de Brasília (na estreia, o de corte do IPO; depois de
+     * um leilão com negócio, o preço dele). Vira na primeira transação do dia, com o clube travado, se o clube
+     * não está em leilão (P9 do Plano do livro de ofertas e formador).
+     */
+    tunnelRef: money("tunnel_ref"),
+    /** 0h de Brasília do dia a que a referência pertence. */
+    tunnelRefDay: instant("tunnel_ref_day"),
+    /** Leilão do túnel: quando abriu e quando termina. Parado pela suspensão: só `auction_opened_at`. */
+    auctionOpenedAt: instant("auction_opened_at"),
+    auctionUntil: instant("auction_until"),
   },
   (t) => [
     primaryKey({ columns: [t.seasonId, t.clubId] }),
     check("season_clubs_division_check", oneOf(t.division, DIVISIONS)),
     check("season_clubs_total_shares_check", sql`${t.totalShares} >= 0`),
     check("season_clubs_last_price_check", sql`${t.lastPrice} is null or ${t.lastPrice} > 0`),
+    check("season_clubs_tunnel_ref_check", sql`${t.tunnelRef} is null or ${t.tunnelRef} > 0`),
+    // o fim do leilão só existe com o início (sem fim = parado pela suspensão)
+    check("season_clubs_auction_check", sql`${t.auctionUntil} is null or ${t.auctionOpenedAt} is not null`),
   ],
 );
 

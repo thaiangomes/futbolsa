@@ -23,7 +23,7 @@ const TABLES = [
 
 /** Colunas de dinheiro (centavos). */
 const MONEY: Record<string, string[]> = {
-  season_clubs: ["band_center", "band_floor", "band_ceiling", "ipo_price", "last_price"],
+  season_clubs: ["band_center", "band_floor", "band_ceiling", "ipo_price", "last_price", "tunnel_ref"],
   season_rules: ["a_per_point", "b_per_point", "promotion_per_share"],
   cup_phases: ["per_share"],
   wallets: ["cash", "reserved_cash"],
@@ -33,7 +33,7 @@ const MONEY: Record<string, string[]> = {
   ipo_results: ["cut_price"],
   ipo_allocations: ["paid", "refunded"],
   orders: ["limit_price", "reserved_cash"],
-  trades: ["price"],
+  trades: ["price", "price_before"],
   candles: ["open", "high", "low", "close"],
   payout_events: ["per_share"],
   payout_credits: ["amount"],
