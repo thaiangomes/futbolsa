@@ -209,10 +209,17 @@ export class PostgresMatchingEngine extends MatchingEngine {
       // inteira nele, com a reserva (critério 39; a cotação da casa também, D2). As carteiras das contrapartes
       // ficam travadas sem uso até o COMMIT, o que não muda a ordem das travas.
       if (breachesTunnel(match.fills, tunnel)) {
-        if (request.type !== "limit") throw new Error("ordem a mercado com negócio fora do túnel: o teto dela devia ser o do túnel");
-        auction = { until: await openAuction(tx, club, at) };
-        openedAuction = true;
-        match = unmatched(request);
+        if (request.type === "limit") {
+          auction = { until: await openAuction(tx, club, at) };
+          openedAuction = true;
+          match = unmatched(request);
+        } else {
+          // A ordem a mercado não abre leilão (D1): executa só dentro do túnel. O teto da compra (e o piso da venda)
+          // já está no `validateOrder`, mas o outro lado do túnel não: uma venda parada abaixo do piso (ou uma compra
+          // acima do teto), aceita como limitada, é a primeira que a ordem a mercado alcança. Ela fica sem negócio e o
+          // resto é cancelado (`market_remainder`), como o que passaria do limite de 20%.
+          match = { status: "cancelled", fills: [], remaining: request.quantity, rests: false };
+        }
       }
     } else if (request.type !== "limit") {
       throw new Error("ordem a mercado passou pela conferência com o clube em leilão");
