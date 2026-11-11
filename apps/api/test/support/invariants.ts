@@ -105,6 +105,95 @@ export async function assertSharesConserved(db: Database, seasonId: number): Pro
   );
 }
 
+/**
+ * Nenhum livro cruzado fora de leilão (Plano do livro de ofertas e formador, "Testes"): em cada clube da
+ * temporada, a melhor compra aberta fica abaixo da melhor venda aberta. O clube em leilão
+ * (`auction_opened_at` preenchido) fica de fora: nele as ordens esperam o preço único e o livro pode cruzar.
+ */
+export async function assertBookNotCrossed(db: Database, seasonId: number): Promise<void> {
+  fail(
+    "livro cruzado fora de leilão (melhor compra igual ou acima da melhor venda)",
+    await problems(
+      db,
+      sql`select c.ticker, b.best_bid, a.best_ask
+          from futbolsa.season_clubs sc
+          join futbolsa.clubs c on c.id = sc.club_id
+          cross join lateral (
+            select max(o.limit_price) as best_bid from futbolsa.orders o
+            where o.season_id = sc.season_id and o.club_id = sc.club_id and o.side = 'buy' and o.status = 'open') b
+          cross join lateral (
+            select min(o.limit_price) as best_ask from futbolsa.orders o
+            where o.season_id = sc.season_id and o.club_id = sc.club_id and o.side = 'sell' and o.status = 'open') a
+          where sc.season_id = ${seasonId} and sc.auction_opened_at is null and b.best_bid >= a.best_ask`,
+    ),
+  );
+}
+
+/** `wallets.open_orders` de cada carteira da temporada é o número de ordens abertas dela (o limite de 50 conta por ele). */
+export async function assertOpenOrdersCounter(db: Database, seasonId: number): Promise<void> {
+  fail(
+    "open_orders diferente do número de ordens abertas da carteira",
+    await problems(
+      db,
+      sql`select w.id, w.open_orders, count(o.id)::int as open_in_book
+          from futbolsa.wallets w
+          left join futbolsa.orders o on o.wallet_id = w.id and o.status = 'open'
+          where w.season_id = ${seasonId}
+          group by w.id
+          having w.open_orders <> count(o.id)`,
+    ),
+  );
+}
+
+/**
+ * As reservas batem com o livro: a compra limitada aberta prende o que falta executar × o preço limite, e só ela
+ * prende caixa; o caixa reservado da carteira é a soma das compras abertas mais as ofertas ativas do IPO; as ações
+ * reservadas de cada posição são o que falta executar das vendas abertas dela no clube.
+ */
+export async function assertReservesMatchOrders(db: Database, seasonId: number): Promise<void> {
+  fail(
+    "reserved_cash da ordem diferente do que falta executar × o preço limite",
+    await problems(
+      db,
+      sql`select o.id, o.side, o.type, o.status, o.quantity, o.filled, o.limit_price, o.reserved_cash
+          from futbolsa.orders o
+          where o.season_id = ${seasonId}
+            and o.reserved_cash <> case when o.status = 'open' and o.side = 'buy' then (o.quantity - o.filled) * o.limit_price else 0 end`,
+    ),
+  );
+  fail(
+    "caixa reservado da carteira diferente das compras abertas e das ofertas do IPO",
+    await problems(
+      db,
+      sql`select w.id, w.reserved_cash,
+            (select coalesce(sum(o.reserved_cash), 0) from futbolsa.orders o where o.wallet_id = w.id and o.status = 'open')::bigint as in_orders,
+            (select coalesce(sum(b.reserved), 0) from futbolsa.ipo_bids b where b.wallet_id = w.id and b.status = 'active')::bigint as in_bids
+          from futbolsa.wallets w
+          where w.season_id = ${seasonId}
+            and w.reserved_cash <>
+              (select coalesce(sum(o.reserved_cash), 0) from futbolsa.orders o where o.wallet_id = w.id and o.status = 'open')
+              + (select coalesce(sum(b.reserved), 0) from futbolsa.ipo_bids b where b.wallet_id = w.id and b.status = 'active')`,
+    ),
+  );
+  fail(
+    "ações reservadas diferentes do que falta executar das vendas abertas",
+    await problems(
+      db,
+      sql`with selling as (
+            select o.wallet_id, o.club_id, sum(o.quantity - o.filled)::bigint as reserved
+            from futbolsa.orders o
+            where o.season_id = ${seasonId} and o.side = 'sell' and o.status = 'open'
+            group by o.wallet_id, o.club_id)
+          select coalesce(p.wallet_id, s.wallet_id) as wallet_id, coalesce(p.club_id, s.club_id) as club_id,
+            coalesce(p.reserved_shares, 0) as reserved_shares, coalesce(s.reserved, 0) as in_orders
+          from (select p.* from futbolsa.positions p join futbolsa.wallets w on w.id = p.wallet_id
+                where w.season_id = ${seasonId}) p
+          full join selling s on s.wallet_id = p.wallet_id and s.club_id = p.club_id
+          where coalesce(p.reserved_shares, 0) <> coalesce(s.reserved, 0)`,
+    ),
+  );
+}
+
 /** Soma do caixa de todas as carteiras da temporada. */
 export async function totalCash(db: Database, seasonId: number): Promise<number> {
   const result = await db.execute(

@@ -35,7 +35,7 @@ export async function marketSeason(
  */
 export async function insertTrade(
   db: Database,
-  t: { seasonId: number; clubId: number; at: Date; price: number; quantity: number; buyerWalletId: number; sellerWalletId: number },
+  t: { seasonId: number; clubId: number; at: Date; price: number; quantity: number; buyerWalletId: number; sellerWalletId: number; inAuction?: boolean },
 ): Promise<number> {
   const base = { seasonId: t.seasonId, clubId: t.clubId, type: "limit", quantity: t.quantity, filled: t.quantity, limitPrice: t.price, status: "filled", createdAt: t.at, updatedAt: t.at };
   const [buy] = await db.insert(orders).values({ ...base, walletId: t.buyerWalletId, side: "buy" }).returning({ id: orders.id });
@@ -53,7 +53,7 @@ export async function insertTrade(
       buyerWalletId: t.buyerWalletId,
       sellerWalletId: t.sellerWalletId,
       priceBefore: t.price,
-      inAuction: false,
+      inAuction: t.inAuction ?? false,
     })
     .returning({ id: trades.id });
   return row!.id;

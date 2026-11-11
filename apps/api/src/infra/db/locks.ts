@@ -16,10 +16,24 @@ export type LockedClub = typeof seasonClubs.$inferSelect & { ticker: string };
 export type WalletRow = typeof wallets.$inferSelect;
 export type PayoutEventRow = typeof payoutEvents.$inferSelect;
 
-/** `share` na oferta do IPO; `update` para fechar o IPO, encerrar a negociação ou a temporada. */
+/**
+ * `share` na oferta do IPO; `update` para fechar o IPO, encerrar a negociação ou a temporada.
+ *
+ * O modo exclusivo é `FOR NO KEY UPDATE`, e não `FOR UPDATE`. Os dois excluem outra trava exclusiva e a
+ * compartilhada (`FOR SHARE`), que é o que o jogo precisa; a diferença é que o `FOR UPDATE` segura também a checagem
+ * de chave estrangeira (`FOR KEY SHARE`) de quem grava uma linha que aponta para a temporada. A ordem nova trava o
+ * clube sem travar a temporada (decisão 4 da arquitetura) e depois grava em `orders` e `trades`, que apontam para
+ * ela: com `FOR UPDATE`, quem tivesse a temporada e esperasse o clube (a suspensão do mercado todo, o fim da
+ * negociação) fecharia um círculo com a ordem em andamento, e o Postgres abortaria uma das duas por *deadlock*.
+ * Ninguém muda a chave nem apaga a linha da temporada, então a trava mais fraca basta.
+ */
 export async function lockSeason(tx: Tx, seasonId: number, mode: "share" | "update"): Promise<SeasonRow> {
   tx.locks.checkSeason(seasonId, mode);
-  const rows = await tx.db.select().from(seasons).where(eq(seasons.id, seasonId)).for(mode);
+  const rows = await tx.db
+    .select()
+    .from(seasons)
+    .where(eq(seasons.id, seasonId))
+    .for(mode === "update" ? "no key update" : "share");
   if (rows.length === 0) throw new Error(`temporada inexistente: ${seasonId}`);
   tx.locks.markSeason(seasonId, mode);
   return rows[0]!;

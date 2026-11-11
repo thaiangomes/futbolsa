@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { lockClubs, lockPayoutEvents, lockSeason, lockWallets } from "../../src/infra/db/locks.js";
-import { payoutEvents } from "../../src/infra/db/schema/index.js";
+import { orders, payoutEvents } from "../../src/infra/db/schema/index.js";
 import { LockOrderError, withTransaction } from "../../src/infra/db/transaction.js";
 import { useTestDatabase } from "../support/db.js";
 import { createUser, deferred, listClubs, openWallets, seedSeason, sleep } from "../support/fixtures.js";
@@ -8,6 +8,7 @@ import { createUser, deferred, listClubs, openWallets, seedSeason, sleep } from 
 describe("T6: travas em ordem", () => {
   const t = useTestDatabase();
   let seasonId: number;
+  let fla: number;
   let treasury: number;
   let players: number[];
   /** Dois eventos de pagamento (P3 da F12: travados entre os clubes e as carteiras), em ordem de id. */
@@ -16,6 +17,7 @@ describe("T6: travas em ordem", () => {
   beforeAll(async () => {
     const seeded = await seedSeason(t.db);
     seasonId = seeded.seasonId;
+    fla = seeded.clubIds.get("FLA3")!;
     await listClubs(t.db, seasonId, seeded.clubIds, ["BOT3", "FLA3", "PAL3"]);
     const closedAt = new Date("2027-06-06T20:00:00Z");
     events = (
@@ -130,6 +132,80 @@ describe("T6: travas em ordem", () => {
     release.resolve();
     await Promise.all([first, same]);
     expect(events).toEqual(["C trava PAL3", "A grava FLA3", "B trava FLA3"]);
+  });
+
+  it("a temporada em modo exclusivo segura a compartilhada e outra exclusiva até o COMMIT", async () => {
+    const events: string[] = [];
+    const holding = deferred();
+    const release = deferred();
+    const first = withTransaction(t.db, async (tx) => {
+      await lockSeason(tx, seasonId, "update");
+      holding.resolve();
+      await release.promise;
+      events.push("A solta");
+    });
+    await holding.promise;
+    const others = (["share", "update"] as const).map((mode) =>
+      withTransaction(t.db, async (tx) => {
+        await lockSeason(tx, seasonId, mode);
+        events.push(mode);
+      }),
+    );
+    await sleep(100);
+    expect(events).toEqual([]);
+    release.resolve();
+    await Promise.all([first, ...others]);
+    expect(events[0]).toBe("A solta");
+    expect([...events].sort()).toEqual(["A solta", "share", "update"]);
+  });
+
+  it("a temporada em modo exclusivo não segura quem grava uma linha que aponta para ela: quem tem a temporada e espera o clube não entra em deadlock com a ordem em andamento, 20 vezes", async () => {
+    // A ordem nova trava o clube sem travar a temporada e depois grava em `orders`, que aponta para a temporada
+    // (a checagem da chave estrangeira pede FOR KEY SHARE na linha dela). Com a trava exclusiva em FOR UPDATE, a
+    // suspensão do mercado todo (temporada, depois os clubes) e a ordem esperariam uma pela outra.
+    let retries = 0;
+    const onRetry = () => retries++;
+    const at = new Date("2027-04-06T13:00:00Z");
+    for (let i = 0; i < 20; i++) {
+      const seasonHeld = deferred();
+      const clubHeld = deferred();
+      const suspension = withTransaction(
+        t.db,
+        async (tx) => {
+          await lockSeason(tx, seasonId, "update");
+          seasonHeld.resolve();
+          await clubHeld.promise;
+          await lockClubs(tx, seasonId, ["BOT3", "FLA3", "PAL3"]);
+        },
+        { onRetry },
+      );
+      const order = withTransaction(
+        t.db,
+        async (tx) => {
+          await lockClubs(tx, seasonId, ["FLA3"]);
+          await seasonHeld.promise;
+          clubHeld.resolve();
+          // a suspensão já está parada esperando o FLA3
+          await sleep(30);
+          await tx.db.insert(orders).values({
+            seasonId,
+            clubId: fla,
+            walletId: players[0]!,
+            side: "buy",
+            type: "limit",
+            quantity: 1,
+            limitPrice: 4000,
+            status: "cancelled",
+            cancelReason: "player",
+            createdAt: at,
+            updatedAt: at,
+          });
+        },
+        { onRetry },
+      );
+      await Promise.all([suspension, order]);
+    }
+    expect(retries).toBe(0);
   });
 
   it("carteiras em ordem de id, com a tesouraria por último mesmo tendo o menor id", async () => {

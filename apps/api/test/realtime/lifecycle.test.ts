@@ -8,6 +8,7 @@ import { FakeRealtimeAuthenticator } from "../../src/infra/realtime/fake-authent
 import { RealtimeGateway } from "../../src/infra/realtime/gateway.js";
 import { RealtimeLifecycle, type LifecycleSession } from "../../src/infra/realtime/lifecycle.js";
 import { startApp, TestClient, WEB_ORIGIN, type RunningApp } from "../support/ws-client.js";
+import { tradeData } from "../support/events.js";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const MINUTE = 60_000;
@@ -148,7 +149,7 @@ describe("vida da conexão: de ponta a ponta (T7)", () => {
     await a.ask({ type: "subscribe", channel: "club:STA1" });
     await b.ask({ type: "subscribe", channel: "club:STA1" });
     await b.ask({ type: "subscribe", channel: "season" });
-    bus.publish("club:STA1", "trade", { id: "1" });
+    bus.publish("club:STA1", "trade", tradeData(1));
     await sleep(50);
     const stats = gateway.stats();
     expect(stats.connections).toBeGreaterThanOrEqual(2);

@@ -5,6 +5,7 @@ import { EventBus } from "../../src/infra/realtime/bus.js";
 import { FakeRealtimeAuthenticator } from "../../src/infra/realtime/fake-authenticator.js";
 import { RealtimeGateway } from "../../src/infra/realtime/gateway.js";
 import { startApp, TestClient, WEB_ORIGIN, type RunningApp } from "../support/ws-client.js";
+import { tradeData } from "../support/events.js";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -133,7 +134,7 @@ describe("limites e cliente lento (T6)", () => {
       let publicados = 0;
       // um evento por vez, dando tempo de o cliente que lê esvaziar o envio dele
       for (let i = 0; i < 4_000 && gateway.stats().slowClientsDropped === antes; i++) {
-        bus.publish("club:LEN1", "trade", { id: String(i), lixo: grande });
+        bus.publish("club:LEN1", "trade", { ...tradeData(i), at: grande });
         publicados++;
         await sleep(1);
       }
@@ -145,11 +146,11 @@ describe("limites e cliente lento (T6)", () => {
       expect(publicados).toBeLessThan(4_000);
 
       // quem lê continua recebendo, sem atraso
-      bus.publish("club:LEN1", "trade", { id: "depois" });
+      bus.publish("club:LEN1", "trade", tradeData(999_999));
       let ultimo: any;
       do ultimo = await rapido.next();
-      while (ultimo.data?.id !== "depois");
-      expect(ultimo.data.id).toBe("depois");
+      while (ultimo.data?.id !== 999_999);
+      expect(ultimo.data.id).toBe(999_999);
     });
   });
 });
