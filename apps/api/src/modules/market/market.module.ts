@@ -1,6 +1,7 @@
 import { Module, type OnModuleInit } from "@nestjs/common";
 import { AccountClosureHooks } from "../accounts/index.js";
 import { AdminLogModule } from "../admin/log/index.js";
+import { DividendsModule } from "../dividends/dividends.module.js";
 import { RealtimeModule } from "../../infra/realtime/index.js";
 import { PortfolioModule } from "../portfolio/index.js";
 import { MarketMakerAdminController } from "./admin/market-maker.controller.js";
@@ -8,6 +9,8 @@ import { MarketMakerAdminService } from "./admin/market-maker.service.js";
 import { CloseAuctionAdapter, CloseAuctionService } from "./auction/close-auction.js";
 import { BookController } from "./book/book.controller.js";
 import { BookReadService } from "./book/book-read.service.js";
+import { FairValueService } from "./maker/fair-value.service.js";
+import { RefreshService } from "./maker/refresh.service.js";
 import { MatchingEngine } from "./matching/matching-engine.js";
 import { PostgresMatchingEngine } from "./matching/postgres-matching-engine.js";
 import { CancelService } from "./orders/cancel.service.js";
@@ -31,9 +34,13 @@ import { AuctionCloser } from "./state/tunnel-state.js";
  * encontra o leilão vencido (o `OrderService`, o `PlayerOrdersService` e o `CancelService`) recebe o `AuctionCloser`
  * (`state/tunnel-state.ts`), ligado aqui ao fim do leilão de verdade (P10); a tarefa `auction-close`
  * (`infra/jobs/market-jobs.ts`) fecha os outros a cada 5 segundos.
+ *
+ * Formador de mercado: o `RefreshService` repõe a cotação da casa num clube (T10 e L6), com o valor justo do
+ * `FairValueService` (T9), e grava os pedidos de reposição (`requestRefresh`). Quem acorda a reposição na hora depois
+ * de um pedido é o `RefreshWaker`, que a agenda (T11) registra; sem ele, o pedido espera a tarefa de cada minuto.
  */
 @Module({
-  imports: [PortfolioModule, AdminLogModule, RealtimeModule],
+  imports: [PortfolioModule, AdminLogModule, RealtimeModule, DividendsModule],
   controllers: [MarketMakerAdminController, BookController, OrdersController],
   providers: [
     { provide: MatchingEngine, useClass: PostgresMatchingEngine },
@@ -47,8 +54,10 @@ import { AuctionCloser } from "./state/tunnel-state.js";
     BookReadService,
     BookPublisher,
     MarketEvents,
+    FairValueService,
+    RefreshService,
   ],
-  exports: [OrderService, CancelService, MarketEvents, BookPublisher, CloseAuctionService, AuctionCloser],
+  exports: [OrderService, CancelService, MarketEvents, BookPublisher, CloseAuctionService, AuctionCloser, FairValueService, RefreshService],
 })
 export class MarketModule implements OnModuleInit {
   constructor(
