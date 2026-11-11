@@ -10,7 +10,7 @@ import { CloseAuctionAdapter, CloseAuctionService } from "./auction/close-auctio
 import { BookController } from "./book/book.controller.js";
 import { BookReadService } from "./book/book-read.service.js";
 import { FairValueService } from "./maker/fair-value.service.js";
-import { RefreshService } from "./maker/refresh.service.js";
+import { RefreshService, RefreshWaker } from "./maker/refresh.service.js";
 import { MatchingEngine } from "./matching/matching-engine.js";
 import { PostgresMatchingEngine } from "./matching/postgres-matching-engine.js";
 import { CancelService } from "./orders/cancel.service.js";
@@ -36,8 +36,9 @@ import { AuctionCloser } from "./state/tunnel-state.js";
  * (`infra/jobs/market-jobs.ts`) fecha os outros a cada 5 segundos.
  *
  * Formador de mercado: o `RefreshService` repõe a cotação da casa num clube (T10 e L6), com o valor justo do
- * `FairValueService` (T9), e grava os pedidos de reposição (`requestRefresh`). Quem acorda a reposição na hora depois
- * de um pedido é o `RefreshWaker`, que a agenda (T11) registra; sem ele, o pedido espera a tarefa de cada minuto.
+ * `FairValueService` (T9), e grava os pedidos de reposição (`requestRefresh`). Depois do COMMIT do pedido, ele chama o
+ * `RefreshWaker`, em que a agenda (T11) se inscreve para repor na hora; sem inscrito, o pedido espera a tarefa de cada
+ * minuto.
  */
 @Module({
   imports: [PortfolioModule, AdminLogModule, RealtimeModule, DividendsModule],
@@ -56,8 +57,19 @@ import { AuctionCloser } from "./state/tunnel-state.js";
     MarketEvents,
     FairValueService,
     RefreshService,
+    RefreshWaker,
   ],
-  exports: [OrderService, CancelService, MarketEvents, BookPublisher, CloseAuctionService, AuctionCloser, FairValueService, RefreshService],
+  exports: [
+    OrderService,
+    CancelService,
+    MarketEvents,
+    BookPublisher,
+    CloseAuctionService,
+    AuctionCloser,
+    FairValueService,
+    RefreshService,
+    RefreshWaker,
+  ],
 })
 export class MarketModule implements OnModuleInit {
   constructor(

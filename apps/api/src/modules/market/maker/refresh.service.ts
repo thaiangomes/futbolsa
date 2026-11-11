@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import type { Cents, Quote } from "@futbolsa/engine";
 import { Clock } from "../../../infra/clock/index.js";
@@ -96,14 +96,40 @@ export interface RefreshWakeUp {
   reason: RefreshReason;
 }
 
+export type RefreshWakeListener = (request: RefreshWakeUp) => void | Promise<void>;
+
 /**
  * Quem acorda a reposição na hora depois de um pedido (P5 do plano): o `requestRefresh` chama `wake` no `afterCommit`
  * da transação que gravou o pedido, sem esperar a tarefa de cada minuto (critério 32: na retomada da suspensão, a
- * casa cota "na mesma hora"). Classe abstrata para servir de chave de injeção; a tarefa da agenda (T11) registra a
- * implementação. Sem registro, o pedido fica gravado e a tarefa de cada minuto o atende.
+ * casa cota "na mesma hora"). A tarefa da agenda (T11) se inscreve com `onWake` na subida e repõe os clubes pedidos;
+ * sem ninguém inscrito, o pedido fica gravado e a tarefa de cada minuto o atende. É um ponto de inscrição, e não uma
+ * classe que a tarefa implementa, para a tarefa depender do `RefreshService` sem o Nest ver um círculo.
+ *
+ * O erro de um inscrito não afeta os outros nem quem pediu (o pedido já foi gravado).
  */
-export abstract class RefreshWaker {
-  abstract wake(request: RefreshWakeUp): void | Promise<void>;
+@Injectable()
+export class RefreshWaker {
+  private readonly logger = new Logger(RefreshWaker.name);
+  private readonly listeners: RefreshWakeListener[] = [];
+
+  /** Inscreve quem repõe os clubes pedidos; devolve a função que desfaz a inscrição. */
+  onWake(listener: RefreshWakeListener): () => void {
+    this.listeners.push(listener);
+    return () => {
+      const i = this.listeners.indexOf(listener);
+      if (i >= 0) this.listeners.splice(i, 1);
+    };
+  }
+
+  async wake(request: RefreshWakeUp): Promise<void> {
+    for (const listener of [...this.listeners]) {
+      try {
+        await listener(request);
+      } catch (error) {
+        this.logger.error(`falha ao acordar a reposição de ${request.tickers.join(", ")}: ${(error as Error).message}`);
+      }
+    }
+  }
 }
 
 /** A reposição achou o leilão do clube vencido: nada foi gravado, e o leilão fecha antes (P10). */
@@ -160,7 +186,7 @@ export class RefreshService {
     @Optional() private readonly auctions?: AuctionCloser,
     /** Os avisos depois do `COMMIT`. Opcional: sem ele a reposição não avisa o modo de jogo nem o livro. */
     @Optional() private readonly events?: MarketEvents,
-    /** Quem acorda a reposição na hora depois de um pedido (T11). Opcional. */
+    /** Quem acorda a reposição na hora depois de um pedido (a T11 se inscreve nele). Opcional nos testes. */
     @Optional() private readonly waker?: RefreshWaker,
   ) {}
 

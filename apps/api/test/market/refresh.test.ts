@@ -68,12 +68,14 @@ function refreshed(result: RefreshResult): ClubRefreshed {
   return result;
 }
 
-/** O despertador da reposição (o que a T11 liga), anotando cada pedido. */
-class RecordingWaker extends RefreshWaker {
-  readonly calls: RefreshWakeUp[] = [];
-  wake(request: RefreshWakeUp): void {
-    this.calls.push(request);
-  }
+/** O despertador da reposição com um inscrito (o que a T11 faz na subida) que anota cada pedido. */
+function recordingWaker(): { waker: RefreshWaker; calls: RefreshWakeUp[] } {
+  const waker = new RefreshWaker();
+  const calls: RefreshWakeUp[] = [];
+  waker.onWake((request) => {
+    calls.push(request);
+  });
+  return { waker, calls };
 }
 
 /** Nos testes o valor justo vem pronto (`fairValues`); quem cair aqui esqueceu de passar. */
@@ -92,7 +94,7 @@ describe("reposição da casa", () => {
   let service: OrderService;
   let cancels: CancelService;
   let refresher: RefreshService;
-  let waker: RecordingWaker;
+  let waker: { waker: RefreshWaker; calls: RefreshWakeUp[] };
   let clock: FixedClock;
   let o: ReturnType<typeof orderInputs>;
   let cashBefore: number | undefined;
@@ -111,8 +113,8 @@ describe("reposição da casa", () => {
       service = new OrderService(db, new PostgresMatchingEngine(ledger), adapter);
       cancels = new CancelService(db, ledger, adapter);
       clock = new FixedClock(NOW);
-      waker = new RecordingWaker();
-      refresher = new RefreshService(db, service, cancels, NO_FAIR_VALUE, clock, adapter, undefined, waker);
+      waker = recordingWaker();
+      refresher = new RefreshService(db, service, cancels, NO_FAIR_VALUE, clock, adapter, undefined, waker.waker);
       o = orderInputs({ seasonId, now: NOW });
       cashBefore = undefined;
       await body();
@@ -480,6 +482,17 @@ describe("reposição da casa", () => {
       await request([]);
       expect(waker.calls).toHaveLength(1);
       await expect(request(["COR3"])).rejects.toThrow(/não listado/);
+
+      // o inscrito que falha não segura os outros nem quem pediu; quem desfaz a inscrição não é mais chamado
+      const off = waker.waker.onWake(() => {
+        throw new Error("tarefa fora do ar");
+      });
+      await request(["SPT3"], "close");
+      expect(waker.calls.at(-1)).toEqual({ seasonId, tickers: ["SPT3"], reason: "close" });
+      expect((await requests("SPT3")).map((r) => r.reason)).toEqual(["close"]);
+      off();
+      await request(["SPT3"], "resume");
+      expect(waker.calls).toHaveLength(3);
     }),
   );
 
@@ -575,8 +588,14 @@ describe("reposição da casa na aplicação", () => {
     expect(book.bids[0]).toMatchObject({ price: 3990, quantity: 10 });
     expect(book.asks[0]).toMatchObject({ price: 4410, quantity: 10 });
 
-    // o pedido gravado pela aplicação, sem quem acorde (a T11 liga o RefreshWaker)
+    // o pedido gravado pela aplicação acorda quem se inscreveu no RefreshWaker do app (a T11, na subida)
+    const woken: RefreshWakeUp[] = [];
+    const off = app.get(RefreshWaker).onWake((request) => {
+      woken.push(request);
+    });
     await withTransaction(database.db, (tx) => refresher.requestRefresh(tx, ["FLA3"], "resume"));
+    off();
+    expect(woken).toEqual([{ seasonId, tickers: ["FLA3"], reason: "resume" }]);
     const pending = await database.db.select().from(marketRefreshRequests).where(isNull(marketRefreshRequests.doneAt));
     expect(pending.map((p) => p.reason)).toEqual(["resume"]);
   });
