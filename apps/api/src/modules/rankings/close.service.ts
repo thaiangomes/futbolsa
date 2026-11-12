@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { seasons } from "../../infra/db/schema/index.js";
 import { closeAtOfMonth } from "./base.js";
 import { CLOSE_GRACE_MS, closeMonth, closeSeason, monthsDue } from "./close.js";
+import { requestRecalc } from "./recalc.js";
 import { currentSnapshot } from "./snapshots.js";
 
 /** O fechamento oficial dos rankings: o mês, o ano e a tarefa que recupera o que ficou para trás (T5). */
@@ -43,7 +44,13 @@ export class CloseService {
     return done;
   }
 
-  /** Uma passada da tarefa `rankings-close` (a cada minuto): um mês por transação, com a folga depois do fechamento. */
+  /**
+   * Uma passada da tarefa `rankings-close` (a cada minuto): um mês por transação, com a folga depois do fechamento.
+   * Cada mês fechado aqui também pede o recálculo dele mesmo, na mesma transação: se um recálculo do mês anterior
+   * corria ao mesmo tempo (as duas leituras `repeatable read` não se veem), este mês pode ter lido a base da versão
+   * velha e o recálculo não o viu; o pedido o refaz com a base atual (e não grava versão se nada mudou). Também cobre a
+   * linha com horário até o fechamento gravada por uma transação que terminou depois da folga.
+   */
   async runOnce(now: Date = this.clock.now()): Promise<string[]> {
     if (this.running) return [];
     this.running = true;
@@ -58,7 +65,9 @@ export class CloseService {
           this.db,
           async (tx) => {
             if (await currentSnapshot(tx, season.id, "month", key)) return false;
-            return closeMonth(tx, { seasonId: season.id, monthKey: key, at, now });
+            const closed = await closeMonth(tx, { seasonId: season.id, monthKey: key, at, now });
+            if (closed) await requestRecalc(tx, { seasonId: season.id, from: at, reason: "fechamento do mês", now });
+            return closed;
           },
           { isolationLevel: "repeatable read" },
         );

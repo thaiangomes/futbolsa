@@ -78,14 +78,17 @@ export async function closeSeason(tx: Tx, args: { seasonId: number; at: Date; no
   return { month, season: written };
 }
 
-/** Os meses cujo fechamento já passou (com a folga), do primeiro mês da temporada até o último fechado. */
-export function monthsDue(season: { ipoOpensAt: Date | null; tradingEndedAt: Date | null }, until: Date): string[] {
+/**
+ * Os meses cujo fechamento já passou (com a folga), do primeiro mês da temporada até o último fechado. O limite é o
+ * encerramento da temporada (`closed_at`), não o fim da negociação: o mês do apito final é um mês civil comum e fecha
+ * às 23h59 do último dia se a temporada ainda não foi encerrada; só o mês do encerramento (e os seguintes) são do
+ * `closeSeason`, que mede no instante do encerramento.
+ */
+export function monthsDue(season: { ipoOpensAt: Date | null; closedAt: Date | null }, until: Date): string[] {
   if (!season.ipoOpensAt) return [];
-  const endKey = season.tradingEndedAt ? monthKey(season.tradingEndedAt.getTime()) : null;
+  const limit = season.closedAt !== null ? Math.min(until.getTime(), season.closedAt.getTime()) : until.getTime();
   const out: string[] = [];
-  for (let key = monthKey(season.ipoOpensAt.getTime()); closeAtOfMonth(key).getTime() <= until.getTime(); key = nextMonthKey(key)) {
-    // o mês do encerramento (e os seguintes) são do `closeSeason`, que mede no instante do encerramento
-    if (endKey !== null && key >= endKey) break;
+  for (let key = monthKey(season.ipoOpensAt.getTime()); closeAtOfMonth(key).getTime() <= limit; key = nextMonthKey(key)) {
     out.push(key);
     if (out.length > 240) break;
   }
