@@ -62,11 +62,12 @@ export const officialRankingSchema = z.strictObject({
 });
 export type OfficialRanking = z.infer<typeof officialRankingSchema>;
 
-/** `GET /rankings/live`: a parcial, com a linha de quem pediu (`me`, nulo sem login ou sem carteira). */
+/** `GET /rankings/live`: a parcial, com a linha de quem pediu (`me`, nulo sem login ou sem carteira). `seq` é o do canal `rankings`, lido antes do banco (P2 do Plano do WebSocket). */
 export const liveRankingSchema = z.strictObject({
   period: rankingPeriodSchema,
   periodKey: z.string(),
   computedAt: z.string(),
+  seq: z.number().int(),
   ...pageFields,
   me: rankingRowSchema.nullable(),
 });
