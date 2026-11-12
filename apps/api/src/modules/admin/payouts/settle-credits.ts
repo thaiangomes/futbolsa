@@ -8,11 +8,12 @@ import { SettleReversalService } from "./settle-reversal.js";
 import { dues, settlingEventIds } from "./settlement.js";
 
 /**
- * Carteiras por lote de crédito (P2; proposta, a T8 mede). Uma transação com milhares de carteiras travadas faria
- * toda ordem de um desses donos, que trava o clube antes da carteira, segurar o livro do clube inteiro esperando;
- * com 200 por lote, a espera fica em milissegundos e o resultado é o mesmo.
+ * Carteiras por lote de crédito (P2). Uma transação com milhares de carteiras travadas faria toda ordem de um desses
+ * donos, que trava o clube antes da carteira, segurar o livro do clube inteiro esperando. Medido na T10
+ * (`scripts/payout-batch-timing.mjs`, 5.000 donos): com 200 por lote cada lote segurava as carteiras ~1,3 s (quase
+ * tudo nos ~4,8 ms de cada `portfolio.post`); com 50, ~0,32 s, e a liquidação inteira só ~7% mais lenta (34 s contra 32 s).
  */
-export const SETTLE_BATCH = 200;
+export const SETTLE_BATCH = 50;
 
 /** Um crédito lançado num lote: o dividendo, o complemento ou o estorno (valor negativo) de uma carteira. */
 export interface Credit {
@@ -121,14 +122,27 @@ export class SettleCreditsService implements OnModuleDestroy {
       }
     }
 
-    // quem não cobre o estorno: uma transação por carteira, com as compras canceladas (P5)
+    // quem não cobre o estorno: uma transação por carteira, com as compras canceladas (P5). A falha de uma carteira não
+    // segura as outras (revisão T10: antes, a primeira que falhasse, sempre a mesma por ser em ordem de id, deixava as
+    // seguintes sem estorno a cada execução da tarefa); o erro sobe no fim, para o log da tarefa
+    const failures: Array<{ walletId: number; error: unknown }> = [];
     for (const walletId of deferred) {
-      const batches = await this.reversal.settleWallet(event.seasonId, walletId, (b) => this.onCredited(b));
+      let batches: CreditedBatch[];
+      try {
+        batches = await this.reversal.settleWallet(event.seasonId, walletId, (b) => this.onCredited(b));
+      } catch (error) {
+        failures.push({ walletId, error });
+        continue;
+      }
       for (const b of batches.filter((x) => x.eventId === eventId)) {
         summary.batches++;
         summary.credited += b.credits.length;
         summary.amount += b.credits.reduce((total, c) => total + c.amount, 0);
       }
+    }
+    if (failures.length > 0) {
+      const detail = failures.map((f) => `carteira ${f.walletId}: ${(f.error as Error).message}`).join("; ");
+      throw new Error(`liquidação do evento ${eventId}: ${failures.length} carteira(s) sem estorno (${detail})`, { cause: failures[0]!.error });
     }
     return summary;
   }

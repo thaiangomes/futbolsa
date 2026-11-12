@@ -8,7 +8,7 @@ import { adminLog, marketRefreshRequests, matches, payoutCredits, users, wallets
 import { ApplyCorrectionService } from "../../src/modules/admin/payouts/apply-correction.service.js";
 import { RankingsPort } from "../../src/modules/admin/payouts/ports.js";
 import { SettleCreditsService, SETTLE_BATCH } from "../../src/modules/admin/payouts/settle-credits.js";
-import { settlingEventIds } from "../../src/modules/admin/payouts/settlement.js";
+import { dues, duesQuery, settlingEventIds } from "../../src/modules/admin/payouts/settlement.js";
 import { RefreshWaker } from "../../src/modules/market/index.js";
 import { PortfolioLedger } from "../../src/modules/portfolio/index.js";
 import { post } from "../../src/modules/portfolio/ledger/index.js";
@@ -405,6 +405,46 @@ describe("correção aplicada (POST /admin/payouts/corrections)", () => {
     // a próxima correção não é recusada por "liquidando"
     await scene.setScore(s.seasonId, "CAM3", [1, 1]);
     expect((await scene.plan(s.seasonId, after(now, 5))).preview.changes.length).toBeGreaterThan(0);
+  });
+
+  it("revisão T10: dues em conjuntos — quem vendeu tudo entre os fechamentos devolve, e o filtro de carteiras vale para a foto e o já pago", async () => {
+    const s = await scene.newSeason();
+    const ana = await scene.player(s);
+    const bob = await scene.player(s);
+    await scene.buy(s, ana, "CAM3", 500);
+    await scene.buy(s, bob, "CAM3", 200);
+    await scene.insertMatches(scene.round10(s.seasonId));
+    await scene.close(s.seasonId, after(ROUND10_CLOSE, 3));
+    await scene.approveAll(after(ROUND10_CLOSE, 5));
+    // Ana passa tudo a Bob às 20h10; o último jogo acabou às 20h30: a foto nova não tem Ana
+    await scene.transfer(ana, bob, "CAM3", 500, after(ROUND10_CLOSE, 10));
+    await t.db.update(matches).set({ finishedAt: after(ROUND10_CLOSE, 30) }).where(eq(matches.id, (await scene.matchOf(s.seasonId, "JUV3")).id));
+    const now = after(ROUND10_CLOSE, 60);
+    await apply((await scene.plan(s.seasonId, now)).planCode, now);
+    const [, camV2] = await scene.eventsOf(s.seasonId, "CAM3");
+
+    const byWallet = (walletIds: number[]) => dues(t.db, { eventId: camV2!.id, walletIds }).then((r) => r.map((d) => [d.walletId, d.shares, d.amount]));
+    expect(await byWallet([ana])).toEqual([[ana, 0, -15_000]]);
+    expect(await byWallet([bob])).toEqual([[bob, 700, 15_000]]);
+    const [low, high] = [ana, bob].sort((a, b) => a - b);
+    const cursor = await dues(t.db, { eventId: camV2!.id, afterWallet: low });
+    expect(cursor.map((d) => d.walletId)).toEqual([high]);
+    expect(await settlingEventIds(t.db, s.seasonId)).toEqual([camV2!.id]);
+
+    // nenhuma subconsulta por carteira: com elas, a temporada inteira levava ~18 s com 200 eventos de 2.000 donos
+    const { rows } = await t.db.execute(sql`explain ${duesQuery({ seasonId: s.seasonId })}`);
+    expect(rows.map((r) => String(Object.values(r)[0])).join("\n")).not.toContain("SubPlan");
+
+    await settle.settlePending();
+    expect((await scene.creditsOf(camV2!.id)).map((c) => [c.walletId, c.amount]).sort((a, b) => a[0]! - b[0]!)).toEqual(
+      [[ana, -15_000], [bob, 15_000]].sort((a, b) => a[0]! - b[0]!),
+    );
+    expect(await settlingEventIds(t.db, s.seasonId)).toEqual([]);
+    await assertLedgerConsistent(t.db, s.seasonId);
+  });
+
+  it("revisão T10: o lote de crédito tem 50 carteiras (a 200 cada lote segurava as carteiras ~1,3 s)", () => {
+    expect(SETTLE_BATCH).toBe(50);
   });
 
   it("regra liquidando: carteira creditada cuja conta foi excluída depois não esconde o crédito que falta", async () => {

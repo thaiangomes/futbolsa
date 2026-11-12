@@ -205,6 +205,44 @@ describe("estorno com cancelamento das compras e caixa negativo (T7)", () => {
     expect(await scene.walletOf(bruno)).toMatchObject({ cash: 20_000, reservedCash: 0, openOrders: 0 });
   });
 
+  it("revisão T10: a carteira cujo estorno falha não segura o estorno das outras; a tarefa seguinte termina", async () => {
+    const s = await scene.newSeason();
+    const owners: number[] = [];
+    for (let i = 0; i < 2; i++) {
+      const w = await scene.player(s, 2_000 * PRICE);
+      await scene.buy(s, w, "CAM3", 2_000);
+      owners.push(w);
+    }
+    await scene.insertMatches(scene.round10(s.seasonId));
+    await scene.close(s.seasonId, after(ROUND10_CLOSE, 3));
+    await scene.approveAll(after(ROUND10_CLOSE, 5));
+    // as duas gastam o dividendo: R$ 150,00 no caixa não cobrem o estorno de R$ 400,00 (transação por carteira)
+    for (const w of owners) await scene.buy(s, w, "FLA3", 450, after(ROUND10_CLOSE, 30));
+    await scene.setScore(s.seasonId, "CAM3", [1, 1]);
+    const p = await scene.plan(s.seasonId, NOW);
+    clock.set(NOW);
+    await applier.apply(scene.admin.id, { planCode: p.planCode, reason: REASON });
+
+    const [first, second] = [...owners].sort((a, b) => a - b);
+    reversal.hooks = {
+      afterClubsRead: async (walletId) => {
+        if (walletId === first) throw new Error("falha simulada");
+      },
+    };
+    const failed = await settle.settlePending();
+    expect(failed.errors).toHaveLength(1);
+    expect(failed.errors[0]).toContain(`carteira ${first}`);
+    // a segunda carteira teve o estorno mesmo com a primeira falhando antes dela
+    expect(await scene.cashOf(second!)).toBe(-25_000);
+    expect(await scene.cashOf(first!)).toBe(15_000);
+
+    reversal.hooks = {};
+    expect((await settle.settlePending()).errors).toEqual([]);
+    expect(await scene.cashOf(first!)).toBe(-25_000);
+    for (const w of owners) expect(await scene.entriesOf(w, ["reversal"])).toHaveLength(1);
+    await assertLedgerConsistent(t.db, s.seasonId);
+  });
+
   /** Uma carteira com duas compras abertas (R$ 100,00 reservados) e uma venda, num cenário sem correção. */
   async function walletWithOrders() {
     const s = await scene.newSeason();

@@ -14,7 +14,7 @@ com estorno (T7) espera a F9 (`market.cancelOrders`).
 | `close-events.job.ts` | Dispara a passada a cada minuto, ao subir a API, a cada `MatchesChangedEvent` e a cada mudança da classificação. |
 | `preview.service.ts`, `payouts.controller.ts` | `GET /admin/payouts` (prévia) e `GET /admin/payouts/:id/holders`. |
 | `approve.service.ts` | `POST /admin/payouts/approve`: cada evento passa a `approved` numa transação curta, com o registro do admin e o aviso aos rankings. |
-| `settle-credits.ts`, `settle.job.ts` | O crédito em lotes de até 200 carteiras, retomável (tarefa de cada minuto e ao subir a API). |
+| `settle-credits.ts`, `settle.job.ts` | O crédito em lotes de até 50 carteiras (`SETTLE_BATCH`, medido na T10), retomável (tarefa de cada minuto e ao subir a API). |
 | `settlement.ts` | Quais eventos aprovados ainda estão liquidando. |
 | `correction-plan.ts`, `corrections.controller.ts` | `GET /admin/payouts/corrections`: o plano e a prévia da correção, com o código do plano. Não aplica nada. |
 | `ports.ts` | `RankingsPort` (aviso ao recálculo dos rankings da F13, dentro da transação, e `wake()` depois do `COMMIT`); a implementação vazia fica até a F13. |

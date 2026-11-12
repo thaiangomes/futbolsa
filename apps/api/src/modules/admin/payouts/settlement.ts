@@ -44,44 +44,59 @@ const list = (ids: readonly number[]) => sql.join(ids.map((id) => sql`${id}`), s
  *
  * Só carteiras que recebem: a conta excluída fica de fora mesmo que tenha sido creditada antes da exclusão (ela não
  * recebe nem devolve, P6), então ela nunca deixa um evento "liquidando" nem esconde o crédito que falta de outra.
+ *
+ * Em conjuntos (revisão T10): a foto e o já creditado pelas versões anteriores entram por junção, nunca por subconsulta
+ * por carteira. Com subconsultas correlacionadas, cada carteira de cada evento relia os eventos da temporada (as
+ * versões antigas não estão em índice nenhum por chave), e `settlingEventIds` da temporada inteira, que a tarefa de
+ * cada minuto, a correção e a visão geral do admin chamam, levava ~18 s com 200 eventos pagos de 2.000 donos. O filtro
+ * de carteiras entra na foto e nos créditos antes da junção, então o lote e o cursor só leem as carteiras deles.
  */
-function duesQuery(filter: DuesFilter): SQL {
+export function duesQuery(filter: DuesFilter): SQL {
   const where: SQL[] = [sql`e.status = 'approved'`];
   if (filter.eventId !== undefined) where.push(sql`e.id = ${filter.eventId}`);
   if (filter.seasonId !== undefined) where.push(sql`e.season_id = ${filter.seasonId}`);
   if (filter.eventIds) where.push(filter.eventIds.length === 0 ? sql`false` : sql`e.id in (${list(filter.eventIds)})`);
-  const walletWhere: SQL[] = [];
-  if (filter.walletIds) walletWhere.push(filter.walletIds.length === 0 ? sql`false` : sql`d.wallet_id in (${list(filter.walletIds)})`);
-  if (filter.afterWallet !== undefined) walletWhere.push(sql`d.wallet_id > ${filter.afterWallet}`);
+  const walletsOf = (column: SQL): SQL => {
+    const parts: SQL[] = [];
+    if (filter.walletIds) parts.push(filter.walletIds.length === 0 ? sql`false` : sql`${column} in (${list(filter.walletIds)})`);
+    if (filter.afterWallet !== undefined) parts.push(sql`${column} > ${filter.afterWallet}`);
+    return parts.length > 0 ? sql`and ${sql.join(parts, sql` and `)}` : sql``;
+  };
   return sql`
-    select e.id as event_id, d.wallet_id, d.shares, d.amount
-    from futbolsa.payout_events e
-    cross join lateral (
-      select x.wallet_id, x.shares, x.shares::bigint * e.per_share - x.paid as amount
-      from (
-        select c.wallet_id,
-          coalesce((select h.shares from futbolsa.payout_holdings h where h.event_id = e.id and h.wallet_id = c.wallet_id), 0) as shares,
-          coalesce((
-            select sum(pc.amount) from futbolsa.payout_credits pc
-            join futbolsa.payout_events o on o.id = pc.event_id
-            where o.season_id = e.season_id and o.club_id = e.club_id and o.event_key = e.event_key
-              and o.version < e.version and pc.wallet_id = c.wallet_id
-          ), 0)::bigint as paid
-        from (
-          select h.wallet_id from futbolsa.payout_holdings h where h.event_id = e.id
-          union
-          select pc.wallet_id from futbolsa.payout_credits pc
-          join futbolsa.payout_events o on o.id = pc.event_id
-          where o.season_id = e.season_id and o.club_id = e.club_id and o.event_key = e.event_key and o.version < e.version
-        ) c
-      ) x
-    ) d
+    with ev as (
+      select e.id, e.season_id, e.club_id, e.event_key, e.version, e.per_share
+      from futbolsa.payout_events e
+      where ${sql.join(where, sql` and `)}
+    ),
+    hold as (
+      select h.event_id, h.wallet_id, h.shares
+      from ev join futbolsa.payout_holdings h on h.event_id = ev.id
+      where true ${walletsOf(sql`h.wallet_id`)}
+    ),
+    prev as (
+      select ev.id as event_id, pc.wallet_id, sum(pc.amount)::bigint as paid
+      from ev
+      join futbolsa.payout_events o
+        on o.season_id = ev.season_id and o.club_id = ev.club_id and o.event_key = ev.event_key and o.version < ev.version
+      join futbolsa.payout_credits pc on pc.event_id = o.id
+      where true ${walletsOf(sql`pc.wallet_id`)}
+      group by ev.id, pc.wallet_id
+    ),
+    d as (
+      select coalesce(hold.event_id, prev.event_id) as event_id,
+        coalesce(hold.wallet_id, prev.wallet_id) as wallet_id,
+        coalesce(hold.shares, 0) as shares,
+        coalesce(prev.paid, 0)::bigint as paid
+      from hold full join prev on prev.event_id = hold.event_id and prev.wallet_id = hold.wallet_id
+    )
+    select d.event_id, d.wallet_id, d.shares, d.shares::bigint * ev.per_share - d.paid as amount
+    from d
+    join ev on ev.id = d.event_id
     join futbolsa.wallets w on w.id = d.wallet_id
     left join futbolsa.users u on u.id = w.user_id
-    where ${sql.join(where, sql` and `)} and ${RECEIVES} and d.amount <> 0
-      ${walletWhere.length > 0 ? sql`and ${sql.join(walletWhere, sql` and `)}` : sql``}
-      and not exists (select 1 from futbolsa.payout_credits pc where pc.event_id = e.id and pc.wallet_id = d.wallet_id)
-    order by e.id, d.wallet_id
+    where ${RECEIVES} and d.shares::bigint * ev.per_share - d.paid <> 0
+      and not exists (select 1 from futbolsa.payout_credits pc where pc.event_id = d.event_id and pc.wallet_id = d.wallet_id)
+    order by d.event_id, d.wallet_id
     ${filter.limit === undefined ? sql`` : sql`limit ${filter.limit}`}`;
 }
 

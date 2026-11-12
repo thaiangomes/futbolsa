@@ -29,6 +29,10 @@
 //     dues() sozinho, antes e depois: cursor de 200 26 a 63 ms; as 200 do lote 10 ms; settlingEventIds 55 a 62 ms
 //   => cada lote de 200 segura as carteiras ~1,3 s; uma ordem de um desses donos espera isso com o clube travado.
 //      ~6,5 ms por carteira, quase tudo no `portfolio.post` um a um (a saída é o `postMany` da F11 ou lotes menores).
+// Revisão T10 (mesma máquina, `dues()` reescrita em conjuntos, sem subconsulta por carteira):
+//   lotes de 200: correção 32,7 s; entre lotes (o cursor) p50 24 ms (era 597 ms); travas por lote p50 1.277 ms
+//   lotes de 50 (o SETTLE_BATCH novo): aprovação 34,3 s, correção 35,0 s; travas por lote p50 319 ms, p95 345 ms
+//   (e, à parte, 200 eventos pagos de 2.000 donos: settlingEventIds da temporada de 17,7 s para 0,7 s)
 import "reflect-metadata";
 import { randomBytes } from "node:crypto";
 import { performance } from "node:perf_hooks";
