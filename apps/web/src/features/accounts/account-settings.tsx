@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { deleteMeResponseSchema } from "@futbolsa/contracts";
 import { z } from "zod";
 import { ApiError, type ApiClient } from "../../lib/api";
@@ -24,6 +24,8 @@ export interface AccountSettingsProps {
   onSignedOut(reason: "signed_out" | "deleted"): void;
   /** O relógio, para os testes. */
   now?: () => Date;
+  /** Um bloco a mais embaixo do perfil público (a foto mensal da carteira, da F10). */
+  profileExtra?: ReactNode;
 }
 
 /**
@@ -156,7 +158,7 @@ function PasswordSection({ auth, email, returnUrl, now }: { auth: AuthClient; em
 }
 
 /** Perfil e conta (prancha 6c, a parte da conta; a foto mensal e o histórico vêm na F10 e na F15). */
-export function AccountSettings({ me, auth, api, returnUrl, onChanged, onSignedOut, now = () => new Date() }: AccountSettingsProps) {
+export function AccountSettings({ me, auth, api, returnUrl, onChanged, onSignedOut, now = () => new Date(), profileExtra }: AccountSettingsProps) {
   const [nickname, setNickname] = useState(me.nickname);
   const [nickError, setNickError] = useState<string | null>(null);
   const [nickOk, setNickOk] = useState(false);
@@ -214,6 +216,7 @@ export function AccountSettings({ me, auth, api, returnUrl, onChanged, onSignedO
           </div>
           <span className="chip">Assim os outros veem seu perfil</span>
         </section>
+        {profileExtra}
       </div>
 
       <aside className="stack">
