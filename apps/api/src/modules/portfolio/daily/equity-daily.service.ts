@@ -45,7 +45,17 @@ export class EquityDailyService {
         .from(wallets)
         .where(and(eq(wallets.seasonId, season.id), sql`${wallets.ownerType} <> 'treasury'`));
       if (!first?.at) return report;
-      for (const start of closedDays(new Date(first.at).getTime(), now.getTime())) {
+      const all = closedDays(new Date(first.at).getTime(), now.getTime());
+      if (all.length === 0) return report;
+      // uma consulta só diz quais dias ainda têm carteira sem a linha (sem nada faltando, acaba aqui)
+      const pending = await this.db.execute(sql`
+        select to_char(d, 'YYYY-MM-DD') as day from generate_series(${brasiliaDay(all[0]!)}::date, ${brasiliaDay(all[all.length - 1]!)}::date, interval '1 day') d
+        where exists (select 1 from futbolsa.wallets w where w.season_id = ${season.id} and w.owner_type <> 'treasury'
+          and w.entered_at <= (d + interval '1 day') at time zone 'America/Sao_Paulo'
+          and not exists (select 1 from futbolsa.equity_daily e where e.wallet_id = w.id and e.day = d::date))`);
+      const missingDays = new Set(pending.rows.map((r) => String(r.day)));
+      for (const start of all) {
+        if (!missingDays.has(brasiliaDay(start))) continue;
         const day = brasiliaDay(start);
         const at = new Date(dayPointAt(start));
         // as carteiras que já existiam no fim do dia e ainda não têm a linha dele

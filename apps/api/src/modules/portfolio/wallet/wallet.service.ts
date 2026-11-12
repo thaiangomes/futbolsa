@@ -11,7 +11,6 @@ import { EventBus, meChannel } from "../../../infra/realtime/index.js";
 import { currentSeason } from "../../admin/current-season.js";
 import { auctionStates } from "../../market/state/auction-states.js";
 import { EQUITY_BASE_CENTS } from "../valuation/constants.js";
-import { balancesAt } from "../valuation/readers/balances-at.js";
 import { payablesAt } from "../valuation/readers/payables-at.js";
 import { pricesAt } from "../valuation/readers/prices-at.js";
 import { seasons } from "../../../infra/db/schema/index.js";
@@ -59,7 +58,9 @@ export class WalletService {
         const seasonId = head.seasonId;
         const [season] = await tx.db.select({ tradingEndedAt: seasons.tradingEndedAt }).from(seasons).where(eq(seasons.id, seasonId));
         const buybackClosed = season?.tradingEndedAt != null && season.tradingEndedAt.getTime() <= now.getTime();
-        const [balance] = await balancesAt(tx, seasonId, now, [walletId]);
+        // caixa e posições do mesmo estado (a mesma foto do banco): o patrimônio de agora é o do estado atual
+        const [row0] = await tx.db.select({ cash: wallets.cash, reserved: wallets.reservedCash }).from(wallets).where(eq(wallets.id, walletId));
+        const balance = row0;
         if (!balance) throw new DomainError(WALLET_NOT_FOUND, 404, COMMON_ERROR_MESSAGES.not_found);
 
         const rows = await tx.db

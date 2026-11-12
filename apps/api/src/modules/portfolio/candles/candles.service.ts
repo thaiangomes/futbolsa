@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, asc, desc, eq, gte, lt, lte } from "drizzle-orm";
 import type { CandlesResponse, ChartRange } from "@futbolsa/contracts";
-import { type Candle, candleStart, fillGaps } from "@futbolsa/engine";
+import { type Candle, candleStart, dayStart, fillGaps } from "@futbolsa/engine";
 import { Clock } from "../../../infra/clock/index.js";
 import { DB, type Database } from "../../../infra/db/index.js";
 import { candles, clubs, seasonClubs, seasons } from "../../../infra/db/schema/index.js";
@@ -73,7 +73,7 @@ export class CandlesService {
     const [earlier] = await this.db
       .select()
       .from(candles)
-      .where(and(eq(candles.clubId, club.clubId), eq(candles.interval, window.interval), lt(candles.start, new Date(first))))
+      .where(and(eq(candles.clubId, club.clubId), eq(candles.interval, window.interval), lt(candles.start, new Date(first)), gte(candles.start, new Date(dayStart(club.tradingOpensAt?.getTime() ?? first)))))
       .orderBy(desc(candles.start))
       .limit(1);
     const toEngine = (c: typeof candles.$inferSelect): Candle => ({ start: c.start.getTime(), open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume });
