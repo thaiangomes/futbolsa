@@ -97,6 +97,18 @@ describe("valuation: patrimônio num instante", () => {
     expect((await equityOf(w, at("2027-04-06T14:00:00Z")))!.receivable).toBe(2000);
   });
 
+  it("versão corrigida que muda o fechamento: antes do novo fechamento nada a receber, como o receivable() do motor", async () => {
+    const w = await newPlayer(database.db, s.seasonId);
+    await applyMovements(database.db, w, D5, ipoBuy(pal, 100, 4000));
+    const v1 = await insertPayout(database.db, { seasonId: s.seasonId, clubId: pal }, { key: "pts-r7", perShare: 30, closedAt: at("2027-04-06T10:00:00Z"), status: "superseded", holdings: [[w, 100]] });
+    await creditPayout(database.db, v1, w, pal, at("2027-04-06T11:00:00Z"), 3000);
+    await insertPayout(database.db, { seasonId: s.seasonId, clubId: pal }, { key: "pts-r7", perShare: 30, closedAt: at("2027-04-06T16:00:00Z"), version: 2, holdings: [[w, 100]], createdAt: at("2027-04-06T12:00:00Z") });
+    // entre os dois fechamentos o evento vigente ainda não fechou: nem a receber nem desconto (o motor pula o evento inteiro)
+    expect((await equityOf(w, at("2027-04-06T13:00:00Z")))!.receivable).toBe(0);
+    // depois do novo fechamento: R$ 30,00 × 100 − os R$ 30,00 já pagos
+    expect((await equityOf(w, at("2027-04-06T17:00:00Z")))!.receivable).toBe(0);
+  });
+
   it("com a recompra fechada, as ações valem R$ 0,00 e conta só a recompra a receber", async () => {
     const w = await newPlayer(database.db, s.seasonId);
     await applyMovements(database.db, w, D5, ipoBuy(pal, 100, 4000));

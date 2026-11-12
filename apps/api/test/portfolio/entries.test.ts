@@ -133,6 +133,8 @@ describe("GET /portfolio/entries", () => {
     const items = await all(ana.account);
     const reversal = items.find((i) => i.kind === "reversal")!;
     expect(reversal).toMatchObject({ amount: -6_000_000, reason: "erro de pontuação", group: "dividend" });
+    // estorno sem crédito ligado a um evento: só o motivo, sem valor por ação inventado
+    expect(reversal.payout).toBeNull();
     expect(items.find((i) => i.kind === "dividend")!.payout).toEqual({ reason: "3 pontos, rodada 5", perShare: 30, shares: 1200 });
   });
 

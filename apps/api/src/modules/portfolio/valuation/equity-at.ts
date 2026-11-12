@@ -18,6 +18,7 @@ export interface HeldPosition {
 export interface WalletEquity {
   walletId: number;
   cash: Cents;
+  /** O reservado de **agora** (não o de T): não entra no patrimônio, serve à tela da carteira. */
   reserved: Cents;
   positions: HeldPosition[];
   /** Dividendos e recompra a receber, total e por clube. */

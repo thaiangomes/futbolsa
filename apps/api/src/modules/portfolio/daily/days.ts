@@ -10,8 +10,11 @@ export function dayPointAt(dayStartMs: number): number {
   return nextDayStart(dayStartMs) - 1;
 }
 
-/** Folga depois do instante de fechamento, para as transações em andamento terminarem (P6). */
-export const CLOSE_GRACE_MS = 30_000;
+/**
+ * Folga depois do instante de fechamento: as transações em andamento terminam e os eventos de pagamento, que fecham com até
+ * 2 minutos de atraso, já existem (P6). Resultado importado horas depois não entra no ponto do dia (ele não é regravado).
+ */
+export const CLOSE_GRACE_MS = 5 * 60_000;
 
 /** Os dias de Brasília já fechados (com a folga) entre o dia de `from` e `now`, do mais antigo para o mais novo. */
 export function closedDays(from: number, now: number): number[] {

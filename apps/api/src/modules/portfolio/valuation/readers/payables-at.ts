@@ -13,7 +13,7 @@ export interface PayableRow {
 /**
  * Dividendos e recompra a receber em `at`, por carteira e clube (a conta de `receivable` do motor, em lote): eventos
  * vigentes com `closed_at ≤ at`, as ações da foto do evento, o valor por ação da versão atual e, descontado, a soma
- * dos créditos de **todas** as versões da mesma chave com o lançamento até `at`. Passar do "a receber" para o caixa não
+ * dos créditos de **todas** as versões da mesma chave com o lançamento até `at`, só enquanto o evento vigente já estava fechado em `at` (como o `receivable()` do motor, que pula o evento inteiro). Passar do "a receber" para o caixa não
  * conta duas vezes porque o crédito entra no desconto. Uma consulta, sem laço por carteira.
  */
 export async function payablesAt(tx: Tx, seasonId: number, at: Date, walletIds?: readonly number[]): Promise<PayableRow[]> {
@@ -31,9 +31,11 @@ export async function payablesAt(tx: Tx, seasonId: number, at: Date, walletIds?:
       select pc.wallet_id, pe.club_id, pe.event_key, sum(pc.amount) as credited
       from futbolsa.payout_credits pc
       join futbolsa.payout_events pe on pe.id = pc.event_id
+      join futbolsa.payout_events cur on cur.season_id = pe.season_id and cur.club_id = pe.club_id and cur.event_key = pe.event_key
+        and cur.status <> 'superseded' and cur.closed_at <= ${iso}::timestamptz
       join futbolsa.wallet_entries e on e.id = pc.entry_id
       join futbolsa.wallets w on w.id = pc.wallet_id
-      where pe.season_id = ${seasonId} and pe.closed_at <= ${iso}::timestamptz and e.at <= ${iso}::timestamptz
+      where pe.season_id = ${seasonId} and e.at <= ${iso}::timestamptz
         and ${walletFilter(seasonId, walletIds, "w")}
       group by pc.wallet_id, pe.club_id, pe.event_key
     )

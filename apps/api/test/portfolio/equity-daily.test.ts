@@ -18,12 +18,12 @@ import { AFTER_OPEN, applyMovements, creditPayout, insertPayout, ipoBuy, portfol
 const at = (iso: string) => new Date(iso);
 
 describe("dias de Brasília", () => {
-  it("o dia fecha às 24h de Brasília, com 30 segundos de folga", () => {
+  it("o dia fecha às 24h de Brasília, com 5 minutos de folga", () => {
     expect(brasiliaDay(at("2027-04-06T02:59:59Z").getTime())).toBe("2027-04-05");
     expect(brasiliaDay(at("2027-04-06T03:00:00Z").getTime())).toBe("2027-04-06");
-    // 2027-04-06T03:00:00Z é o fim do dia 5; com a folga, só às 03:00:30
-    expect(closedDays(at("2027-04-05T13:00:00Z").getTime(), at("2027-04-06T03:00:29Z").getTime())).toEqual([]);
-    expect(closedDays(at("2027-04-05T13:00:00Z").getTime(), at("2027-04-06T03:00:30Z").getTime()).map((d) => brasiliaDay(d))).toEqual(["2027-04-05"]);
+    // 2027-04-06T03:00:00Z é o fim do dia 5; com a folga, só às 03:05:00
+    expect(closedDays(at("2027-04-05T13:00:00Z").getTime(), at("2027-04-06T03:04:59Z").getTime())).toEqual([]);
+    expect(closedDays(at("2027-04-05T13:00:00Z").getTime(), at("2027-04-06T03:05:00Z").getTime()).map((d) => brasiliaDay(d))).toEqual(["2027-04-05"]);
   });
 });
 
