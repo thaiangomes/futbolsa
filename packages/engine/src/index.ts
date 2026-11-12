@@ -29,3 +29,4 @@ export * from "./engine/auction.js";
 // Clubes conhecidos e a regra do jogo adiado, para a importação de resultados do admin (F7).
 export { CLUBS, CLUBE_DOS_TREZE, clubIdFromName, clubName, type ClubInfo } from "./data/clubs.js";
 export { markOutOfWindow } from "./data/season.js";
+export * from "./engine/slices.js";
