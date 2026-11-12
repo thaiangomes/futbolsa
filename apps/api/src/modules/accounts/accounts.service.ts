@@ -121,7 +121,7 @@ export class AccountsService {
   }
 
   /** `GET /players/:nickname`, público: só o apelido atual, nunca e-mail nem id (critério 11). */
-  async publicPlayer(nickname: string): Promise<PublicPlayer | null> {
+  async publicPlayer(nickname: string): Promise<Pick<PublicPlayer, "nickname"> | null> {
     const [row] = await this.db
       .select({ nickname: users.nickname })
       .from(users)
