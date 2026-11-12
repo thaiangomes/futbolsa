@@ -4,7 +4,9 @@ import { PortfolioModule } from "../../portfolio/index.js";
 import { AdminLogModule } from "../log/index.js";
 import { ResultsModule } from "../results/results.module.js";
 import { StandingsModule } from "../standings/standings.module.js";
+import { ApplyCorrectionService } from "./apply-correction.service.js";
 import { ApproveService } from "./approve.service.js";
+import { SettleReversalService } from "./settle-reversal.js";
 import { CloseEventsJob } from "./close-events.job.js";
 import { CloseEventsService } from "./close-events.service.js";
 import { CorrectionPlanService } from "./correction-plan.js";
@@ -19,7 +21,8 @@ import { SettleJob } from "./settle.job.js";
 /**
  * Pagamentos de dividendos (F12; dono: `admin`): foto das posições, fechamento dos eventos, prévia, aprovação em lotes
  * e correção com estorno. A F13 troca o `RankingsPort` vazio pelo de verdade. Do `ResultsModule` vêm o
- * `MatchesEvents` (dispara o fechamento) e o `MarketPort` (reposição do formador); do `StandingsModule`, o
+ * `MatchesEvents` (dispara o fechamento), o `MarketPort` (reposição do formador) e, pelo `MarketModule` que ele
+ * reexporta, o `CancelService` (as compras canceladas no estorno); do `StandingsModule`, o
  * `StandingsEvents`; do `PortfolioModule`, o `PortfolioLedger` (o crédito); do `AdminLogModule`, o registro.
  */
 @Module({
@@ -33,9 +36,11 @@ import { SettleJob } from "./settle.job.js";
     PreviewService,
     CorrectionPlanService,
     ApproveService,
+    ApplyCorrectionService,
+    SettleReversalService,
     SettleCreditsService,
     SettleJob,
   ],
-  exports: [RankingsPort, EngineInputService, CloseEventsService, CorrectionPlanService, SettleCreditsService],
+  exports: [RankingsPort, EngineInputService, CloseEventsService, CorrectionPlanService, SettleCreditsService, SettleReversalService],
 })
 export class PayoutsModule {}

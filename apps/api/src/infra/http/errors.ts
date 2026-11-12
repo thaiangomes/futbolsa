@@ -9,6 +9,11 @@ export class DomainError extends Error {
     message: string,
     /** Só em `invalid_input`: os campos que falharam. */
     readonly fields?: string[],
+    /**
+     * Campos a mais no corpo da resposta, quando o contrato da rota os prevê (o `preview` do `correction_stale`).
+     * Não substituem `code`, `message` nem `fields`.
+     */
+    readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "DomainError";

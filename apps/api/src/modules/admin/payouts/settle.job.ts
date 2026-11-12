@@ -10,8 +10,8 @@ export const SETTLE_EVERY_MS = 60_000;
  * A tarefa de liquidação (Plano dos dividendos e pagamentos, "Aprovação em lotes", etapa 3): `payouts-settle`, a
  * cada minuto e ao subir a API, procura os eventos aprovados da temporada atual com crédito faltando e continua de
  * onde parou. A rota da aprovação também a dispara, sem esperar. Desliga com `JOBS_ENABLED=false` (os testes
- * chamam o serviço direto). Falha vira registro no log, nunca derruba a API. A T7 acrescenta aqui os estornos e
- * complementos da correção.
+ * chamam o serviço direto). Falha vira registro no log, nunca derruba a API. Pega também os complementos e
+ * estornos da correção (T7), inclusive os das carteiras que não cobrem o estorno, pelo mesmo `settlePending`.
  */
 @Injectable()
 export class SettleJob implements OnApplicationBootstrap {
