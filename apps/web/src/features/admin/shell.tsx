@@ -10,6 +10,8 @@ export const ADMIN_MENU = [
   { href: "/admin", label: "Visão geral" },
   { href: "/admin/jogos", label: "Jogos e pendências" },
   { href: "/admin/classificacao", label: "Classificação oficial" },
+  { href: "/admin/pagamentos", label: "Pagamentos" },
+  { href: "/admin/pagamentos/correcao", label: "Correção de pagamentos" },
   { href: "/admin/temporada", label: "Preparar a temporada" },
   { href: "/admin/suspensao", label: "Suspensão" },
   { href: "/admin/formador", label: "Formador de mercado" },

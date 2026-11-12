@@ -51,6 +51,8 @@ export const ACTION_LABELS: Record<string, string> = {
   "invite.create": "Convite criado",
   "invite.revoke": "Convite retirado",
   "player.role": "Papel alterado",
+  "payout.approve": "Pagamento aprovado",
+  "payout.correct": "Correção de pagamento aplicada",
 };
 
 export const COMPETITION_LABELS: Record<string, string> = {

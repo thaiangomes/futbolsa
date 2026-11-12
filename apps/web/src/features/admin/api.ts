@@ -13,6 +13,14 @@ import {
   listMatchesResponseSchema,
   overviewSchema,
   pendingResponseSchema,
+  type ApplyCorrectionBody,
+  applyCorrectionResponseSchema,
+  type ApprovePayoutsBody,
+  approvePayoutsResponseSchema,
+  correctionPreviewSchema,
+  payoutHoldersResponseSchema,
+  type PayoutListQuery,
+  payoutListResponseSchema,
   type PatchMatchBody,
   type PatchSeasonBody,
   type PutCupBody,
@@ -74,6 +82,12 @@ export function adminApi(api: ApiClient) {
 
     marketMaker: () => api.request(marketMakerViewSchema, "/admin/market-maker"),
     updateMarketMaker: (body: MarketMakerBody) => api.request(marketMakerStateSchema, "/admin/market-maker", { method: "PATCH", body }),
+
+    payouts: (query: Partial<PayoutListQuery> = {}) => api.request(payoutListResponseSchema, `/admin/payouts${queryString(query)}`),
+    payoutHolders: (id: number, page = 1) => api.request(payoutHoldersResponseSchema, `/admin/payouts/${id}/holders${queryString({ page, pageSize: 50 })}`),
+    approvePayouts: (body: ApprovePayoutsBody) => api.request(approvePayoutsResponseSchema, "/admin/payouts/approve", { method: "POST", body }),
+    correctionPreview: () => api.request(correctionPreviewSchema, "/admin/payouts/corrections"),
+    applyCorrection: (body: ApplyCorrectionBody) => api.request(applyCorrectionResponseSchema, "/admin/payouts/corrections", { method: "POST", body }),
 
     log: (query: Partial<AdminLogQuery> = {}) => api.request(adminLogResponseSchema, `/admin/log${queryString(query)}`),
   };
