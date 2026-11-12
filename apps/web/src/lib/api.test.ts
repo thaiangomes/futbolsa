@@ -58,6 +58,15 @@ describe("cliente da API", () => {
     expect((calls[0]!.init.headers as Record<string, string>)["content-type"]).toBe("application/json");
   });
 
+  it("o resto do corpo do erro (a prévia do correction_stale) fica em extra", async () => {
+    const { auth } = fakeAuth({ current: "t" });
+    const body = { code: "correction_stale", message: "Mudou.", preview: { planCode: "b" } };
+    const { fetchFn } = fakeFetch([{ status: 409, body }]);
+    const api = new ApiClient({ baseUrl: "http://api.local", auth, fetch: fetchFn });
+    const error = await api.request(meResponseSchema, "/me").catch((e: unknown) => e);
+    expect(error).toMatchObject({ status: 409, code: "correction_stale", extra: { preview: { planCode: "b" } } });
+  });
+
   it("401 invalid_token renova a sessão uma vez e repete com o token novo", async () => {
     const { auth, calls: tokenCalls } = fakeAuth({ current: "velho", refreshed: "novo" });
     const { fetchFn, calls } = fakeFetch([

@@ -9,6 +9,8 @@ export class ApiError extends Error {
     readonly code: string,
     message: string,
     readonly fields?: string[],
+    /** O resto do corpo do erro (por exemplo a `preview` do `correction_stale`), sem validar. */
+    readonly extra?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "ApiError";
@@ -73,8 +75,10 @@ async function peekCode(res: Response): Promise<string | undefined> {
 
 async function toApiError(res: Response): Promise<ApiError> {
   try {
-    const body = errorResponseSchema.parse(await res.json());
-    return new ApiError(res.status, body.code, body.message, body.fields);
+    const raw = (await res.json()) as Record<string, unknown>;
+    const body = errorResponseSchema.parse(raw);
+    const { code: _c, message: _m, fields: _f, ...extra } = raw;
+    return new ApiError(res.status, body.code, body.message, body.fields, Object.keys(extra).length > 0 ? extra : undefined);
   } catch {
     return new ApiError(res.status, "internal_error", COMMON_ERROR_MESSAGES.internal_error);
   }
