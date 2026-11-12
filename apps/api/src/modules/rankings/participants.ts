@@ -67,3 +67,20 @@ export async function identities(tx: Pick<Tx, "db">, walletIds: readonly number[
   }
   return out;
 }
+
+/** As carteiras dadas, no formato de `Participant` (para o recálculo, que mantém o conjunto de quem estava no oficial). Em ordem de id. */
+export async function participantsByIds(tx: Pick<Tx, "db">, walletIds: readonly number[]): Promise<Participant[]> {
+  if (walletIds.length === 0) return [];
+  const result = await tx.db.execute(sql`
+    select w.id, w.owner_type, w.user_id, w.bot_id, w.entered_at
+    from futbolsa.wallets w
+    where w.id in (${sql.join(walletIds.map((id) => sql`${id}`), sql`, `)})
+    order by w.id`);
+  return result.rows.map((r) => ({
+    walletId: Number(r.id),
+    isBot: r.owner_type === "bot",
+    userId: r.user_id === null ? null : String(r.user_id),
+    botId: r.bot_id === null ? null : Number(r.bot_id),
+    enteredAt: new Date(r.entered_at as string),
+  }));
+}

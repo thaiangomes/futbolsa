@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnApplicationBootstrap } from "@nestjs/common";
 import { SchedulerRegistry } from "@nestjs/schedule";
 import { CloseService } from "../../modules/rankings/close.service.js";
+import { RecalcService } from "../../modules/rankings/recalc.service.js";
 import { jobsEnabled } from "./account-jobs.js";
 
 /** O passo das tarefas dos rankings: a cada minuto confere o que já devia ter sido fechado. */
@@ -17,11 +18,13 @@ export class RankingsJobs implements OnApplicationBootstrap {
   constructor(
     private readonly registry: SchedulerRegistry,
     private readonly close: CloseService,
+    private readonly recalc: RecalcService,
   ) {}
 
   onApplicationBootstrap(): void {
     if (!jobsEnabled()) return;
     this.every("rankings-close", () => this.close.runOnce());
+    this.every("rankings-recalc", () => this.recalc.processRecalcRequests());
   }
 
   private every(name: string, run: () => Promise<unknown>): void {
