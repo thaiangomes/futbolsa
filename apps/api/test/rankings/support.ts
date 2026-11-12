@@ -13,7 +13,7 @@ export type { PortfolioSeason } from "../portfolio/support.js";
 export const at = (iso: string) => new Date(iso);
 
 /** O horário de Brasília (UTC−3) escrito como no dia a dia: `br("2027-06-30 23:59")`. */
-export const br = (local: string) => new Date(`${local.replace(" ", "T")}:00-03:00`);
+export const br = (local: string) => new Date(`${local.replace(" ", "T")}${local.length === 16 ? ":00" : ""}-03:00`);
 
 export const BASE = 10_000_000;
 
