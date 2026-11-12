@@ -2,8 +2,7 @@
 
 Dono: módulo `admin` (quem recebe, aprovação, correção, estorno e caixa negativo). O desenho está no vault, em
 `Técnica/Planos/Plano dos dividendos e pagamentos.md`. As regras de valor ficam no motor (`eventsFor`, `diffEvents`,
-`settle`); os valores da temporada vêm do `dividends` (`SeasonValuesService`). **Feito até aqui: T0 a T6.** A correção
-com estorno (T7) espera a F9 (`market.cancelOrders`).
+`settle`); os valores da temporada vêm do `dividends` (`SeasonValuesService`). **Feito: T0 a T10** (falta só o que a F13, a F14 e a F15 ligam).
 
 ## Arquivos
 | Arquivo | O que faz |
@@ -17,6 +16,8 @@ com estorno (T7) espera a F9 (`market.cancelOrders`).
 | `settle-credits.ts`, `settle.job.ts` | O crédito em lotes de até 50 carteiras (`SETTLE_BATCH`, medido na T10), retomável (tarefa de cada minuto e ao subir a API). |
 | `settlement.ts` | Quais eventos aprovados ainda estão liquidando. |
 | `correction-plan.ts`, `corrections.controller.ts` | `GET /admin/payouts/corrections`: o plano e a prévia da correção, com o código do plano. Não aplica nada. |
+| `apply-correction.service.ts`, `settle-reversal.ts` | `POST /admin/payouts/corrections`: versões novas `approved` e antigas `superseded` numa transação (código do plano, `correction_stale`); o estorno por carteira cancela as compras de quem não cobre (`cancelBuysToCover`, usado também pela F14 com `annulment`) e o caixa pode ficar negativo. |
+| `events.ts`, `outstanding.ts` | `payout.credited` (canal `me`) e `admin.pending` depois do `COMMIT`; `outstanding(temporada)` para o encerramento e `perShareTotals(temporada, clube)` para o simulador. |
 | `ports.ts` | `RankingsPort` (aviso ao recálculo dos rankings da F13, dentro da transação, e `wake()` depois do `COMMIT`); a implementação vazia fica até a F13. |
 
 ## Regras que valem para quem mexer aqui

@@ -93,7 +93,7 @@ export class SettleCreditsService implements OnModuleDestroy {
    */
   onCredited(batch: CreditedBatch): void {
     this.logger.debug(`evento ${batch.eventId}: ${batch.credits.length} créditos`);
-    void this.events?.credited(batch).then(() => this.events?.adminChanged());
+    void this.events?.credited(batch);
   }
 
   /**
