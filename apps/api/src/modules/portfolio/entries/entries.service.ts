@@ -70,6 +70,7 @@ export class EntriesService {
     const rows = result.rows.map((r) => ({
       ...r,
       id: Number(r.id),
+      at: new Date(r.at as string | Date),
       cash_delta: Number(r.cash_delta),
       price: r.price === null ? null : Number(r.price),
       realized: r.realized === null ? null : Number(r.realized),

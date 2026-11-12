@@ -9,7 +9,7 @@ import { bearer, withTestAuth } from "./auth.js";
  * Rotas que respondem sem login. Toda rota nova sem `@Public()` precisa de login; uma rota
  * pública nova entra nesta lista no mesmo commit, para a decisão ficar à vista na revisão.
  */
-export const PUBLIC_ROUTES: readonly string[] = ["GET /health", "GET /players/:nickname", "GET /season", "GET /clubs", "GET /clubs/:ticker/book"];
+export const PUBLIC_ROUTES: readonly string[] = ["GET /health", "GET /players/:nickname", "GET /season", "GET /clubs", "GET /clubs/:ticker/book", "GET /clubs/:ticker/candles", "GET /clubs/:ticker/markers"];
 
 export interface RouteScan {
   routes: string[];
