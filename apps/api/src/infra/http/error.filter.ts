@@ -15,7 +15,7 @@ const CODE_BY_STATUS: Record<number, CommonErrorCode> = {
 /** Converte qualquer erro no corpo `{ code, message }` da API, sem vazar detalhe interno. */
 export function toErrorResponse(error: unknown): { status: number; body: ErrorResponse } {
   if (error instanceof DomainError) {
-    const body: ErrorResponse = { code: error.code, message: error.message };
+    const body: ErrorResponse = { ...error.details, code: error.code, message: error.message };
     if (error.fields) body.fields = error.fields;
     return { status: error.status, body };
   }

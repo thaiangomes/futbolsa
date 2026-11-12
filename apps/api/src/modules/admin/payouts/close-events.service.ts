@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { eventsFor, type PayoutEvent, type PayoutEventKind } from "@futbolsa/engine";
 import { DB, type Database, lockSeason, type Tx, withTransaction } from "../../../infra/db/index.js";
@@ -6,6 +6,7 @@ import { payoutEvents, seasons } from "../../../infra/db/schema/index.js";
 import { MarketPort } from "../results/ports.js";
 import { EngineInputService, LEAGUE_COMPETITIONS, type SeasonEngineInput } from "./engine-input.js";
 import { copyHoldings, holdingsAt, writeHoldings } from "./holdings.js";
+import { PayoutEvents } from "./events.js";
 import { RankingsPort } from "./ports.js";
 
 /**
@@ -114,6 +115,7 @@ export class CloseEventsService {
     private readonly engineInput: EngineInputService,
     private readonly market: MarketPort,
     private readonly rankings: RankingsPort,
+    @Optional() private readonly events?: PayoutEvents,
   ) {}
 
   /** Acrescenta uma fonte de eventos (a F15 registra a da recompra). */
@@ -141,6 +143,7 @@ export class CloseEventsService {
     this.logger.debug(
       `temporada ${change.seasonId}, ${change.ticker}: ${change.created} novos, ${change.versioned} com versão nova, ${change.superseded} substituídos`,
     );
+    void this.events?.adminChanged();
   }
 
   private async pass(seasonId: number, now: Date): Promise<CloseSummary> {

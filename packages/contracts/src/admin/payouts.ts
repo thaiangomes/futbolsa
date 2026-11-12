@@ -176,6 +176,37 @@ export const applyCorrectionBodySchema = z.strictObject({
 });
 export type ApplyCorrectionBody = z.infer<typeof applyCorrectionBodySchema>;
 
+/**
+ * Resposta do `POST /admin/payouts/corrections`: as versões novas gravadas já aprovadas (a etapa 1). Os estornos e
+ * complementos saem depois, em lotes por carteira, e a prévia dos pagamentos mostra "liquidando" até acabar.
+ */
+export const applyCorrectionResponseSchema = z.strictObject({
+  planCode: z.string().min(1),
+  events: z.array(
+    z.strictObject({
+      /** A versão nova, já `approved`. */
+      eventId: z.number().int(),
+      key: z.string(),
+      ticker: z.string(),
+      version: z.number().int(),
+      /** A versão substituída; `null` no evento novo numa rodada ou fase já paga. */
+      supersedesId: z.number().int().nullable(),
+      perShare: z.number().int(),
+    }),
+  ),
+  /** O resumo por carteira da prévia aplicada. */
+  wallets: correctionPreviewSchema.shape.wallets,
+});
+export type ApplyCorrectionResponse = z.infer<typeof applyCorrectionResponseSchema>;
+
+/** O 409 `correction_stale`: a prévia nova vai junto, para a tela mostrar o que mudou (sem ela, só se não deu para calcular). */
+export const correctionStaleResponseSchema = z.strictObject({
+  code: z.literal("correction_stale"),
+  message: z.string(),
+  preview: correctionPreviewSchema.optional(),
+});
+export type CorrectionStaleResponse = z.infer<typeof correctionStaleResponseSchema>;
+
 // ---------- tempo real ----------
 
 /** `payout.credited`, no canal `me`: um crédito, complemento ou estorno de pagamento chegou à carteira. */

@@ -1,34 +1,26 @@
-import { Inject, Injectable, Logger, type OnModuleDestroy } from "@nestjs/common";
-import { eq, sql } from "drizzle-orm";
-import { Clock } from "../../../infra/clock/index.js";
-import {
-  DB,
-  type Database,
-  lockPayoutEvents,
-  lockSeason,
-  lockWallets,
-  type PayoutEventRow,
-  type Tx,
-  withTransaction,
-} from "../../../infra/db/index.js";
-import { payoutCredits, payoutEvents } from "../../../infra/db/schema/index.js";
-import { PortfolioLedger } from "../../portfolio/index.js";
+import { Inject, Injectable, Logger, Optional, type OnModuleDestroy } from "@nestjs/common";
+import { eq } from "drizzle-orm";
+import { DB, type Database, lockPayoutEvents, lockSeason, lockWallets, type PayoutEventRow, type Tx, withTransaction } from "../../../infra/db/index.js";
+import { payoutEvents } from "../../../infra/db/schema/index.js";
 import { currentSeason } from "../current-season.js";
-import { type Executor, executorOf } from "./holdings.js";
-import { settlingEventIds } from "./settlement.js";
+import { PayoutEvents } from "./events.js";
+import { SettleReversalService } from "./settle-reversal.js";
+import { dues, settlingEventIds } from "./settlement.js";
 
 /**
- * Carteiras por lote de crédito (P2; proposta, a T8 mede). Uma transação com milhares de carteiras travadas faria
- * toda ordem de um desses donos, que trava o clube antes da carteira, segurar o livro do clube inteiro esperando;
- * com 200 por lote, a espera fica em milissegundos e o resultado é o mesmo.
+ * Carteiras por lote de crédito (P2). Uma transação com milhares de carteiras travadas faria toda ordem de um desses
+ * donos, que trava o clube antes da carteira, segurar o livro do clube inteiro esperando. Medido na T10
+ * (`scripts/payout-batch-timing.mjs`, 5.000 donos): com 200 por lote cada lote segurava as carteiras ~1,3 s (quase
+ * tudo nos ~4,8 ms de cada `portfolio.post`); com 50, ~0,32 s, e a liquidação inteira só ~7% mais lenta (34 s contra 32 s).
  */
-export const SETTLE_BATCH = 200;
+export const SETTLE_BATCH = 50;
 
-/** Um crédito lançado num lote. */
+/** Um crédito lançado num lote: o dividendo, o complemento ou o estorno (valor negativo) de uma carteira. */
 export interface Credit {
   walletId: number;
   amount: number;
   entryId: number;
+  kind: "dividend" | "complement" | "reversal";
 }
 
 /** O que um lote creditou, para o aviso depois do `COMMIT` (`payout.credited`, na T9). */
@@ -43,7 +35,7 @@ export interface CreditedBatch {
 /** O que a liquidação de um evento fez nesta execução. */
 export interface SettleEventSummary {
   eventId: number;
-  /** Lotes que fizeram `COMMIT` com algum crédito. */
+  /** Lotes (e transações por carteira) que fizeram `COMMIT` com algum crédito deste evento. */
   batches: number;
   credited: number;
   amount: number;
@@ -59,49 +51,25 @@ export interface SettlePendingSummary {
 }
 
 /**
- * Quem recebe pela foto (P6): bots e jogadores, inclusive os bloqueados; a conta excluída não recebe, e a
- * tesouraria nunca (ela não está na foto, mas fica de fora aqui também). A mesma regra da prévia.
- */
-const RECEIVES = sql.raw(`(w.owner_type = 'bot' or (w.owner_type = 'user' and u.status <> 'deleted'))`);
-
-/** As carteiras da foto do evento que recebem e ainda não têm a linha do crédito, em ordem de carteira. */
-function missingQuery(eventId: number, walletIds: readonly number[] | null, limit: number | null) {
-  return sql`
-    select h.wallet_id, h.shares
-    from futbolsa.payout_holdings h
-    join futbolsa.wallets w on w.id = h.wallet_id
-    left join futbolsa.users u on u.id = w.user_id
-    where h.event_id = ${eventId} and ${RECEIVES}
-      ${walletIds ? sql`and h.wallet_id in (${sql.join(walletIds.map((id) => sql`${id}`), sql`, `)})` : sql``}
-      and not exists (select 1 from futbolsa.payout_credits c where c.event_id = h.event_id and c.wallet_id = h.wallet_id)
-    order by h.wallet_id
-    ${limit === null ? sql`` : sql`limit ${limit}`}`;
-}
-
-async function missing(
-  executor: Executor,
-  eventId: number,
-  options: { walletIds?: readonly number[]; limit?: number },
-): Promise<Array<{ walletId: number; shares: number }>> {
-  const result = await executorOf(executor).execute(missingQuery(eventId, options.walletIds ?? null, options.limit ?? null));
-  return result.rows.map((r) => ({ walletId: Number(r.wallet_id), shares: Number(r.shares) }));
-}
-
-/**
- * A liquidação em lotes dos eventos aprovados (Plano dos dividendos e pagamentos, "Aprovação em lotes", etapas 2 e
- * 3; Admin, critérios 3 e 4; Dividendos e recompra, critério 1): o dividendo cai no caixa de quem estava na foto
- * do fechamento, pelas ações dela, e nunca duas vezes.
+ * A liquidação em lotes dos eventos aprovados (Plano dos dividendos e pagamentos, "Aprovação em lotes", etapas 2 e 3, e
+ * "Aplicar a correção", etapa 2; Admin, critérios 3, 4, 12, 13 e 15; Dividendos e recompra, critério 1).
+ *
+ * O que cada carteira recebe ou devolve num evento sai de `dues` (`settlement.ts`): na versão comum, ações na foto ×
+ * valor (o dividendo); na versão gravada por uma correção, o líquido da carteira naquela chave (complemento ou
+ * estorno, com o motivo do admin). Nunca duas vezes: a linha em `payout_credits` marca a carteira como feita.
  *
  * Cada lote, até `batchSize` carteiras, é uma transação com as travas na ordem do jogo (P3): a temporada
  * (compartilhada), a linha do evento com `FOR SHARE` (conferindo que ainda é `approved`: a correção, que trava o
  * evento com `FOR UPDATE`, espera o lote acabar), as carteiras do lote em ordem de id. Com as carteiras travadas, o
- * lote reconfere quais ainda não têm crédito (dois lotes ao mesmo tempo nunca creditam a mesma carteira; a chave
- * de `payout_credits` é a rede de segurança) e lança `dividend` pelo `portfolio.post` com a linha em
- * `payout_credits`. O dividendo é uma entrada: com o caixa negativo, ele abate o negativo.
+ * lote reconfere o que falta (dois lotes ao mesmo tempo nunca creditam a mesma carteira; a chave de `payout_credits` é
+ * a rede de segurança) e lança pelo `portfolio.post`. O dividendo e o complemento são entradas (com o caixa negativo,
+ * abatem o negativo); o estorno sai no lote quando o caixa livre cobre. A carteira cujo caixa livre não cobre o estorno
+ * fica para uma transação só dela, que trava antes os clubes das compras abertas e as cancela
+ * (`SettleReversalService.settleWallet`).
  *
- * Retomável: o que já tem linha em `payout_credits` não é pago de novo, então a tarefa de cada minuto
+ * Retomável: o que já tem linha em `payout_credits` não é lançado de novo, então a tarefa de cada minuto
  * (`settlePending`) continua de onde um lote interrompido parou. Nenhum lote avisa os rankings: o "a receber"
- * (foto × valor menos o creditado) não muda com o crédito, só com a aprovação.
+ * (foto × valor menos o creditado) não muda com o crédito, só com a aprovação e a correção.
  */
 @Injectable()
 export class SettleCreditsService implements OnModuleDestroy {
@@ -114,45 +82,69 @@ export class SettleCreditsService implements OnModuleDestroy {
 
   constructor(
     @Inject(DB) private readonly db: Database,
-    private readonly ledger: PortfolioLedger,
-    private readonly clock: Clock,
+    private readonly reversal: SettleReversalService,
+    @Optional() private readonly events?: PayoutEvents,
   ) {}
 
   /**
    * Depois do `COMMIT` de cada lote que creditou. Ponto de extensão do aviso `payout.credited` aos donos, que a
-   * T9 liga ao barramento de tempo real; por ora só registra no log.
+   * T9 liga ao barramento de tempo real; por ora só registra no log. O `wallet.changed` já sai pelo `WalletEvents`
+   * de cada lançamento, e o `order.updated` das compras canceladas pelo `MarketEvents` do `cancelOrders`.
    */
   onCredited(batch: CreditedBatch): void {
-    this.logger.debug(`evento ${batch.eventId}: ${batch.credits.length} créditos de dividendo`);
+    this.logger.debug(`evento ${batch.eventId}: ${batch.credits.length} créditos`);
+    void this.events?.credited(batch);
   }
 
   /**
-   * Liquida um evento aprovado: lotes até não sobrar carteira que recebe sem crédito. Pode rodar ao mesmo tempo
-   * que outra liquidação do mesmo evento (a outra instância da API, a tarefa e a rota): as travas garantem um
-   * crédito por carteira. Evento que não está aprovado, ou de valor R$ 0,00, não credita nada.
+   * Liquida um evento aprovado: lotes até não sobrar carteira com algo a lançar, e depois, uma a uma, as que não cobrem
+   * o estorno. Pode rodar ao mesmo tempo que outra liquidação do mesmo evento (a outra instância da API, a tarefa e a
+   * rota): as travas garantem um crédito por carteira. Evento que não está aprovado não credita nada.
    */
   async settleEvent(eventId: number): Promise<SettleEventSummary> {
     const summary: SettleEventSummary = { eventId, batches: 0, credited: 0, amount: 0, stopped: null };
     const [event] = await this.db.select().from(payoutEvents).where(eq(payoutEvents.id, eventId));
     if (!event || event.status !== "approved") return { ...summary, stopped: "not_approved" };
-    if (event.perShare === 0) return summary;
 
-    let previousFirst: number | null = null;
+    const deferred: number[] = [];
+    let cursor: number | undefined;
     for (;;) {
-      const batch = await missing(this.db, eventId, { limit: this.batchSize });
-      if (batch.length === 0) return summary;
+      const batch = await dues(this.db, { eventId, afterWallet: cursor, limit: this.batchSize });
+      if (batch.length === 0) break;
+      cursor = batch[batch.length - 1]!.walletId;
       const result = await withTransaction(this.db, (tx) => this.creditBatch(tx, event, batch.map((b) => b.walletId)));
       if (result.stopped) return { ...summary, stopped: result.stopped };
+      deferred.push(...result.deferred);
       if (result.credits.length > 0) {
         summary.batches++;
         summary.credited += result.credits.length;
         summary.amount += result.credits.reduce((total, c) => total + c.amount, 0);
-      } else if (previousFirst === batch[0]!.walletId) {
-        // o mesmo lote duas vezes sem crédito: algo fora da regra (não deveria acontecer); para em vez de girar
-        throw new Error(`liquidação do evento ${eventId} sem progresso na carteira ${previousFirst}`);
       }
-      previousFirst = batch[0]!.walletId;
     }
+
+    // quem não cobre o estorno: uma transação por carteira, com as compras canceladas (P5). A falha de uma carteira não
+    // segura as outras (revisão T10: antes, a primeira que falhasse, sempre a mesma por ser em ordem de id, deixava as
+    // seguintes sem estorno a cada execução da tarefa); o erro sobe no fim, para o log da tarefa
+    const failures: Array<{ walletId: number; error: unknown }> = [];
+    for (const walletId of deferred) {
+      let batches: CreditedBatch[];
+      try {
+        batches = await this.reversal.settleWallet(event.seasonId, walletId, (b) => this.onCredited(b));
+      } catch (error) {
+        failures.push({ walletId, error });
+        continue;
+      }
+      for (const b of batches.filter((x) => x.eventId === eventId)) {
+        summary.batches++;
+        summary.credited += b.credits.length;
+        summary.amount += b.credits.reduce((total, c) => total + c.amount, 0);
+      }
+    }
+    if (failures.length > 0) {
+      const detail = failures.map((f) => `carteira ${f.walletId}: ${(f.error as Error).message}`).join("; ");
+      throw new Error(`liquidação do evento ${eventId}: ${failures.length} carteira(s) sem estorno (${detail})`, { cause: failures[0]!.error });
+    }
+    return summary;
   }
 
   /** Um lote, numa transação: as travas na ordem P3, a reconferência e os créditos. */
@@ -160,41 +152,38 @@ export class SettleCreditsService implements OnModuleDestroy {
     tx: Tx,
     event: PayoutEventRow,
     walletIds: number[],
-  ): Promise<{ credits: Credit[]; stopped: SettleEventSummary["stopped"] }> {
+  ): Promise<{ credits: Credit[]; deferred: number[]; stopped: SettleEventSummary["stopped"] }> {
     const season = await lockSeason(tx, event.seasonId, "share");
-    if (season.status === "closed") return { credits: [], stopped: "season_closed" };
+    if (season.status === "closed") return { credits: [], deferred: [], stopped: "season_closed" };
     const [locked] = await lockPayoutEvents(tx, [event.id], "share");
     // substituído por uma correção entre a leitura e a trava: a versão nova é que paga
-    if (locked!.status !== "approved") return { credits: [], stopped: "not_approved" };
-    await lockWallets(tx, walletIds);
+    if (locked!.status !== "approved") return { credits: [], deferred: [], stopped: "not_approved" };
+    const rows = await lockWallets(tx, walletIds);
+    const cash = new Map(rows.map((w) => [w.id, w.cash - w.reservedCash]));
 
-    // com as carteiras travadas, nenhum outro lote credita nelas: quem já recebeu fica de fora
-    const due = await missing(tx, event.id, { walletIds });
-    const at = this.clock.now();
+    // com as carteiras travadas, nenhum outro lote lança nelas: quem já recebeu fica de fora
+    const due = await dues(tx, { eventId: event.id, walletIds });
+    const context = (await this.reversal.contexts(tx, [locked!])).get(event.id)!;
     const credits: Credit[] = [];
-    for (const { walletId, shares } of due) {
-      const amount = shares * locked!.perShare;
-      const { entry } = await this.ledger.post(tx, {
-        walletId,
-        at,
-        kind: "dividend",
-        clubId: locked!.clubId,
-        cashDelta: amount,
-        ref: { type: "payout_event", id: locked!.id },
-        reason: locked!.reason,
-      });
-      credits.push({ walletId, amount, entryId: entry.id });
+    const deferred: number[] = [];
+    for (const d of due) {
+      // o estorno que o caixa livre não cobre cancela as compras abertas, com os clubes travados antes: fica para a
+      // transação da carteira
+      if (d.amount < 0 && cash.get(d.walletId)! + d.amount < 0) {
+        deferred.push(d.walletId);
+        continue;
+      }
+      credits.push(await this.reversal.postCredit(tx, context, d));
     }
     if (credits.length > 0) {
-      await tx.db.insert(payoutCredits).values(credits.map((c) => ({ eventId: event.id, ...c })));
       const batch: CreditedBatch = { eventId: event.id, seasonId: event.seasonId, clubId: locked!.clubId, reason: locked!.reason, credits };
       tx.afterCommit(() => this.onCredited(batch));
     }
-    return { credits, stopped: null };
+    return { credits, deferred, stopped: null };
   }
 
   /**
-   * A tarefa de liquidação: todos os eventos aprovados da temporada atual com crédito faltando, em ordem de id.
+   * A tarefa de liquidação: todos os eventos aprovados da temporada atual com algo a lançar, em ordem de id.
    * Uma execução por vez nesta API: pedida durante outra, roda logo depois dela (os pedidos nesse meio tempo
    * viram uma execução só). A falha de um evento vai para o log e não impede os outros.
    */
@@ -211,7 +200,7 @@ export class SettleCreditsService implements OnModuleDestroy {
     return queued;
   }
 
-  /** Dispara a tarefa sem esperar (a rota da aprovação); a falha vai para o log. */
+  /** Dispara a tarefa sem esperar (as rotas da aprovação e da correção); a falha vai para o log. */
   trigger(): void {
     this.settlePending().catch((error: unknown) => this.logger.error(`liquidação dos pagamentos falhou: ${(error as Error).message}`));
   }
@@ -241,7 +230,7 @@ export class SettleCreditsService implements OnModuleDestroy {
     const summary: SettlePendingSummary = { events: 0, credited: 0, errors: [] };
     const season = await currentSeason(this.db);
     if (!season) return summary;
-    // os aprovados com menos créditos do que carteiras que recebem (a mesma consulta que a correção usa no `payout_settling`)
+    // os aprovados com algo a lançar (a mesma consulta que a correção usa no `payout_settling`)
     for (const eventId of await settlingEventIds(this.db, season.id)) {
       try {
         const done = await this.settleEvent(eventId);

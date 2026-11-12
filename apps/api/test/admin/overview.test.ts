@@ -48,6 +48,9 @@ describe("visão geral do admin", () => {
       marketSuspended: false,
       ipoBlockers: [],
       ipoSettlementFailures: [],
+      pendingPayouts: 0,
+      settlingPayouts: 0,
+      correctionToApply: false,
     });
 
     // jogo pendente

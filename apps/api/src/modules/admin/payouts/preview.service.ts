@@ -12,6 +12,7 @@ import { DB, type Database } from "../../../infra/db/index.js";
 import { bots, clubs, payoutCredits, payoutEvents, payoutHoldings, standings, users, wallets } from "../../../infra/db/schema/index.js";
 import { DomainError } from "../../../infra/http/index.js";
 import { currentSeason } from "../current-season.js";
+import { dues } from "./settlement.js";
 
 /** A classificação oficial de que cada tipo de evento depende (colocação da Série A, acesso da Série B). */
 export const STANDINGS_OF_KIND = { placement: "brasileirao-a", promotion: "brasileirao-b" } as const;
@@ -48,18 +49,22 @@ export class PreviewService {
     if (rows.length === 0) return { events: [] };
 
     const ids = rows.map((r) => r.event.id);
-    const [shares, credits, confirmed] = await Promise.all([
+    const [shares, credits, confirmed, owed] = await Promise.all([
       this.sharesOf(ids),
       this.creditsOf(ids),
       this.confirmedStandings(season.id),
+      this.missingOf(season.id, ids),
     ]);
 
     return {
       events: rows.map(({ event: e, club }): PayoutEventView => {
         const s = shares.get(e.id) ?? { players: 0, bots: 0, holders: 0 };
         const standingsCompetition = STANDINGS_OF_KIND[e.kind as keyof typeof STANDINGS_OF_KIND];
-        const expected = e.status === "approved" && e.perShare > 0 ? s.holders : 0;
+        // liquidado é não faltar lançamento para nenhuma carteira (a regra de `settlement.ts`: na correção, o crédito é o
+        // líquido, e a carteira com líquido zero não precisa de linha); o esperado é o já lançado mais o que falta
         const credited = e.status === "approved" ? (credits.get(e.id) ?? 0) : 0;
+        const missing = e.status === "approved" ? (owed.get(e.id) ?? 0) : 0;
+        const expected = credited + missing;
         return {
           id: e.id,
           key: e.eventKey,
@@ -78,7 +83,7 @@ export class PreviewService {
           total: (s.players + s.bots) * e.perShare,
           standingsConfirmed: standingsCompetition ? (confirmed.get(standingsCompetition) ?? false) : null,
           settlement: {
-            state: e.status !== "approved" ? "not_started" : credited >= expected ? "settled" : "settling",
+            state: e.status !== "approved" ? "not_started" : missing === 0 ? "settled" : "settling",
             credited,
             expected,
           },
@@ -150,6 +155,13 @@ export class PreviewService {
       .where(inArray(payoutHoldings.eventId, ids))
       .groupBy(payoutHoldings.eventId);
     return new Map(rows.map((r) => [r.eventId, r]));
+  }
+
+  /** Quantas carteiras ainda esperam lançamento em cada evento aprovado. */
+  private async missingOf(seasonId: number, ids: number[]): Promise<Map<number, number>> {
+    const out = new Map<number, number>();
+    for (const due of await dues(this.db, { seasonId, eventIds: ids })) out.set(due.eventId, (out.get(due.eventId) ?? 0) + 1);
+    return out;
   }
 
   private async creditsOf(ids: number[]): Promise<Map<number, number>> {

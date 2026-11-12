@@ -18,7 +18,8 @@ import { MatchesEvents } from "./results/ports.js";
  */
 @Injectable()
 export class AdminEvents {
-  private lastPending: number | null = null;
+  private lastPending: string | null = null;
+  private payoutsCounter: (() => Promise<number>) | null = null;
 
   constructor(
     private readonly bus: EventBus,
@@ -40,11 +41,18 @@ export class AdminEvents {
     tx.afterCommit(() => this.bus.publish("season", "market.resumed", data));
   }
 
-  /** Publica quantos jogos estão pendentes, se mudou desde o último aviso. */
+  /** A F12 registra quem conta os pagamentos aguardando (o `admin` não importa a pasta `payouts`). */
+  registerPayoutsCounter(counter: () => Promise<number>): void {
+    this.payoutsCounter = counter;
+  }
+
+  /** Publica quantos jogos e pagamentos estão pendentes, se algum número mudou desde o último aviso. */
   async publishPending(): Promise<void> {
-    const count = (await this.pending.compute()).matches.length;
-    if (count === this.lastPending) return;
-    this.lastPending = count;
-    this.bus.publish("admin", "admin.pending", { pendingMatches: count });
+    const pendingMatches = (await this.pending.compute()).matches.length;
+    const pendingPayouts = this.payoutsCounter ? await this.payoutsCounter() : undefined;
+    const key = `${pendingMatches}/${pendingPayouts ?? ""}`;
+    if (key === this.lastPending) return;
+    this.lastPending = key;
+    this.bus.publish("admin", "admin.pending", pendingPayouts === undefined ? { pendingMatches } : { pendingMatches, pendingPayouts });
   }
 }

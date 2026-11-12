@@ -8,6 +8,7 @@ import { seasonCups } from "../../infra/db/schema/index.js";
 import { CUP_COMPETITIONS } from "../../infra/db/schema/values.js";
 import { IpoOpeningService, IpoSettlementService } from "../ipo/index.js";
 import { currentSeason } from "./current-season.js";
+import { PayoutsStatusService } from "./payouts/outstanding.js";
 import { PendingService } from "./results/pending.service.js";
 import { StandingsService } from "./standings/standings.service.js";
 import { SuspensionService } from "./suspension/suspension.service.js";
@@ -23,6 +24,7 @@ export class OverviewService {
     private readonly ipoOpening: IpoOpeningService,
     private readonly ipoSettlement: IpoSettlementService,
     private readonly clock: Clock,
+    private readonly payouts: PayoutsStatusService,
   ) {}
 
   async compute(): Promise<Overview> {
@@ -34,6 +36,7 @@ export class OverviewService {
       // "O IPO não abriu: falta …" (proposta 6 do Plano do IPO), só depois do horário de abertura.
       this.ipoOpening.blockers(this.clock.now()),
     ]);
+    const outstanding = season ? await this.payouts.outstanding(season.id, this.clock.now()) : { pending: 0, settling: 0, correctionEvents: 0 };
     const confirmedCups = new Set(
       season
         ? (await this.db.select().from(seasonCups).where(eq(seasonCups.seasonId, season.id))).filter((c) => c.confirmedAt).map((c) => c.competition)
@@ -47,6 +50,9 @@ export class OverviewService {
       marketSuspended: suspension.market !== null,
       ipoBlockers,
       ipoSettlementFailures: [...this.ipoSettlement.failures()],
+      pendingPayouts: outstanding.pending,
+      settlingPayouts: outstanding.settling,
+      correctionToApply: outstanding.correctionEvents > 0,
     };
   }
 }
