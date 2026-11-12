@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import type { PortfolioApi } from "../api";
 import { formatMoney } from "../format";
 import { formatHour } from "../../market/format";
+import { useIsNarrow } from "../../market/mobile-club";
 import { ChartCanvas } from "./chart-canvas";
 import { RANGE_LABELS } from "./labels";
 import { MarkerBalloon } from "./marker-balloon";
@@ -22,6 +23,7 @@ export function ClubChart({ ticker, api, logged, short = false }: { ticker: stri
   const [mode, setMode] = useState<"line" | "candles">("line");
   const [selected, setSelected] = useState<string | null>(null);
   const data = useClubChart(api, ticker, range, logged);
+  const narrow = useIsNarrow();
 
   const markers: ChartMarker[] = useMemo(() => {
     if (!data.candles || data.candles.candles.length === 0) return [];
@@ -84,7 +86,7 @@ export function ClubChart({ ticker, api, logged, short = false }: { ticker: stri
               ipoPrice={resp.ipoPrice}
               averagePrice={data.mine?.averagePrice ?? null}
               onSelect={setSelected}
-              short={short}
+              short={short || narrow}
             />
             {picked && <MarkerBalloon marker={picked} onClose={() => setSelected(null)} />}
           </>
