@@ -84,7 +84,7 @@ export async function displayedPrices(db: Db, seasonId: number, at: Date): Promi
     select c.ticker as ticker,
            coalesce(
              (select t.price from futbolsa.trades t
-               where t.club_id = sc.club_id and t.at <= ${at.toISOString()}::timestamptz
+               where t.club_id = sc.club_id and t.season_id = sc.season_id and t.at <= ${at.toISOString()}::timestamptz
                order by t.at desc, t.id desc limit 1),
              sc.ipo_price, sc.last_price) as price
     from futbolsa.season_clubs sc

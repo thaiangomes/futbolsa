@@ -52,9 +52,9 @@ describe("contratos de accounts", () => {
   });
 
   it("conta 11: o perfil público não deixa passar e-mail nem id", () => {
-    expect(publicPlayerSchema.safeParse({ nickname: "anagol" }).success).toBe(true);
-    expect(publicPlayerSchema.safeParse({ nickname: "anagol", email: "ana@exemplo.com" }).success).toBe(false);
-    expect(publicPlayerSchema.safeParse({ nickname: "anagol", id: "x" }).success).toBe(false);
+    expect(publicPlayerSchema.safeParse({ nickname: "anagol", snapshot: null }).success).toBe(true);
+    expect(publicPlayerSchema.safeParse({ nickname: "anagol", snapshot: null, email: "ana@exemplo.com" }).success).toBe(false);
+    expect(publicPlayerSchema.safeParse({ nickname: "anagol", snapshot: null, id: "x" }).success).toBe(false);
   });
 
   it("GET /me sem conta não traz e-mail nem dados de outra pessoa", () => {

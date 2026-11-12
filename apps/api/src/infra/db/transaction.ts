@@ -179,6 +179,10 @@ export interface TransactionOptions {
   onRetry?: (attempt: number, code: string) => void;
   /** Erro num `afterCommit`: a transação já foi gravada, então não volta como erro. */
   onAfterCommitError?: (error: unknown) => void;
+  /** O isolamento da transação; o padrão é `read committed`. As leituras de patrimônio pedem `repeatable read` (uma foto só). */
+  isolationLevel?: "read committed" | "repeatable read";
+  /** Transação só de leitura (o Postgres recusa qualquer escrita). */
+  readOnly?: boolean;
 }
 
 /** O código SQLSTATE do erro do Postgres, procurando também nas causas (o Drizzle embrulha). */
@@ -214,7 +218,7 @@ export async function withTransaction<T>(
           tx = new Tx(dtx);
           return fn(tx);
         },
-        { isolationLevel: "read committed" },
+        { isolationLevel: options.isolationLevel ?? "read committed", accessMode: options.readOnly ? "read only" : "read write" },
       );
     } catch (error) {
       const code = pgErrorCode(error);

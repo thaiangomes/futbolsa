@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { tradingBand } from "@futbolsa/engine/engine/orderRules";
 import { CLUBS } from "@futbolsa/engine/data/clubs";
 import { ApiError } from "../../lib/api";
 import { useSession } from "../accounts/session-provider";
+import { ClubChart } from "../portfolio/chart/club-chart";
+import { portfolioApi } from "../portfolio/api";
 import { type MarketApi, marketApi } from "./api";
 import { BookPanel } from "./book-panel";
 import type { ClubState } from "./club-state";
@@ -35,11 +37,14 @@ const NAMES = new Map<string, string>(CLUBS.map((c) => [c.id, c.name]));
 export function ClubScreen({ ticker }: { ticker: string }) {
   const api = useMarketApi();
   const { state: session } = useSession();
-  return <ClubView ticker={ticker} api={api} logged={session.status === "ready"} />;
+  const { api: client } = useSession();
+  const logged = session.status === "ready";
+  const chart = useMemo(() => <ClubChart ticker={ticker} api={portfolioApi(client)} logged={logged} />, [ticker, client, logged]);
+  return <ClubView ticker={ticker} api={api} logged={logged} chart={chart} />;
 }
 
 /** O miolo da tela, sem depender da sessão (os testes passam a API e se está logado). */
-export function ClubView({ ticker, api, logged }: { ticker: string; api: MarketApi; logged: boolean }) {
+export function ClubView({ ticker, api, logged, chart = null }: { ticker: string; api: MarketApi; logged: boolean; chart?: ReactNode }) {
   const book = useClubBook(api, ticker);
   const mine = useMyOrders(api, logged);
   const balances = useBalances(api, ticker, logged);

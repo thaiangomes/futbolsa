@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { snapshotSchema } from "../portfolio/snapshot.js";
 
 /**
  * Apelidos que ninguém escolhe, em qualquer combinação de maiúsculas, para ninguém se passar
@@ -83,7 +84,7 @@ export const deleteMeResponseSchema = z.strictObject({ walletCloseout: z.enum(["
 export type DeleteMeResponse = z.infer<typeof deleteMeResponseSchema>;
 
 /** `GET /players/:nickname`, público: só o apelido (critério 11). */
-export const publicPlayerSchema = z.strictObject({ nickname: z.string() });
+export const publicPlayerSchema = z.strictObject({ nickname: z.string(), snapshot: snapshotSchema.nullable() });
 export type PublicPlayer = z.infer<typeof publicPlayerSchema>;
 
 const emailSchema = z.email("E-mail inválido.").max(254);

@@ -2,6 +2,17 @@ import { Injectable, Module } from "@nestjs/common";
 import type { Tx } from "../../infra/db/transaction.js";
 import { RealtimeModule } from "../../infra/realtime/index.js";
 import { recordTrade } from "./candles/record-trade.js";
+import { CandlesController } from "./candles/candles.controller.js";
+import { CandlesService } from "./candles/candles.service.js";
+import { EquityController } from "./daily/equity.controller.js";
+import { EquityDailyService } from "./daily/equity-daily.service.js";
+import { EntriesController } from "./entries/entries.controller.js";
+import { EntriesService } from "./entries/entries.service.js";
+import { MarkersController, MyTradesController } from "./markers/markers.controller.js";
+import { MarkersService } from "./markers/markers.service.js";
+import { SnapshotService } from "./snapshots/snapshot.service.js";
+import { WalletController } from "./wallet/wallet.controller.js";
+import { WalletService } from "./wallet/wallet.service.js";
 import { WalletEvents } from "./wallet-events.js";
 import { openWallet, post, type Movement, type OpenWallet } from "./ledger/index.js";
 
@@ -25,10 +36,14 @@ export class PortfolioLedger {
   }
 }
 
-/** Carteira e gráficos. A F4 traz o `PortfolioLedger`; telas e rotas vêm na F10. */
+/**
+ * Carteira e gráficos. A F4 traz o `PortfolioLedger`; a F10 traz as leituras (carteira, extrato, candles, marcadores,
+ * patrimônio diário e foto mensal) e o `EquityAt`, o patrimônio num instante que os rankings (F13) reaproveitam.
+ */
 @Module({
   imports: [RealtimeModule],
-  providers: [PortfolioLedger, WalletEvents],
-  exports: [PortfolioLedger, WalletEvents],
+  controllers: [WalletController, EntriesController, CandlesController, MarkersController, MyTradesController, EquityController],
+  providers: [PortfolioLedger, WalletEvents, WalletService, EntriesService, CandlesService, MarkersService, EquityDailyService, SnapshotService],
+  exports: [PortfolioLedger, WalletEvents, WalletService, EntriesService, EquityDailyService, SnapshotService],
 })
 export class PortfolioModule {}
