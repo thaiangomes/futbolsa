@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { and, desc, eq, inArray, max } from "drizzle-orm";
 import { ADMIN_ERROR_MESSAGES, type ApplyCorrectionBody, type ApplyCorrectionResponse, type CorrectionPreview } from "@futbolsa/contracts";
 import { Clock } from "../../../infra/clock/index.js";
@@ -9,6 +9,7 @@ import { currentSeason, type SeasonRow } from "../current-season.js";
 import { AdminLogService } from "../log/admin-log.service.js";
 import { MarketPort } from "../results/ports.js";
 import { roundAndPhase } from "./close-events.service.js";
+import { PayoutEvents } from "./events.js";
 import { type CorrectionPlan, CorrectionPlanService } from "./correction-plan.js";
 import { copyHoldings, writeHoldings } from "./holdings.js";
 import { RankingsPort } from "./ports.js";
@@ -48,6 +49,7 @@ export class ApplyCorrectionService {
     private readonly market: MarketPort,
     private readonly rankings: RankingsPort,
     private readonly clock: Clock,
+    @Optional() private readonly events?: PayoutEvents,
   ) {}
 
   async apply(actorId: string, body: ApplyCorrectionBody): Promise<ApplyCorrectionResponse> {
@@ -170,6 +172,7 @@ export class ApplyCorrectionService {
     // o "a receber" dos meses dos fechamentos antigos e novos muda
     await this.rankings.payoutsChanged(tx, { seasonId, closedAts: plan.closedAts });
     tx.afterCommit(() => this.rankings.wake());
+    tx.afterCommit(() => this.events?.adminChanged());
     return response;
   }
 

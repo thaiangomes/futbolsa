@@ -18,5 +18,11 @@ export const overviewSchema = z.strictObject({
    * tudo certo; enquanto houver clube aqui, a negociação não abre e as contas excluídas esperam.
    */
   ipoSettlementFailures: z.array(z.strictObject({ ticker: z.string(), error: z.string() })),
+  /** Pagamentos aguardando aprovação (F12). */
+  pendingPayouts: z.number().int(),
+  /** Eventos aprovados com crédito ainda saindo em lotes. */
+  settlingPayouts: z.number().int(),
+  /** Há resultado mudado depois de pago: uma correção a aplicar. */
+  correctionToApply: z.boolean(),
 });
 export type Overview = z.infer<typeof overviewSchema>;

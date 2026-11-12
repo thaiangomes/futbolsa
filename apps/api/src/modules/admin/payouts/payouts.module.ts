@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { DividendsModule } from "../../dividends/dividends.module.js";
+import { RealtimeModule } from "../../../infra/realtime/index.js";
 import { PortfolioModule } from "../../portfolio/index.js";
 import { AdminLogModule } from "../log/index.js";
 import { ResultsModule } from "../results/results.module.js";
@@ -13,6 +14,8 @@ import { CorrectionPlanService } from "./correction-plan.js";
 import { CorrectionsController } from "./corrections.controller.js";
 import { EngineInputService } from "./engine-input.js";
 import { PayoutsController } from "./payouts.controller.js";
+import { PayoutEvents } from "./events.js";
+import { PayoutsStatusService } from "./outstanding.js";
 import { NoopRankingsPort, RankingsPort } from "./ports.js";
 import { PreviewService } from "./preview.service.js";
 import { SettleCreditsService } from "./settle-credits.js";
@@ -26,7 +29,7 @@ import { SettleJob } from "./settle.job.js";
  * `StandingsEvents`; do `PortfolioModule`, o `PortfolioLedger` (o crédito); do `AdminLogModule`, o registro.
  */
 @Module({
-  imports: [DividendsModule, ResultsModule, StandingsModule, PortfolioModule, AdminLogModule],
+  imports: [RealtimeModule, DividendsModule, ResultsModule, StandingsModule, PortfolioModule, AdminLogModule],
   controllers: [PayoutsController, CorrectionsController],
   providers: [
     { provide: RankingsPort, useClass: NoopRankingsPort },
@@ -37,10 +40,12 @@ import { SettleJob } from "./settle.job.js";
     CorrectionPlanService,
     ApproveService,
     ApplyCorrectionService,
+    PayoutsStatusService,
+    PayoutEvents,
     SettleReversalService,
     SettleCreditsService,
     SettleJob,
   ],
-  exports: [RankingsPort, EngineInputService, CloseEventsService, CorrectionPlanService, SettleCreditsService, SettleReversalService],
+  exports: [PayoutsStatusService, RankingsPort, EngineInputService, CloseEventsService, CorrectionPlanService, SettleCreditsService, SettleReversalService],
 })
 export class PayoutsModule {}

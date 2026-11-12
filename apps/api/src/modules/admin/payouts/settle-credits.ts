@@ -1,8 +1,9 @@
-import { Inject, Injectable, Logger, type OnModuleDestroy } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional, type OnModuleDestroy } from "@nestjs/common";
 import { eq } from "drizzle-orm";
 import { DB, type Database, lockPayoutEvents, lockSeason, lockWallets, type PayoutEventRow, type Tx, withTransaction } from "../../../infra/db/index.js";
 import { payoutEvents } from "../../../infra/db/schema/index.js";
 import { currentSeason } from "../current-season.js";
+import { PayoutEvents } from "./events.js";
 import { SettleReversalService } from "./settle-reversal.js";
 import { dues, settlingEventIds } from "./settlement.js";
 
@@ -81,6 +82,7 @@ export class SettleCreditsService implements OnModuleDestroy {
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly reversal: SettleReversalService,
+    @Optional() private readonly events?: PayoutEvents,
   ) {}
 
   /**
@@ -90,6 +92,7 @@ export class SettleCreditsService implements OnModuleDestroy {
    */
   onCredited(batch: CreditedBatch): void {
     this.logger.debug(`evento ${batch.eventId}: ${batch.credits.length} créditos`);
+    void this.events?.credited(batch).then(() => this.events?.adminChanged());
   }
 
   /**

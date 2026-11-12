@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 import { ADMIN_ERROR_MESSAGES, type ApproveOutcome, type ApprovePayoutsBody, type ApprovePayoutsResponse } from "@futbolsa/contracts";
 import { Clock } from "../../../infra/clock/index.js";
@@ -7,6 +7,7 @@ import { payoutEvents, seasons, standings } from "../../../infra/db/schema/index
 import { DomainError } from "../../../infra/http/index.js";
 import { currentSeason, type SeasonRow } from "../current-season.js";
 import { AdminLogService } from "../log/admin-log.service.js";
+import { PayoutEvents } from "./events.js";
 import { RankingsPort } from "./ports.js";
 import { STANDINGS_OF_KIND } from "./preview.service.js";
 
@@ -32,6 +33,7 @@ export class ApproveService {
     private readonly clock: Clock,
     private readonly adminLog: AdminLogService,
     private readonly rankings: RankingsPort,
+    @Optional() private readonly events?: PayoutEvents,
   ) {}
 
   async approve(actorId: string, body: ApprovePayoutsBody): Promise<ApprovePayoutsResponse> {
@@ -112,6 +114,7 @@ export class ApproveService {
     // o "a receber" do mês do fechamento muda: o pedido de recálculo entra nesta transação
     await this.rankings.payoutsChanged(tx, { seasonId, closedAts: [approved.closedAt] });
     tx.afterCommit(() => this.rankings.wake());
+    tx.afterCommit(() => this.events?.adminChanged());
     return "approved";
   }
 

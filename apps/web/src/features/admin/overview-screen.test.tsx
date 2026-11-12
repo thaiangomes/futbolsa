@@ -14,6 +14,9 @@ const calm: Overview = {
   marketSuspended: false,
   ipoBlockers: [],
   ipoSettlementFailures: [],
+  pendingPayouts: 0,
+  settlingPayouts: 0,
+  correctionToApply: false,
 };
 const apiWith = (overview: Overview) => ({ overview: async () => overview }) as unknown as AdminApi;
 

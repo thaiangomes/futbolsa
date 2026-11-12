@@ -95,10 +95,10 @@ describe("eventos de tempo real do admin", () => {
     const events = app.get(await import("../../src/modules/admin/events.js").then((x) => x.AdminEvents), { strict: false });
     await events.publishPending();
     await events.publishPending();
-    expect(frames(live).map((x) => x.data)).toEqual([{ pendingMatches: 1 }]);
+    expect(frames(live).map((x) => x.data)).toEqual([{ pendingMatches: 1, pendingPayouts: 0 }]);
     // marcar o jogo como adiado pela rota publica o novo número
     await call("PATCH", `/admin/matches/${m!.id}`, { status: "postponed", reason: "adiado pela federação" });
     await new Promise((r) => setTimeout(r, 100));
-    expect(frames(live).map((x) => x.data)).toEqual([{ pendingMatches: 1 }, { pendingMatches: 0 }]);
+    expect(frames(live).map((x) => x.data)).toEqual([{ pendingMatches: 1, pendingPayouts: 0 }, { pendingMatches: 0, pendingPayouts: 0 }]);
   });
 });
