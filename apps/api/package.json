@@ -16,7 +16,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --env-file-if-exists=../../.env --import tsx src/infra/db/migrate.ts",
     "db:seed": "node --env-file-if-exists=../../.env --import tsx src/infra/db/seed.ts",
-    "auth:check": "node --env-file-if-exists=../../.env --import tsx scripts/supabase-check.ts"
+    "auth:check": "node --env-file-if-exists=../../.env --import tsx scripts/supabase-check.ts",
+    "demo:carteira": "node --env-file-if-exists=../../.env --import tsx scripts/demo-carteira.ts"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.11",

@@ -27,7 +27,7 @@ describe("troca de apelido e perfil público", () => {
   it("conta 10: Ana troca anagol por ana_fla; o perfil acha ana_fla, anagol some e fica livre", async () => {
     const ana = await createAccount(database.db, { nickname: "anagol" });
     expect((await patch(ana.token, "ana_fla")).statusCode).toBe(204);
-    expect((await profile("ana_fla")).json()).toEqual({ nickname: "ana_fla" });
+    expect((await profile("ana_fla")).json()).toEqual({ nickname: "ana_fla", snapshot: null });
     expect((await profile("anagol")).statusCode).toBe(404);
     const outro = await createAccount(database.db);
     expect((await patch(outro.token, "anagol")).statusCode).toBe(204);
@@ -58,7 +58,7 @@ describe("troca de apelido e perfil público", () => {
     const davi = await createAccount(database.db, { nickname: "davi_perfil" });
     const res = await profile("DAVI_PERFIL");
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ nickname: "davi_perfil" });
+    expect(res.json()).toEqual({ nickname: "davi_perfil", snapshot: null });
     expect(res.body).not.toContain(davi.email);
     expect(res.body).not.toContain(davi.id);
   });
