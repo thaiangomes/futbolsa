@@ -53,6 +53,17 @@ export class ApiClient {
     return schema.parse(await res.json());
   }
 
+  /** Um arquivo de texto da API (o relatório de trapaça em HTML), com o login. */
+  async requestText(path: string): Promise<string> {
+    let res = await this.send(path, {}, await this.options.auth.getAccessToken());
+    if (res.status === 401 && (await peekCode(res)) === "invalid_token") {
+      const fresh = await this.options.auth.getAccessToken({ forceRefresh: true });
+      if (fresh) res = await this.send(path, {}, fresh);
+    }
+    if (!res.ok) throw await toApiError(res);
+    return res.text();
+  }
+
   private send(path: string, req: ApiRequest, token: string | null): Promise<Response> {
     const headers: Record<string, string> = { accept: "application/json", ...req.headers };
     if (token) headers.authorization = `Bearer ${token}`;

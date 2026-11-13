@@ -21,6 +21,14 @@ export function brasiliaToIso(local: string): string | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
 }
 
+/** A conta digitada no filtro (id do jogador ou `bot:número`) como o corpo do relatório pede; `null` se não é uma conta (a casa, vazio). */
+export function fraudAccountOf(value: string): { userId: string } | { botId: number } | null {
+  const v = value.trim();
+  if (/^bot:[0-9]+$/.test(v)) return { botId: Number(v.slice(4)) };
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) return { userId: v };
+  return null;
+}
+
 /** Auditoria de negócios (Admin, critério 34; protótipo 7j): filtros de jogador, par de contas, clube e período. */
 export function AuditScreen({ admin }: { admin: AdminApi }) {
   const [player, setPlayer] = useState("");
@@ -32,6 +40,18 @@ export function AuditScreen({ admin }: { admin: AdminApi }) {
   const [rows, setRows] = useState<AuditTrade[] | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const search = useAction();
+  const report = useAction();
+  const accountA = fraudAccountOf(pairA);
+  const accountB = fraudAccountOf(pairB);
+  // abre o relatório de trapaça do par e do período filtrados (sem período, os últimos 30 dias)
+  const openReport = () =>
+    report.run(async () => {
+      if (!accountA || !accountB) return;
+      const toIso = brasiliaToIso(to) ?? new Date().toISOString();
+      const fromIso = brasiliaToIso(from) ?? new Date(Date.parse(toIso) - 30 * 86_400_000).toISOString();
+      const opened = await admin.openFraudCase({ accountA, accountB, from: fromIso, to: toIso, ...(club.trim() ? { ticker: club.trim().toUpperCase() } : {}) });
+      window.location.href = `/admin/trapaca?id=${opened.id}`;
+    });
 
   const query = () => ({
     ...(player.trim() ? { player: player.trim() } : {}),
@@ -71,7 +91,11 @@ export function AuditScreen({ admin }: { admin: AdminApi }) {
             <div className="field"><label htmlFor="f-ate">Até (Brasília)</label><input id="f-ate" type="datetime-local" className="input" value={to} onChange={(e) => setTo(e.target.value)} /></div>
           </div>
           <ErrorNote message={search.error} />
-          <button type="submit" className="btn btn-p" disabled={search.busy}>Buscar negócios</button>
+          <ErrorNote message={report.error} />
+          <div className="row" style={{ gap: 8 }}>
+            <button type="submit" className="btn btn-p" disabled={search.busy}>Buscar negócios</button>
+            <button type="button" className="btn" disabled={!accountA || !accountB || report.busy} onClick={() => void openReport()}>Abrir relatório de trapaça do par</button>
+          </div>
         </form>
       </Card>
       {rows && (

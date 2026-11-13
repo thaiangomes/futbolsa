@@ -1,4 +1,14 @@
 import {
+  banFraudResponseSchema,
+  type BanFraudBody,
+  confirmFraudResponseSchema,
+  type ConfirmFraudBody,
+  type CreateFraudCaseBody,
+  dismissFraudResponseSchema,
+  type DismissFraudBody,
+  fraudCaseDetailSchema,
+  fraudCasesResponseSchema,
+  type FraudCasesQuery,
   type AdjustBody,
   adjustResponseSchema,
   auditResponseSchema,
@@ -116,6 +126,16 @@ export function adminApi(api: ApiClient) {
       api.request(adjustResponseSchema, `/admin/players/${id}/adjust`, { method: "POST", body, headers: { "idempotency-key": idempotencyKey } }),
 
     trades: (query: Partial<AuditQuery> = {}) => api.request(auditResponseSchema, `/admin/trades${queryString(query)}`),
+
+    fraudCases: (query: Partial<FraudCasesQuery> = {}) => api.request(fraudCasesResponseSchema, `/admin/fraud/cases${queryString(query)}`),
+    fraudCase: (id: number, without?: readonly number[]) =>
+      api.request(fraudCaseDetailSchema, `/admin/fraud/cases/${id}${without ? `?without=${without.join(",")}` : ""}`),
+    openFraudCase: (body: CreateFraudCaseBody) => api.request(fraudCaseDetailSchema, "/admin/fraud/cases", { method: "POST", body }),
+    confirmFraud: (id: number, body: ConfirmFraudBody, idempotencyKey: string) =>
+      api.request(confirmFraudResponseSchema, `/admin/fraud/cases/${id}/confirm`, { method: "POST", body, headers: { "idempotency-key": idempotencyKey } }),
+    dismissFraud: (id: number, body: DismissFraudBody) => api.request(dismissFraudResponseSchema, `/admin/fraud/cases/${id}/dismiss`, { method: "POST", body }),
+    banFraud: (id: number, body: BanFraudBody) => api.request(banFraudResponseSchema, `/admin/fraud/cases/${id}/ban`, { method: "POST", body }),
+    fraudReportFile: (id: number) => api.requestText(`/admin/fraud/cases/${id}/download`),
 
     bots: (): Promise<BotsView> => api.request(botsViewSchema, "/admin/bots"),
     updateBots: (body: PatchBotsBody) => api.request(patchBotsResponseSchema, "/admin/bots", { method: "PATCH", body }),
