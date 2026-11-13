@@ -48,7 +48,8 @@ export class AdminLogService {
     @Inject(DB) private readonly db: Database,
   ) {}
 
-  async record(tx: Tx, entry: AdminLogEntry): Promise<void> {
+  /** Devolve o id da linha, para o `ref` dos movimentos que a ação grava (o ajuste de saldo, F14). */
+  async record(tx: Tx, entry: AdminLogEntry): Promise<number> {
     // Tudo é conferido antes de gravar: a recusa não deixa linha nenhuma.
     const required = reasonRequired(entry.action);
     const reason = entry.reason?.trim() || undefined;
@@ -66,7 +67,9 @@ export class AdminLogService {
         `O registro do admin não guarda e-mail (ação "${entry.action}"): use o id, o apelido ou o e-mail embaralhado por emailFingerprint.`,
       );
     }
-    await tx.db.insert(adminLog).values({
+    const [row] = await tx.db
+      .insert(adminLog)
+      .values({
       actorId: entry.actorId,
       at: this.clock.now(),
       action: entry.action,
@@ -75,7 +78,9 @@ export class AdminLogService {
       before: entry.before ?? null,
       after: entry.after ?? null,
       reason,
-    });
+      })
+      .returning({ id: adminLog.id });
+    return Number(row!.id);
   }
 
   /**

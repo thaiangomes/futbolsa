@@ -23,6 +23,13 @@ import { lockAdminsAndCountOthers } from "./roles.service.js";
 export const REAUTH_WINDOW_MS = 15 * 60_000;
 
 type SeasonRow = typeof seasons.$inferSelect;
+type UserRow = typeof users.$inferSelect;
+
+/** Ganchos da exclusão feita pelo admin (F14, T4), dentro da transação da exclusão. */
+export interface DeleteAccountOptions {
+  validate?: (tx: Tx, user: UserRow) => Promise<void> | void;
+  record?: (tx: Tx, info: { user: UserRow; walletCloseout: DeleteMeResponse["walletCloseout"] }) => Promise<void>;
+}
 
 /**
  * Exclusão da conta (Conta e login, critérios 22 e 23; Admin, critério 26). Pode ser pedida a
@@ -48,10 +55,15 @@ export class AccountDeletionService {
     private readonly realtime: RealtimeGateway,
   ) {}
 
-  async deleteAccount(userId: string): Promise<DeleteMeResponse> {
+  /**
+   * `options` é do admin (F14, T4): `validate` roda com a conta travada e antes de qualquer mudança (recusa por exceção);
+   * `record` roda na mesma transação, depois da exclusão, com o resultado do encerramento da carteira (o registro do admin).
+   */
+  async deleteAccount(userId: string, options: DeleteAccountOptions = {}): Promise<DeleteMeResponse> {
     const now = this.clock.now();
     const closeout = await withTransaction(this.db, async (tx) => {
       const user = await this.lockUser(tx, userId);
+      if (options.validate) await options.validate(tx, user);
       const season = await this.currentSeason(tx);
       const wallet = season ? await this.walletOf(tx, season.id, userId) : undefined;
       let result: DeleteMeResponse["walletCloseout"] = "done";
@@ -65,6 +77,7 @@ export class AccountDeletionService {
         .set({ status: "deleted", email: null, nickname: null, deletedAt: now })
         .where(eq(users.id, userId));
       if (user.email) await tx.db.delete(invites).where(eq(invites.email, user.email));
+      if (options.record) await options.record(tx, { user, walletCloseout: result });
       tx.afterCommit(async () => {
         this.realtime.disconnectUser(userId);
         await this.purgeIdentities(userId);
