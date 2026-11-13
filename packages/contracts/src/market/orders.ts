@@ -20,6 +20,7 @@ export const orderCancelReasonSchema = z.enum([
   "house_refresh",
   "suspension",
   "market_remainder",
+  "annulment",
 ]);
 
 /**

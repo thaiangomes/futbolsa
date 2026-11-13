@@ -36,6 +36,13 @@ export const ADMIN_ACTIONS = {
   "invite.create": { reasonRequired: false },
   "invite.revoke": { reasonRequired: false },
   "player.role": { reasonRequired: true },
+  // Jogadores e bots (F14): bloquear, excluir e ajustar mexem nos outros e pedem motivo; os bots e a chave não
+  "player.block": { reasonRequired: true },
+  "player.unblock": { reasonRequired: true },
+  "player.delete": { reasonRequired: true },
+  "player.adjust": { reasonRequired: true },
+  "bots.update": { reasonRequired: false },
+  "season.bots_in_rankings": { reasonRequired: false },
 } as const satisfies Record<string, { reasonRequired: boolean }>;
 
 export type AdminAction = keyof typeof ADMIN_ACTIONS;
