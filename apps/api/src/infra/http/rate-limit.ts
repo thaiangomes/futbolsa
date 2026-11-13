@@ -13,6 +13,10 @@ export const RATE_LIMITS = {
   signup: { limit: 10, ttl: 60_000 },
   /** Ordens (F9). */
   orders: { limit: 60, ttl: 60_000 },
+  /** A prévia da entrada no meio da temporada (F11): 30 por minuto. */
+  entryPreview: { limit: 30, ttl: 60_000 },
+  /** A confirmação da entrada (F11): 5 por minuto. */
+  entry: { limit: 5, ttl: 60_000 },
   /** Ofertas do IPO (F8). */
   bids: { limit: 60, ttl: 60_000 },
 } as const;
