@@ -6,5 +6,5 @@
     "rootDir": "src",
     "outDir": "dist"
   },
-  "include": ["src/index.ts", "src/engine", "src/data"]
+  "include": ["src/index.ts", "src/engine", "src/data", "src/sim/botView.ts", "src/sim/bots.ts", "src/sim/leagueView.ts", "src/sim/market.ts", "src/sim/rng.ts"]
 }
