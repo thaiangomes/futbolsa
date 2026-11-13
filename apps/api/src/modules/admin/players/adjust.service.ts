@@ -12,6 +12,7 @@ import { WalletEvents } from "../../portfolio/wallet-events.js";
 import type { PostResult } from "../../portfolio/ledger/post.js";
 import { currentSeason } from "../current-season.js";
 import { AdminLogService } from "../log/index.js";
+import { assertLatestNotClosed, assertSeasonOpen } from "../seasons/season-state.js";
 import { adjustPlan, type AdjustRefusal } from "./adjust.rules.js";
 
 const ROUTE = "POST /admin/players/:id/adjust";
@@ -57,8 +58,13 @@ export class AdjustService {
       const [user] = await tx.db.select({ status: users.status }).from(users).where(eq(users.id, targetId)).for("share");
       if (!user || user.status === "deleted") throw fail("player_not_found");
       const season0 = await currentSeason(tx.db);
-      if (!season0) throw fail("no_season");
+      if (!season0) {
+        // sem temporada atual, a mais nova encerrada recusa: o ajuste seria nela (F15, T7)
+        await assertLatestNotClosed(tx);
+        throw fail("no_season");
+      }
       const season = await lockSeason(tx, season0.id, "share");
+      assertSeasonOpen(season);
 
       let clubId: number | undefined;
       let price: number | null = null;

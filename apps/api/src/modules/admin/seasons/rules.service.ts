@@ -19,6 +19,7 @@ import { DomainError } from "../../../infra/http/index.js";
 import { cupFromRows } from "../../dividends/season-values/mapper.js";
 import { SeasonValuesService } from "../../dividends/season-values/season-values.service.js";
 import { AdminLogService } from "../log/index.js";
+import { assertSeasonIdOpen } from "./season-state.js";
 
 /** Fases preliminares não pagam (como em `validateCupTable`): jogo delas sem valor na tabela não é aviso. */
 const PRELIMINARY = /^(pre-|preliminar)/i;
@@ -137,6 +138,8 @@ export class RulesService {
   }
 
   private async ensureEditable(tx: Tx, seasonId: number): Promise<void> {
+    // a temporada encerrada recusa antes de ganhar qualquer valor (F15, T7)
+    await assertSeasonIdOpen(tx, seasonId);
     await this.ensure(tx, seasonId);
     // Fora da preparação (IPO aberto ou depois) nada muda, mesmo que o `locked_at` não tenha sido gravado
     // (temporada antiga que ganhou os valores só agora, na primeira consulta).

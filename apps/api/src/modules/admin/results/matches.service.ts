@@ -15,6 +15,7 @@ import { clubs, matches } from "../../../infra/db/schema/index.js";
 import { DomainError } from "../../../infra/http/index.js";
 import { currentSeason } from "../current-season.js";
 import { AdminLogService } from "../log/index.js";
+import { assertLatestNotClosed, assertSeasonOpen } from "../seasons/season-state.js";
 import { MarketPort, MatchesEvents, notifyAfterCommit } from "./ports.js";
 import type { SourceSnapshot } from "./import.service.js";
 import type { MatchRow } from "./to-engine.js";
@@ -115,8 +116,14 @@ export class MatchesService {
   async create(actorId: string, body: CreateMatchBody): Promise<AdminMatch> {
     return withTransaction(this.db, async (tx) => {
       const season = await currentSeason(tx.db);
-      if (!season) throw new DomainError("no_season", 409, ADMIN_ERROR_MESSAGES.no_season);
+      if (!season) {
+        // sem temporada atual, a mais nova encerrada recusa: o jogo novo seria dela (Admin, critério 18)
+        await assertLatestNotClosed(tx);
+        throw new DomainError("no_season", 409, ADMIN_ERROR_MESSAGES.no_season);
+      }
       const locked = await lockSeason(tx, season.id, "share");
+      // o encerramento pode ter passado enquanto a trava era esperada
+      assertSeasonOpen(locked);
       // com a recompra fechada, um jogo novo reabriria uma competição (Admin, critério 37)
       if (locked.status === "trading_ended") throw tradingEnded();
       const [home, away] = await this.clubsOf(tx, body.homeClubId, body.awayClubId);
@@ -171,7 +178,7 @@ export class MatchesService {
       const [found] = await tx.db.select({ seasonId: matches.seasonId }).from(matches).where(eq(matches.id, id));
       if (!found) throw new DomainError("match_not_found", 404, ADMIN_ERROR_MESSAGES.match_not_found);
       const season = await lockSeason(tx, found.seasonId, "share");
-      if (season.status === "closed") throw new DomainError("season_closed", 409, ADMIN_ERROR_MESSAGES.season_closed);
+      assertSeasonOpen(season);
       const [row] = await tx.db.select().from(matches).where(eq(matches.id, id)).for("update");
       if (!row) throw new DomainError("match_not_found", 404, ADMIN_ERROR_MESSAGES.match_not_found);
       const [home, away] = await this.clubsOf(tx, row.homeClubId, row.awayClubId);

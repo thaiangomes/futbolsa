@@ -17,6 +17,7 @@ import { SeasonValuesService } from "../../dividends/season-values/season-values
 import { IpoClosingService } from "../../ipo/index.js";
 import { currentSeason, type SeasonRow } from "../current-season.js";
 import { AdminLogService } from "../log/index.js";
+import { assertSeasonOpen } from "./season-state.js";
 
 export const toSeasonView = (s: SeasonRow): SeasonView => ({
   id: s.id,
@@ -221,11 +222,13 @@ export class SeasonsService {
     return season;
   }
 
-  /** A temporada travada (exclusiva), em qualquer status; 404 se não existe. */
+  /** A temporada travada (exclusiva), em qualquer status menos encerrada (`season_closed`, F15, T7); 404 se não existe. */
   private async lockExisting(tx: Tx, id: number): Promise<SeasonRow> {
     const [exists] = await tx.db.select({ id: seasons.id }).from(seasons).where(eq(seasons.id, id));
     if (!exists) throw notFound();
-    return lockSeason(tx, id, "update");
+    const season = await lockSeason(tx, id, "update");
+    assertSeasonOpen(season);
+    return season;
   }
 
   private async clubsOf(db: Database | DrizzleTx, seasonId: number): Promise<CurrentSeasonResponse["clubs"]> {

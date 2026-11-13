@@ -13,6 +13,7 @@ import { clubs, positions, seasonClubs, seasons, wallets } from "../../../infra/
 import { DomainError } from "../../../infra/http/index.js";
 import { currentSeason } from "../../admin/current-season.js";
 import { AdminLogService } from "../../admin/log/index.js";
+import { assertSeasonOpen } from "../../admin/seasons/season-state.js";
 import { clubsInMatch } from "../state/match-mode.js";
 
 const stateOf = (s: typeof seasons.$inferSelect): MarketMakerState => ({
@@ -99,6 +100,8 @@ export class MarketMakerAdminService {
       if (!found) throw new DomainError("no_season", 409, MARKET_MAKER_ERROR_MESSAGES.no_season);
       // trava a temporada: duas mudanças ao mesmo tempo não se pisam, e o antes e o depois do registro são verdadeiros
       const season = await lockSeason(tx, found.id, "update");
+      // o encerramento pode ter passado enquanto a trava era esperada (F15, T7)
+      assertSeasonOpen(season);
       if (body.mmLotBp !== undefined && body.mmLotBp !== season.mmLotBp && season.status !== "preparing") {
         throw new DomainError("lot_locked", 409, MARKET_MAKER_ERROR_MESSAGES.lot_locked);
       }

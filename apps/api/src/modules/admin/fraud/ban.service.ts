@@ -8,6 +8,7 @@ import { DomainError } from "../../../infra/http/index.js";
 import { NoticeMailJob } from "../../../infra/jobs/notice-mail.js";
 import { NoticesService } from "../../accounts/notices.service.js";
 import { AdminLogService } from "../log/index.js";
+import { assertSeasonIdOpen } from "../seasons/season-state.js";
 import { BlockService } from "../players/block.service.js";
 
 /** O prefixo do `blocked_reason` do banimento: a tela e o registro sabem que o bloqueio veio da trapaça. */
@@ -46,8 +47,10 @@ export class FraudBanService {
 
   async ban(adminId: string, caseId: number, body: BanFraudBody): Promise<BanFraudResponse> {
     const now = this.clock.now();
-    const [exists] = await this.db.select({ id: fraudCases.id }).from(fraudCases).where(eq(fraudCases.id, caseId));
+    const [exists] = await this.db.select({ id: fraudCases.id, seasonId: fraudCases.seasonId }).from(fraudCases).where(eq(fraudCases.id, caseId));
     if (!exists) throw notFound();
+    // caso de temporada encerrada não leva mais a banimento (F15, T7; acréscimo de 2026-11-07)
+    await assertSeasonIdOpen(this.db, exists.seasonId);
     let reportHash: string | null = null;
     let warnings: WarningRef[] = [];
     await this.blocks.block(adminId, body.userId, `${FRAUD_BLOCK_PREFIX}: ${body.reason}`, {

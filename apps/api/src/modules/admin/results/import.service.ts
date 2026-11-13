@@ -78,6 +78,10 @@ export class ImportService {
       if (season.status === "closed") {
         throw new DomainError("season_closed", 409, ADMIN_ERROR_MESSAGES.season_closed);
       }
+      // Com a recompra fechada (Admin, critério 37; F15, T7), nada que reabriria uma competição entra pela fonte: jogo
+      // novo, jogo disputado que volta a agendado ou adiado, e o adiado recalculado. O placar e quem passou continuam
+      // entrando (só mudam os valores, pela correção); o resto fica só no snapshot, como divergência.
+      const ended = season.status === "trading_ended";
 
       const report: ImportReport = { competition, kind, inserted: 0, updated: 0, unchanged: 0, clubsCreated: [], error: null };
       const clubsByName = new Map<string, ResolvedClub>();
@@ -122,7 +126,7 @@ export class ImportService {
 
         const known = byKey.get(`${src.source}:${src.sourceId}`);
         if (known) {
-          if (known.manualOverride) {
+          if (known.manualOverride || (ended && data.status !== known.status && data.status !== "finished")) {
             // O que o admin escreveu vale mais: só o snapshot muda, e a tela mostra a divergência.
             await tx.db.update(matches).set({ sourceSnapshot: snapshot }).where(eq(matches.id, known.id));
             report.unchanged++;
@@ -141,6 +145,12 @@ export class ImportService {
           changedIds.add(known.id);
           for (const c of [home.id, away.id]) changedClubs.add(c);
           if (scoreDiffers(known, data)) for (const c of [home.id, away.id]) scoreClubs.add(c);
+          continue;
+        }
+
+        // Com a recompra fechada, um jogo que o jogo não conhece não entra (reabriria a competição).
+        if (ended) {
+          report.unchanged++;
           continue;
         }
 
@@ -171,8 +181,10 @@ export class ImportService {
         if (src.status === "finished") for (const c of [home.id, away.id]) scoreClubs.add(c);
       }
 
-      for (const id of await this.recomputeOutOfWindow(tx, seasonId, competition, tickerOfClub)) {
-        changedIds.add(id);
+      if (!ended) {
+        for (const id of await this.recomputeOutOfWindow(tx, seasonId, competition, tickerOfClub)) {
+          changedIds.add(id);
+        }
       }
 
       if (changedIds.size > 0) {

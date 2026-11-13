@@ -68,7 +68,9 @@ export class AccountDeletionService {
       const season = await this.currentSeason(tx);
       const wallet = season ? await this.walletOf(tx, season.id, userId) : undefined;
       let result: DeleteMeResponse["walletCloseout"] = "done";
-      if (season && wallet) {
+      // a temporada encerrada já deixou a carteira em R$ 0,00 e sem ações, e nada mais muda nela (F15, T7): o histórico,
+      // o anual ("conta excluída") e o `season_results` ficam como estão
+      if (season && wallet && season.status !== "closed") {
         // A leitura sem trava é um atalho; quem decide de fato é o `closeWallet`, com a temporada travada.
         if (await this.awaitingSettlement(tx, season, now)) result = "after_ipo_settlement";
         else if (!(await this.closeWallet(tx, season.id, wallet, now))) result = "after_ipo_settlement";
@@ -107,7 +109,8 @@ export class AccountDeletionService {
     for (const { walletId, seasonId } of pending) {
       const closed = await withTransaction(this.db, async (tx) => {
         const [season] = await tx.db.select().from(seasons).where(eq(seasons.id, seasonId));
-        if (!season || (await this.awaitingSettlement(tx, season, now))) return false;
+        // a tarefa pula a temporada encerrada (F15, T7)
+        if (!season || season.status === "closed" || (await this.awaitingSettlement(tx, season, now))) return false;
         const [wallet] = await tx.db.select().from(wallets).where(eq(wallets.id, walletId));
         return this.closeWallet(tx, seasonId, wallet!, now);
       });
@@ -193,6 +196,8 @@ export class AccountDeletionService {
    */
   private async closeWallet(tx: Tx, seasonId: number, wallet: typeof wallets.$inferSelect, at: Date): Promise<boolean> {
     const season = await lockSeason(tx, seasonId, "share");
+    // encerrada enquanto a trava era esperada: a carteira já foi zerada no encerramento
+    if (season.status === "closed") return true;
     if (await this.awaitingSettlement(tx, season, at)) return false;
     await lockClubs(tx, seasonId, await this.hooks.clubsToLock(tx, wallet.id));
     const [treasury] = await tx.db

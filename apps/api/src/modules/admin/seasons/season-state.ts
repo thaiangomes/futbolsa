@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { ADMIN_ERROR_MESSAGES } from "@futbolsa/contracts";
 import { type Database, type DrizzleTx, Tx } from "../../../infra/db/index.js";
 import { seasons } from "../../../infra/db/schema/index.js";
@@ -14,6 +14,16 @@ export const seasonClosedError = () => new DomainError("season_closed", 409, ADM
 /** Recusa com `season_closed` se a temporada está encerrada. */
 export function assertSeasonOpen(season: { status: string } | null | undefined): void {
   if (season?.status === "closed") throw seasonClosedError();
+}
+
+/**
+ * Para quem escreve na temporada atual e não achou nenhuma (`currentSeason` nulo): se a mais nova está encerrada, a
+ * escrita seria nela, então `season_closed`; senão volta sem erro e quem chama recusa com o próprio `no_season`.
+ */
+export async function assertLatestNotClosed(executor: Tx | Database | DrizzleTx): Promise<void> {
+  const db = executor instanceof Tx ? executor.db : executor;
+  const [latest] = await db.select({ status: seasons.status }).from(seasons).orderBy(desc(seasons.year)).limit(1);
+  assertSeasonOpen(latest);
 }
 
 /** Como `assertSeasonOpen`, lendo a temporada pelo id (sem travar). Temporada inexistente passa: quem chama decide o 404. */

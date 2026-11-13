@@ -61,6 +61,7 @@ import { PortfolioLedger, WalletEvents } from "../../portfolio/index.js";
 import type { PostResult } from "../../portfolio/ledger/post.js";
 import { RecalcService } from "../../rankings/recalc.service.js";
 import { AdminLogService } from "../log/index.js";
+import { assertSeasonIdOpen, assertSeasonOpen } from "../seasons/season-state.js";
 import { SettleReversalService } from "../payouts/settle-reversal.js";
 import { reportHash } from "./report.js";
 import { FraudReportService, type CaseRow } from "./report.service.js";
@@ -226,6 +227,7 @@ export class FraudDecisionService {
       await tx.db.select({ id: users.id }).from(users).where(inArray(users.id, lockedUsers)).orderBy(asc(users.id)).for("share");
     }
     const season = await lockSeason(tx, c0.seasonId, "share");
+    assertSeasonOpen(season);
     if (season.status !== "trading" && season.status !== "trading_ended") throw fail("annul_not_allowed");
     const cashMode = season.status === "trading_ended";
     const lockedClubs = await lockClubs(tx, season.id, [...tickers]);
@@ -558,6 +560,8 @@ export class FraudDecisionService {
   private async caseOf(tx: Tx, caseId: number): Promise<CaseRow> {
     const [c] = await tx.db.select().from(fraudCases).where(eq(fraudCases.id, caseId));
     if (!c) throw fail("case_not_found");
+    // caso de temporada encerrada não se decide mais (F15, T7; acréscimo de 2026-11-07)
+    await assertSeasonIdOpen(tx, c.seasonId);
     if (c.status !== "open") throw fail("case_already_decided");
     return c;
   }

@@ -62,8 +62,8 @@ export class BlockService {
       let cancelledBidIds: number[] = [];
       const season = await currentSeason(tx.db);
       const wallet = season ? await this.walletOf(tx, season.id, targetId) : undefined;
-      if (season && wallet && season.status !== "closed") {
-        await lockSeason(tx, season.id, "share");
+      // na temporada encerrada (inclusive a que encerrou enquanto a trava era esperada) o bloqueio não mexe em nada dela
+      if (season && wallet && season.status !== "closed" && (await lockSeason(tx, season.id, "share")).status !== "closed") {
         await lockClubs(tx, season.id, await this.hooks.clubsToLock(tx, wallet.id));
         await lockWallets(tx, [wallet.id]);
         const before = await this.openCounts(tx, wallet.id);

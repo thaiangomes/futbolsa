@@ -20,6 +20,7 @@ import { baseOf, closeAtOfMonth } from "../../rankings/base.js";
 import { participants } from "../../rankings/participants.js";
 import { EquityAt } from "../../portfolio/valuation/equity-at.js";
 import { currentSeason } from "../current-season.js";
+import { assertLatestNotClosed } from "../seasons/season-state.js";
 import { AdminLogService } from "../log/index.js";
 import { fraudParties } from "./parties.js";
 import { monthsOf, reportTrades, seriesInstants, type PairTrade } from "./report.js";
@@ -91,7 +92,11 @@ export class FraudReportService {
   async open(adminId: string, body: CreateFraudCaseBody): Promise<FraudCaseDetail> {
     const caseId = await withTransaction(this.db, async (tx) => {
       const season = await currentSeason(tx.db);
-      if (!season) throw new DomainError("no_season", 409, "Não há temporada em preparação ou em andamento.");
+      if (!season) {
+        // sem temporada atual, a mais nova encerrada recusa: o caso seria dela (F15, T7)
+        await assertLatestNotClosed(tx);
+        throw new DomainError("no_season", 409, "Não há temporada em preparação ou em andamento.");
+      }
       const a = await this.walletOf(tx, season.id, body.accountA);
       const b = await this.walletOf(tx, season.id, body.accountB);
       if (a === b) throw new DomainError("fraud_same_account", 400, FRAUD_ERROR_MESSAGES.fraud_same_account);
