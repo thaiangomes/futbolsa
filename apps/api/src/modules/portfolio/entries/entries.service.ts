@@ -42,7 +42,7 @@ export class EntriesService {
 
   async list(walletId: number, query: EntriesQuery): Promise<EntriesResponse> {
     const limit = query.limit;
-    const filters = [sql`e.wallet_id = ${walletId}`, sql`(e.cash_delta <> 0 or e.shares_delta <> 0)`];
+    const filters = [sql`e.wallet_id = ${walletId}`, sql`(e.cash_delta <> 0 or e.shares_delta <> 0 or e.kind = 'trade_annulled')`];
     if (query.club) filters.push(sql`c.ticker = ${query.club}`);
     if (query.kind) {
       const kinds = kindsOfGroup(query.kind);
@@ -57,13 +57,14 @@ export class EntriesService {
              e.cash_delta::bigint as cash_delta, e.shares_delta, e.price::bigint as price, e.realized::bigint as realized,
              e.cash_after::bigint as cash_after, e.reason,
              pe.reason as event_reason, pe.per_share::bigint as per_share, h.shares as holding_shares,
-             t.in_auction
+             t.in_auction, (ta.trade_id is not null and e.kind = 'trade') as annulled
       from futbolsa.wallet_entries e
       left join futbolsa.clubs c on c.id = e.club_id
       left join futbolsa.payout_credits pc on pc.entry_id = e.id
       left join futbolsa.payout_events pe on pe.id = pc.event_id
       left join futbolsa.payout_holdings h on h.event_id = pe.id and h.wallet_id = e.wallet_id
       left join futbolsa.trades t on e.ref_type = 'trade' and t.id = (case when e.ref_type = 'trade' then e.ref_id::bigint end)
+      left join futbolsa.trade_annulments ta on ta.trade_id = t.id
       where ${sql.join(filters, sql` and `)}
       order by e.at desc, e.id desc
       limit ${limit + 1}`);

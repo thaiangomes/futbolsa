@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, desc, eq, gte, inArray, lte, ne, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, ne, or, sql } from "drizzle-orm";
 import type { ChartRange, MarkersResponse, MyTradesResponse } from "@futbolsa/contracts";
 import { COMMON_ERROR_MESSAGES } from "@futbolsa/contracts";
 import { averagePrice } from "@futbolsa/engine";
@@ -111,6 +111,8 @@ export class MarkersService {
           eq(walletEntries.clubId, club.clubId),
           inArray(walletEntries.kind, ["trade", "ipo_settle", "index_entry", "buyback"]),
           lte(walletEntries.at, new Date(w.to)),
+          // o negócio que o admin anulou por inteiro não é marcador (o que sobrou por falta de ações continua)
+          sql`not exists (select 1 from futbolsa.trade_annulments ta where ${walletEntries.refType} = 'trade' and ta.trade_id = case when ${walletEntries.refType} = 'trade' then ${walletEntries.refId}::bigint end and ta.shares_short = 0)`,
         ),
       )
       .orderBy(desc(walletEntries.at), desc(walletEntries.id))

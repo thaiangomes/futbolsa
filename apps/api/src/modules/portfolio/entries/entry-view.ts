@@ -7,6 +7,7 @@ export const ENTRY_GROUP_OF: Record<string, EntryGroup> = {
   ipo_reserve: "ipo",
   ipo_settle: "ipo",
   trade: "trade",
+  trade_annulled: "trade",
   order_reserve: "other",
   order_release: "other",
   dividend: "dividend",
@@ -42,6 +43,8 @@ export interface EntryRow {
   per_share: number | null;
   holding_shares: number | null;
   in_auction: boolean | null;
+  /** O negócio desta linha foi anulado pelo admin (F14). */
+  annulled: boolean | null;
 }
 
 /**
@@ -73,5 +76,6 @@ export function entryItemOf(r: EntryRow): EntryItem {
     reason: r.reason,
     payout: payoutOf(r),
     inAuction: r.in_auction === true,
+    annulled: r.annulled === true,
   };
 }

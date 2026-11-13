@@ -52,6 +52,7 @@ const entry = (over: Partial<EntryItem> = {}): EntryItem => ({
   at: "2027-04-06T16:00:00.000Z",
   kind: "trade",
   group: "trade",
+  annulled: false,
   club: FLA,
   quantity: -300,
   price: 4500,

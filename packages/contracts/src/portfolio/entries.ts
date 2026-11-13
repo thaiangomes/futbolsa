@@ -41,6 +41,8 @@ export const entryItemSchema = z.strictObject({
   payout: entryPayoutSchema.nullable(),
   /** O negócio saiu num leilão do túnel de preço. */
   inAuction: z.boolean(),
+  /** O negócio desta linha foi anulado pelo admin por trapaça (a linha `trade_annulled` mostra o desfazer). */
+  annulled: z.boolean(),
 });
 export type EntryItem = z.infer<typeof entryItemSchema>;
 
