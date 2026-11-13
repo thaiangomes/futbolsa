@@ -94,6 +94,34 @@ Módulo `src/modules/admin/`, uma subpasta por assunto, cada uma com o próprio 
   `loadSeasonValues`, para a F8, a F9 e a F12).
 - **Nos testes:** `expectAdminOnly(app, db, rota)` (`test/support/admin-routes.ts`) confere 401, 403 e o acesso do admin.
 
+### Jogadores, auditoria e bots (F14, parte 1)
+
+| Pasta | O que faz | Rotas |
+|---|---|---|
+| `players/` | Ver jogadores (busca por prefixo do apelido ou e-mail exato), bloquear e desbloquear, excluir, ajustar saldo | `GET /admin/players`, `GET /admin/players/:id`, `GET .../entries`, `POST .../block`, `POST .../unblock`, `DELETE /admin/players/:id`, `POST .../adjust` |
+| `audit/` | Negócios com comprador e vendedor (a consulta é do `market`, `market/audit/audit-trades.ts`) | `GET /admin/trades` |
+| `bots/` | Ligar e desligar bots por perfil, a visão de mercado dos bots e a tarefa que os faz agir | `GET/PATCH /admin/bots` |
+| `seasons/` | A chave "bots nos rankings" | `PATCH /admin/seasons/:id` com `{ botsInRankings }` (sozinho) |
+
+- **Bloquear** cancela as ordens abertas (`blocked`) e a oferta do IPO (só com o IPO aberto) pelos ganchos do `accounts`;
+  o bloqueado continua dono das ações, recebe dividendos e lê a carteira. **Excluir** usa o `deleteAccount` da F5, que
+  ganhou dois ganchos (`validate` e `record`) para o admin conferir o apelido e gravar o registro na mesma transação.
+- **Ajustar saldo** exige `Idempotency-Key`. Regra pura em `players/adjust.rules.ts`: crédito de ações sai das ações
+  livres da tesouraria pelo **preço exibido**; débito só do que está livre; caixa de `ipo_open` a `trading_ended`, ações só em
+  `trading`. O caixa não passa pela tesouraria.
+- **Bots:** o admin define quantos ficam ativos por perfil (0 a 200). Desliga os de id maior; liga religando os de id menor
+  antes de criar novos. Com o IPO aberto o bot ganha R$ 100.000,00; depois do IPO, pela carteira índice da F11; depois da
+  janela, `bot_entry_closed`. A tarefa `bots-run` (`bots/runner.ts`) roda a cada `BOT_TICK_MINUTES` (padrão 15) e cada bot age com
+  chance `BOT_ACTIVITY × BOT_TICK_MINUTES ÷ 180` (padrão 0,25: ≈ 2,1% por rodada, o mesmo ritmo da simulação calibrada,
+  decidindo em média a cada 12 horas). Os bots passam pelo `placeOrder` da F9, com a porta `bot_inactive` conferida com a carteira
+  travada; `JOBS_ENABLED=false` desliga a tarefa.
+- **Visão dos bots:** `BotView` (motor, `src/sim/botView.ts`) é o que os perfis leem e fazem; a simulação usa `MarketView` e a
+  API usa `LiveBotView` (`bots/live-view.ts`), as duas sobre o `LeagueView` do motor, então o valor justo e a colocação são as
+  mesmas contas. O estado de cada bot fica na memória, com a semente de (temporada, id do bot).
+- **Migração `0004_admin_jogadores`:** índices de `trades` por carteira (a auditoria por jogador), `trade_annulled` em
+  `wallet_entries.kind`, `annulment` em `orders.cancel_reason` e as tabelas da trapaça entre contas (`fraud_cases`,
+  `fraud_case_trades`, `trade_annulments`, `fraud_warnings`, `player_notices`), que a parte 2 da F14 usa.
+
 ## Conferir o login no Supabase
 
 Depois de configurar o login no painel do projeto (Authentication), com o `.env` preenchido
