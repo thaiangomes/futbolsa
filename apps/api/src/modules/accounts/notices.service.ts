@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { and, asc, eq, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, lt, ne, sql } from "drizzle-orm";
 import { NOTICE_ERROR_MESSAGES, noticeBodySchema, type NoticeBody, type NoticeKind, type PendingNotice, type ReadNoticeResponse } from "@futbolsa/contracts";
 import { formatBRL } from "@futbolsa/engine";
 import { Clock } from "../../infra/clock/index.js";
@@ -76,7 +76,8 @@ export class NoticesService {
       .select({ id: playerNotices.id, kind: playerNotices.kind, body: playerNotices.body, nickname: users.nickname, email: users.email })
       .from(playerNotices)
       .innerJoin(users, eq(users.id, playerNotices.userId))
-      .where(and(isNull(playerNotices.emailSentAt), lt(playerNotices.emailAttempts, MAX_MAIL_ATTEMPTS), eq(users.status, "active")))
+      // o bloqueado recebe: o aviso do banimento (`fraud_ban`) é gravado justamente com a conta já bloqueada
+      .where(and(isNull(playerNotices.emailSentAt), lt(playerNotices.emailAttempts, MAX_MAIL_ATTEMPTS), ne(users.status, "deleted")))
       .orderBy(asc(playerNotices.id))
       .limit(MAIL_BATCH);
     let sent = 0;

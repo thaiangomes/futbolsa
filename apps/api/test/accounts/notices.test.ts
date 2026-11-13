@@ -105,6 +105,18 @@ describe("avisos ao jogador", () => {
     expect(mailer.outbox.filter((m) => m.to === ana.email)).toHaveLength(1);
   });
 
+  it("admin 45: o banido recebe o e-mail do banimento (a conta já está bloqueada quando o aviso é gravado)", async () => {
+    const banned = await createAccount(database.db, { status: "blocked" });
+    await give(banned.id, "fraud_ban");
+    mailer.outbox.length = 0;
+    await notices.sendQueued();
+    const mails = mailer.outbox.filter((m) => m.to === banned.email);
+    expect(mails).toHaveLength(1);
+    expect(mails[0]!.subject).toContain("bloqueada");
+    const [row] = await database.db.select().from(playerNotices).where(eq(playerNotices.userId, banned.id));
+    expect(row!.emailSentAt).not.toBeNull();
+  });
+
   it("admin 43: SMTP fora do ar tenta de novo e para em 5", async () => {
     const ana = await createAccount(database.db);
     const id = await give(ana.id);
