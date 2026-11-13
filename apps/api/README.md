@@ -122,6 +122,25 @@ Módulo `src/modules/admin/`, uma subpasta por assunto, cada uma com o próprio 
   `wallet_entries.kind`, `annulment` em `orders.cancel_reason` e as tabelas da trapaça entre contas (`fraud_cases`,
   `fraud_case_trades`, `trade_annulments`, `fraud_warnings`, `player_notices`), que a parte 2 da F14 usa.
 
+### Trapaça entre contas (F14, parte 2)
+Regra em Admin, "Trapaça entre contas"; o desenho está no plano da F14 do vault. Tudo em `/admin`: nenhuma rota fora dele lê os casos, e
+o jogador nunca vê a outra conta.
+- **Alerta** (`admin/fraud/alert-scan.ts`, tarefa `fraud-alert` de 1 minuto, sem trava, `JOBS_ENABLED=false` desliga): lê os negócios
+  suspeitos dos últimos 7 dias (`market/audit/suspect-trades.ts`, até 10 ações, 5% ou mais fora do preço anterior, sem a casa),
+  tira os de casos já decididos e chama `findFraudAlerts` do motor. Cria o caso do par e do clube ou cresce o aberto. `GET
+  /admin/overview` e o evento `admin.pending` trazem `openFraudCases`.
+- **Relatório** (`report.service.ts`): `GET /admin/fraud/cases/:id` calcula na hora, só leitura, os negócios, o peso no clube, o preço
+  com e sem os negócios (`displayedPrices` e `EquityAt` com `ignoreTrades`), o valor justo, o patrimônio e a posição nos fechamentos
+  de mês e os negócios com outros jogadores. `?without=1,2` mostra o efeito de anular só aqueles. `POST /admin/fraud/cases` abre o relatório
+  manual de um par; `GET .../download` baixa o HTML (imprime em PDF pelo navegador).
+- **Anular** (`market/annul/annul-trades.ts`, `portfolio` com a linha `trade_annulled`, `planAnnulment` e `replayCost` do motor):
+  do negócio mais novo para o mais antigo, o que falta fica como está; o preço, os candles e a referência do túnel voltam ao último
+  negócio não anulado. A linha do extrato conta pelo horário do negócio original, então o ranking de cada mês sai sem ele.
+- **Avisos e e-mail** (`accounts/notices.service.ts`, `infra/mail`): `GET /me` traz `pendingNotices`; `POST /me/notices/:id/read` confirma.
+  O e-mail sai por uma tarefa de 1 minuto (`notice-mail`), até 5 tentativas, depois do `COMMIT`. Variáveis: `SMTP_URL`
+  (`smtp://usuario:senha@servidor:587` ou `smtps://...:465`) e `MAIL_FROM`; sem `SMTP_URL` o `LogMailer` só registra o assunto no log.
+  O cliente SMTP é próprio (`infra/mail/smtp-client.ts`, sem biblioteca).
+
 ## Conferir o login no Supabase
 
 Depois de configurar o login no painel do projeto (Authentication), com o `.env` preenchido
