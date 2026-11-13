@@ -6,3 +6,4 @@ export * from "./deletion.service.js";
 export * from "./notices.service.js";
 export * from "./identity.service.js";
 export * from "./season-start.js";
+export * from "./season-results.service.js";

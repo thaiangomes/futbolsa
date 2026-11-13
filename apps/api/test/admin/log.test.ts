@@ -82,6 +82,7 @@ describe("registro do admin (record)", () => {
       "cup.confirm",
       "import.run",
       "season.ipo.postpone",
+      "season.close",
       "suspension.clear",
       "invite.create",
       "invite.revoke",
@@ -91,7 +92,7 @@ describe("registro do admin (record)", () => {
     // as duas dos pagamentos (F12): aprovar não pede motivo, corrigir pede
     expect(reasonRequired("payout.approve")).toBe(false);
     expect(reasonRequired("payout.correct")).toBe(true);
-    expect(Object.keys(ADMIN_ACTIONS)).toHaveLength(30);
+    expect(Object.keys(ADMIN_ACTIONS)).toHaveLength(31);
   });
 
   it("admin 33: ação sem motivo que exige motivo é recusada e nada é gravado", async () => {

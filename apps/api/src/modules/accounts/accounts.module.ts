@@ -18,6 +18,7 @@ import { NoticesService } from "./notices.service.js";
 import { PlayersController } from "./players.controller.js";
 import { RolesController } from "./roles.controller.js";
 import { RolesService } from "./roles.service.js";
+import { SeasonResultsService } from "./season-results.service.js";
 
 /**
  * Conta e login. Global porque o guard de login (de todas as rotas) e o WebSocket perguntam a
@@ -40,7 +41,8 @@ import { RolesService } from "./roles.service.js";
     HistoryService,
     InvitesService,
     RolesService,
+    SeasonResultsService,
   ],
-  exports: [UserResolver, IdentityService, AccountsService, AccountsConfig, AccountClosureHooks, AccountDeletionService, NoticesService],
+  exports: [UserResolver, IdentityService, AccountsService, AccountsConfig, AccountClosureHooks, AccountDeletionService, NoticesService, SeasonResultsService],
 })
 export class AccountsModule {}

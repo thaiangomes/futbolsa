@@ -76,8 +76,8 @@ export interface EndMatches {
   b: number;
 }
 
-export function buybackScene(db: () => Database, app: () => NestFastifyApplication, clock: FixedClock) {
-  const base = correctionScene(db, app, clock);
+export function buybackScene(db: () => Database, app: () => NestFastifyApplication, clock: FixedClock, firstYear?: number) {
+  const base = correctionScene(db, app, clock, firstYear);
   let outsiders: number[] = [];
 
   async function init() {

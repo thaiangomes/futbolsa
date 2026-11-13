@@ -109,9 +109,9 @@ export async function prepareCalls(db: Database): Promise<void> {
   await db.execute(sql`create table if not exists ${CALLS} (id serial primary key, port text not null, season_id int, payload jsonb)`);
 }
 
-export function correctionScene(db: () => Database, app: () => NestFastifyApplication, clock: FixedClock) {
+export function correctionScene(db: () => Database, app: () => NestFastifyApplication, clock: FixedClock, firstYear = 2030) {
   let clubIds = new Map<string, number>();
-  let year = 2030;
+  let year = firstYear;
   let admin: TestAccount;
 
   const club = (ticker: string) => clubIds.get(ticker)!;
@@ -119,7 +119,7 @@ export function correctionScene(db: () => Database, app: () => NestFastifyApplic
 
   /** Antes de tudo: os clubes do seed e o admin. */
   async function init(): Promise<TestAccount> {
-    ({ clubIds } = await seedSeason(db(), 2029));
+    ({ clubIds } = await seedSeason(db(), firstYear - 1));
     admin = await createAccount(db(), { role: "admin" });
     return admin;
   }
