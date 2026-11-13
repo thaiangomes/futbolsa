@@ -8,6 +8,7 @@ import { seasonCups } from "../../infra/db/schema/index.js";
 import { CUP_COMPETITIONS } from "../../infra/db/schema/values.js";
 import { IpoOpeningService, IpoSettlementService } from "../ipo/index.js";
 import { currentSeason } from "./current-season.js";
+import { FraudCasesService } from "./fraud/cases.service.js";
 import { PayoutsStatusService } from "./payouts/outstanding.js";
 import { PendingService } from "./results/pending.service.js";
 import { StandingsService } from "./standings/standings.service.js";
@@ -25,6 +26,7 @@ export class OverviewService {
     private readonly ipoSettlement: IpoSettlementService,
     private readonly clock: Clock,
     private readonly payouts: PayoutsStatusService,
+    private readonly fraud: FraudCasesService,
   ) {}
 
   async compute(): Promise<Overview> {
@@ -53,6 +55,7 @@ export class OverviewService {
       pendingPayouts: outstanding.pending,
       settlingPayouts: outstanding.settling,
       correctionToApply: outstanding.correctionEvents > 0,
+      openFraudCases: await this.fraud.openCount(),
     };
   }
 }

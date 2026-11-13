@@ -24,5 +24,7 @@ export const overviewSchema = z.strictObject({
   settlingPayouts: z.number().int(),
   /** Há resultado mudado depois de pago: uma correção a aplicar. */
   correctionToApply: z.boolean(),
+  /** Casos de trapaça abertos, a decidir (F14). */
+  openFraudCases: z.number().int(),
 });
 export type Overview = z.infer<typeof overviewSchema>;
