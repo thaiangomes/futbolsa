@@ -139,7 +139,8 @@ export class SettleReversalService {
     }
 
     // complementos antes dos estornos: o caixa só fica negativo depois de tudo o que entra
-    const ordered = [...due.filter((d) => d.amount > 0), ...due.filter((d) => d.amount < 0)];
+    // (a recompra de R$ 0,00 entra com as entradas: o crédito dela tira as ações da carteira; revisão T10 da F15)
+    const ordered = [...due.filter((d) => d.amount >= 0), ...due.filter((d) => d.amount < 0)];
     const batches = new Map<number, CreditedBatch>();
     for (const d of ordered) {
       const context = contexts.get(d.eventId)!;
