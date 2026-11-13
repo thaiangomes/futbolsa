@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { ADMIN_ERROR_MESSAGES, type BlockResponse } from "@futbolsa/contracts";
 import { Clock } from "../../../infra/clock/index.js";
 import { DB, type Database, lockClubs, lockSeason, lockWallets, type Tx, withTransaction } from "../../../infra/db/index.js";
@@ -44,6 +44,8 @@ export class BlockService {
 
       let cancelledOrders = 0;
       let cancelledBids = 0;
+      let cancelledOrderIds: number[] = [];
+      let cancelledBidIds: number[] = [];
       const season = await currentSeason(tx.db);
       const wallet = season ? await this.walletOf(tx, season.id, targetId) : undefined;
       if (season && wallet && season.status !== "closed") {
@@ -53,8 +55,10 @@ export class BlockService {
         const before = await this.openCounts(tx, wallet.id);
         await this.hooks.cancelOpen(tx, wallet.id, "blocked", now);
         const after = await this.openCounts(tx, wallet.id);
-        cancelledOrders = before.orders - after.orders;
-        cancelledBids = before.bids - after.bids;
+        cancelledOrderIds = before.orders.filter((id) => !after.orders.includes(id));
+        cancelledBidIds = before.bids.filter((id) => !after.bids.includes(id));
+        cancelledOrders = cancelledOrderIds.length;
+        cancelledBids = cancelledBidIds.length;
       }
       await tx.db.update(users).set({ status: "blocked", blockedReason: reason }).where(eq(users.id, targetId));
       await this.log.record(tx, {
@@ -64,7 +68,7 @@ export class BlockService {
         targetId,
         reason,
         before: { status: user.status, blockedReason: user.blockedReason },
-        after: { status: "blocked", blockedReason: reason, cancelledOrders, cancelledBids },
+        after: { status: "blocked", blockedReason: reason, cancelledOrderIds, cancelledBidIds },
       });
       return { status: "blocked", cancelledOrders, cancelledBids };
     });
@@ -99,15 +103,10 @@ export class BlockService {
     return wallet;
   }
 
-  private async openCounts(tx: Tx, walletId: number): Promise<{ orders: number; bids: number }> {
-    const [o] = await tx.db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(orders)
-      .where(and(eq(orders.walletId, walletId), eq(orders.status, "open")));
-    const [b] = await tx.db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(ipoBids)
-      .where(and(eq(ipoBids.walletId, walletId), eq(ipoBids.status, "active")));
-    return { orders: o!.n, bids: b!.n };
+  /** Os ids das ordens abertas e das ofertas ativas da carteira. */
+  private async openCounts(tx: Tx, walletId: number): Promise<{ orders: number[]; bids: number[] }> {
+    const o = await tx.db.select({ id: orders.id }).from(orders).where(and(eq(orders.walletId, walletId), eq(orders.status, "open"))).orderBy(orders.id);
+    const b = await tx.db.select({ id: ipoBids.id }).from(ipoBids).where(and(eq(ipoBids.walletId, walletId), eq(ipoBids.status, "active"))).orderBy(ipoBids.id);
+    return { orders: o.map((r) => Number(r.id)), bids: b.map((r) => Number(r.id)) };
   }
 }

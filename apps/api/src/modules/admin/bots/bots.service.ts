@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import {
   ADMIN_ERROR_MESSAGES,
   BOT_PROFILE_NAMES,
@@ -103,22 +103,36 @@ export class BotsService {
       if (target === undefined) continue;
       changes.push(await withTransaction(this.db, (tx) => this.changeProfile(tx, adminId, profile, target, body.reason)));
     }
-    // a carteira índice tem a própria transação (trava todos os clubes): depois do COMMIT de cada perfil
+    // a carteira índice tem a própria transação (trava todos os clubes): depois do COMMIT de cada perfil. Cada falha é
+    // coletada, sem parar os outros bots; os que não entraram por a janela ter fechado voltam a ficar desligados, com registro.
+    const notEntered: Array<{ profile: BotProfileName; botId: number }> = [];
     for (const change of changes) {
       for (const botId of change.needsEntry) {
         try {
           await this.entry.enterBot(botId);
         } catch (error) {
           const code = (error as { code?: string }).code;
-          if (code === "entry_window_closed") {
-            // a janela fechou entre a conferência e a entrada: o bot volta a ficar desligado
-            await this.db.update(bots).set({ active: false }).where(eq(bots.id, botId));
-            throw closed();
-          }
+          if (code === "entry_window_closed") notEntered.push({ profile: change.profile, botId });
           // fila cheia, IPO ainda liquidando ou mercado suspenso: o bot fica ligado e a tarefa dos bots entra depois
-          if (code !== "entry_busy" && code !== "entry_not_ready" && code !== "market_suspended" && code !== "entry_not_open") throw error;
+          else if (code !== "entry_busy" && code !== "entry_not_ready" && code !== "market_suspended" && code !== "entry_not_open") throw error;
         }
       }
+    }
+    if (notEntered.length > 0) {
+      await withTransaction(this.db, async (tx) => {
+        const ids = notEntered.map((n) => n.botId).sort((x, y) => x - y);
+        await tx.db.select({ id: bots.id }).from(bots).where(inArray(bots.id, ids)).orderBy(asc(bots.id)).for("no key update");
+        await tx.db.update(bots).set({ active: false }).where(inArray(bots.id, ids));
+        await this.log.record(tx, {
+          actorId: adminId,
+          action: "bots.update",
+          targetType: "bots",
+          targetId: "janela_fechada",
+          before: { turnedOn: ids },
+          after: { turnedOff: ids, why: "bot_entry_closed" },
+        });
+      });
+      throw closed();
     }
     return {
       turnedOn: changes.flatMap((c) => c.turnedOn).sort((a, b) => a - b),
@@ -129,6 +143,8 @@ export class BotsService {
 
   private async changeProfile(tx: Tx, adminId: string, profile: BotProfileName, target: number, reason?: string): Promise<ProfileChange> {
     const now = this.clock.now();
+    // a trava do perfil, antes de ler: sem ela, dois pedidos de criação ao mesmo tempo não se veem (as linhas novas ainda não existem)
+    await tx.db.execute(sql`select pg_advisory_xact_lock(hashtext(${`bots:${profile}`}))`);
     // as linhas do perfil, em ordem de id (NO KEY UPDATE: a carteira do bot aponta para elas)
     const rows = await tx.db.select().from(bots).where(eq(bots.profile, profile)).orderBy(asc(bots.id)).for("no key update");
     const active = rows.filter((r) => r.active);

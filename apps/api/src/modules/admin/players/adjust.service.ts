@@ -105,14 +105,29 @@ export class AdjustService {
       if (!plan.ok) throw fail(plan.code);
       if (body.asset === "shares" && !treasury) throw fail("treasury_insufficient_shares");
 
+      // o registro vem antes dos movimentos só porque o `ref` deles é o id dele; o antes e o depois completam-se logo abaixo
+      const beforeOwn = await positionOf(own.id);
+      const beforeTreasury = treasury ? await positionOf(treasury.id) : null;
       const logId = await this.log.record(tx, {
         actorId: adminId,
         action: "player.adjust",
         targetType: "player",
         targetId,
         reason: body.reason,
-        before: { asset: body.asset, ticker: body.ticker ?? null, cash: ownRow.cash, shares: (await positionOf(own.id))?.shares ?? 0 },
-        after: { delta: body.delta, price },
+        before: {
+          asset: body.asset,
+          ticker: body.ticker ?? null,
+          cash: ownRow.cash,
+          shares: beforeOwn?.shares ?? 0,
+          treasuryShares: beforeTreasury?.shares ?? null,
+        },
+        after: {
+          delta: body.delta,
+          price,
+          cash: body.asset === "cash" ? ownRow.cash + body.delta : ownRow.cash,
+          shares: (beforeOwn?.shares ?? 0) + (body.asset === "shares" ? body.delta : 0),
+          treasuryShares: treasury ? (beforeTreasury?.shares ?? 0) - (body.asset === "shares" ? body.delta : 0) : null,
+        },
       });
 
       const posted: Array<{ result: PostResult; ticker?: string }> = [];

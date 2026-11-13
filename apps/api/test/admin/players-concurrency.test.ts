@@ -89,6 +89,15 @@ describe("admin de jogadores: concorrência", () => {
     admin = await createAccount(database.db, { role: "admin" });
   });
 
+  it("dois admins excluindo o mesmo jogador ao mesmo tempo: um exclui (202) e o outro recebe 404, nunca 401", async () => {
+    for (let i = 0; i < REPS; i++) {
+      const p = await player();
+      const body = { confirmNickname: p.account.nickname, reason: "exclusão concorrente" };
+      const [a, b] = await Promise.all([call(admin, "DELETE", `/admin/players/${p.account.id}`, body), call(admin, "DELETE", `/admin/players/${p.account.id}`, body)]);
+      expect([a.statusCode, b.statusCode].sort()).toEqual([202, 404]);
+    }
+  });
+
   it("ajuste de ações e exclusão da mesma conta ao mesmo tempo: o ajuste entra antes e a exclusão leva tudo, ou é recusado", async () => {
     for (let i = 0; i < REPS; i++) {
       const p = await player();

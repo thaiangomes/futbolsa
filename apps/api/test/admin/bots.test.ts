@@ -141,6 +141,13 @@ describe("bots ao vivo: ligar e desligar", () => {
     expect((await patch({})).statusCode).toBe(400);
   });
 
+  it("dois admins criando o mesmo número de bots de um perfil vazio ao mesmo tempo terminam com esse número, sem passar dele", async () => {
+    const [a, b] = await Promise.all([patch({ captura: 5 }), patch({ captura: 5 })]);
+    expect([a.statusCode, b.statusCode]).toEqual([200, 200]);
+    expect(await profileOf("captura")).toMatchObject({ active: 5, inactive: 0 });
+    expect((await database.db.select().from(bots).where(eq(bots.profile, "captura"))).length).toBe(5);
+  });
+
   it("dois admins mudando o mesmo perfil ao mesmo tempo terminam com um dos dois números, nunca uma mistura", async () => {
     for (let i = 0; i < 6; i++) {
       const [a, b] = await Promise.all([patch({ momentum: 3 + i }), patch({ momentum: 20 - i })]);

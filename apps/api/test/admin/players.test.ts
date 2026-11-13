@@ -188,6 +188,8 @@ describe("admin de jogadores (HTTP)", () => {
       const log = (await logs("player.block")).find((l) => l.targetId === dora.account.id)!;
       expect(log).toMatchObject({ actorId: admin.id, targetId: dora.account.id, reason: "suspeita de trapaça" });
       expect(JSON.stringify(log)).not.toContain(dora.account.email);
+      // o registro guarda os ids do que foi cancelado
+      expect((log.after as { cancelledOrderIds: number[] }).cancelledOrderIds).toHaveLength(2);
     });
 
     it("admin 33: bloquear sem motivo é recusado e nada muda; desbloquear volta ao normal e não recoloca ordens", async () => {

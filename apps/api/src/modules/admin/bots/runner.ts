@@ -126,7 +126,14 @@ export class BotRunner {
       .innerJoin(bots, eq(bots.id, wallets.botId))
       .where(and(eq(orders.seasonId, seasonId), eq(orders.status, "open"), eq(bots.active, false)))
       .orderBy(asc(orders.walletId));
-    for (const { walletId } of rows) report.swept += await this.cancelAllOf(seasonId, walletId, "bot_off", now);
+    for (const { walletId } of rows) {
+      // uma carteira que falha não derruba a rodada: a próxima varredura tenta de novo
+      try {
+        report.swept += await this.cancelAllOf(seasonId, walletId, "bot_off", now);
+      } catch (error) {
+        this.refuse(report, error);
+      }
+    }
   }
 
   private async ipoRound(season: { id: number }, now: Date, report: BotRunReport): Promise<void> {
@@ -140,18 +147,31 @@ export class BotRunner {
     const walletOf = new Map(owned.map((w) => [w.botId!, w.id]));
     for (const bot of active) {
       if (walletOf.has(bot.id)) continue;
-      const opened = await withTransaction(this.db, (tx) =>
-        this.ledger.openWallet(tx, { seasonId: season.id, owner: { type: "bot", botId: bot.id }, at: now, entryMode: "ipo", initialCash: SEASON_START_CASH }),
-      );
-      walletOf.set(bot.id, opened.id);
-      report.wallets++;
+      try {
+        // com a temporada travada: o IPO pode ter fechado, o bot pode ter sido desligado ou um admin pode ter aberto a carteira
+        const opened = await withTransaction(this.db, async (tx) => {
+          const locked = await lockSeason(tx, season.id, "share");
+          if (locked.status !== "ipo_open") return undefined;
+          const [row] = await tx.db.select({ active: bots.active }).from(bots).where(eq(bots.id, bot.id));
+          if (!row?.active) return undefined;
+          const [exists] = await tx.db.select({ id: wallets.id }).from(wallets).where(and(eq(wallets.seasonId, season.id), eq(wallets.botId, bot.id)));
+          if (exists) return undefined;
+          return this.ledger.openWallet(tx, { seasonId: season.id, owner: { type: "bot", botId: bot.id }, at: now, entryMode: "ipo", initialCash: SEASON_START_CASH });
+        });
+        if (opened) {
+          walletOf.set(bot.id, opened.id);
+          report.wallets++;
+        }
+      } catch (error) {
+        this.refuse(report, error);
+      }
     }
 
     // 2. as ofertas de quem ainda não ofertou
     const bidders = new Set(
       (await this.db.selectDistinct({ walletId: ipoBids.walletId }).from(ipoBids).where(eq(ipoBids.seasonId, season.id))).map((r) => r.walletId),
     );
-    const pending = active.filter((b) => !bidders.has(walletOf.get(b.id)!));
+    const pending = active.filter((b) => walletOf.has(b.id) && !bidders.has(walletOf.get(b.id)!));
     if (pending.length === 0) return;
     const snapshot = await this.snapshots.load(season.id, now);
     const bands = await this.bands(season.id);

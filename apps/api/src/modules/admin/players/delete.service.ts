@@ -27,7 +27,9 @@ export class AdminDeleteService {
     if (adminId === targetId) throw new DomainError("cannot_target_self", 409, ADMIN_ERROR_MESSAGES.cannot_target_self);
     const [user] = await this.db.select({ status: users.status }).from(users).where(eq(users.id, targetId));
     if (!user || user.status === "deleted") throw new DomainError("player_not_found", 404, ADMIN_ERROR_MESSAGES.player_not_found);
-    return this.deletion.deleteAccount(targetId, {
+    // dois admins excluindo ao mesmo tempo: o segundo cai na conta já excluída (401 da F5); para o admin é 404
+    try {
+      return await this.deletion.deleteAccount(targetId, {
       validate: (_tx, locked) => {
         if (locked.nickname !== body.confirmNickname) {
           throw new DomainError("nickname_mismatch", 422, ADMIN_ERROR_MESSAGES.nickname_mismatch);
@@ -46,5 +48,9 @@ export class AdminDeleteService {
         });
       },
     });
+    } catch (error) {
+      if ((error as { code?: string }).code === "account_deleted") throw new DomainError("player_not_found", 404, ADMIN_ERROR_MESSAGES.player_not_found);
+      throw error;
+    }
   }
 }
