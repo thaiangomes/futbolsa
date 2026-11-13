@@ -8,6 +8,12 @@ export type LedgerErrorCode =
   | "cost_basis_mismatch"
   | "price_required"
   | "reason_required"
+  /** `trade_annulled` sem o custo e o resultado prontos (`annulled`). */
+  | "annulled_required"
+  /** `annulled` num movimento que não é `trade_annulled`. */
+  | "annulled_not_allowed"
+  /** `trade_annulled` sem o negócio no `ref`. */
+  | "trade_ref_required"
   | "negative_cash"
   | "negative_reserved_cash"
   | "reserved_exceeds_cash"

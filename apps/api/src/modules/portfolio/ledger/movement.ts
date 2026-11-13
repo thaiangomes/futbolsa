@@ -10,7 +10,7 @@ export interface Movement {
   /** Do relógio da API. */
   at: Date;
   kind: WalletEntryKind;
-  /** Obrigatório se mexe em ações ou é dividendo, estorno ou complemento de um clube. */
+  /** Obrigatório se mexe em ações ou é dividendo, estorno, complemento ou anulação de negócio de um clube. */
   clubId?: number;
   cashDelta?: Cents;
   reservedCashDelta?: Cents;
@@ -22,9 +22,17 @@ export interface Movement {
    * Como as ações que entram ou saem mexem no custo: `purchase` soma (negócio,
    * IPO, carteira índice, crédito do admin pelo preço exibido); `sale` tira na
    * proporção com resultado realizado (venda, recompra); `debit` tira na proporção
-   * sem resultado (débito do admin). Obrigatório quando `sharesDelta` não é zero.
+   * sem resultado (débito do admin). Obrigatório quando `sharesDelta` não é zero, menos na anulação.
    */
   costBasis?: "purchase" | "sale" | "debit";
+  /**
+   * Só na linha `trade_annulled` (negócio anulado por trapaça, propostas 16 a 18 do Plano do admin de jogadores
+   * e bots), e nela obrigatório: o custo e o resultado realizado da posição do clube depois do desfazer, já
+   * refeitos por quem chama com `replayCost` do motor, como se o negócio (ou a parte que voltou) não tivesse
+   * existido. Valem no lugar da conta do `costBasis`, que a anulação não leva; o resultado da linha do extrato é
+   * a diferença para o realizado de antes.
+   */
+  annulled?: { cost: Cents; realized: Cents };
   /** O `market` conta as ordens abertas para o limite de 50. */
   openOrdersDelta?: number;
   ref?: { type: string; id: number | string };

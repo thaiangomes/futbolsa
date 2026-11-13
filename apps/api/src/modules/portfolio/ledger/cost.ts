@@ -23,9 +23,18 @@ export interface CostChange {
  *   crédito do admin, que chega com o preço exibido (`creditShares` é o mesmo `buy`);
  * - `sale` (saindo): `sell`, na venda e na recompra, com resultado realizado;
  * - `debit` (saindo): `debitShares`, no débito do admin, sem resultado.
+ * Na anulação de negócio (`trade_annulled`, proposta 18 do Plano do admin de jogadores e bots) não há conta
+ * aqui: o custo e o resultado vêm prontos no movimento (`annulled`, de `replayCost`), mesmo sem ações de volta,
+ * e o resultado da linha é o quanto o realizado mudou.
  * O `post` já conferiu que a posição não fica negativa.
  */
 export function applyCost(before: CostState, m: Movement): CostChange {
+  if (m.kind === "trade_annulled") {
+    // o `validate` já exigiu o `annulled` na anulação
+    const { cost, realized } = m.annulled!;
+    const change = realized - before.realized;
+    return { cost, realized, entryRealized: change === 0 ? null : change };
+  }
   const quantity = m.sharesDelta ?? 0;
   if (quantity === 0) return { cost: before.cost, realized: before.realized, entryRealized: null };
   const position: CostPosition = { shares: before.shares, cost: before.cost, realized: before.realized, dividends: 0 };
