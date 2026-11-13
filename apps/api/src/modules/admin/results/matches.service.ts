@@ -22,6 +22,7 @@ import type { MatchRow } from "./to-engine.js";
 type ClubRow = typeof clubs.$inferSelect;
 
 const invalid = (...fields: string[]) => new DomainError("invalid_input", 400, COMMON_ERROR_MESSAGES.invalid_input, fields);
+const tradingEnded = () => new DomainError("season_trading_ended", 409, ADMIN_ERROR_MESSAGES.season_trading_ended);
 
 /** O jogo como o registro do admin o guarda (antes e depois). */
 function logView(row: MatchRow) {
@@ -115,7 +116,9 @@ export class MatchesService {
     return withTransaction(this.db, async (tx) => {
       const season = await currentSeason(tx.db);
       if (!season) throw new DomainError("no_season", 409, ADMIN_ERROR_MESSAGES.no_season);
-      await lockSeason(tx, season.id, "share");
+      const locked = await lockSeason(tx, season.id, "share");
+      // com a recompra fechada, um jogo novo reabriria uma competição (Admin, critério 37)
+      if (locked.status === "trading_ended") throw tradingEnded();
       const [home, away] = await this.clubsOf(tx, body.homeClubId, body.awayClubId);
       const isLeague = body.competition === "brasileirao-a" || body.competition === "brasileirao-b";
       if (isLeague && body.round === undefined) throw invalid("round");
@@ -179,6 +182,10 @@ export class MatchesService {
 
       const bothGoals = body.homeGoals != null && body.awayGoals != null;
       const status = body.status ?? (bothGoals ? "finished" : (row.status as AdminMatch["status"]));
+      // com a recompra fechada, voltar o jogo para agendado, adiar, desmarcar o adiado ou cancelar reabriria uma
+      // competição (Admin, critério 37; a recompra e o fim da negociação não voltam). Corrigir o placar, quem passou ou o
+      // horário do jogo disputado continua aceito: muda só os valores, pela correção
+      if (season.status === "trading_ended" && status !== row.status && status !== "finished") throw tradingEnded();
       const goals = this.checkState({
         status,
         homeGoals: body.homeGoals !== undefined ? body.homeGoals : row.homeGoals,

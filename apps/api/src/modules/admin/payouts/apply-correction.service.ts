@@ -8,7 +8,7 @@ import { DomainError } from "../../../infra/http/index.js";
 import { currentSeason, type SeasonRow } from "../current-season.js";
 import { AdminLogService } from "../log/admin-log.service.js";
 import { MarketPort } from "../results/ports.js";
-import { roundAndPhase } from "./close-events.service.js";
+import { roundAndPhase, storedCompetition } from "./close-events.service.js";
 import { PayoutEvents } from "./events.js";
 import { type CorrectionPlan, CorrectionPlanService } from "./correction-plan.js";
 import { copyHoldings, writeHoldings } from "./holdings.js";
@@ -119,7 +119,7 @@ export class ApplyCorrectionService {
           eventKey: planned.key,
           kind: planned.next.kind,
           reason: planned.next.reason,
-          competition: planned.next.competition || null,
+          competition: storedCompetition(planned.next.competition),
           ...roundAndPhase(planned.next),
           perShare: planned.next.perShare,
           closedAt: new Date(planned.next.closedAt),
@@ -167,8 +167,8 @@ export class ApplyCorrectionService {
       },
       reason: body.reason,
     });
-    // o valor dos clubes mudou: a casa repõe a cotação
-    await this.market.requestRefresh(tx, [...new Set(plan.events.map((e) => e.ticker))], "correction");
+    // o valor dos clubes mudou: a casa repõe a cotação (com a negociação encerrada, a casa não cota mais)
+    if (season.status !== "trading_ended") await this.market.requestRefresh(tx, [...new Set(plan.events.map((e) => e.ticker))], "correction");
     // o "a receber" dos meses dos fechamentos antigos e novos muda
     await this.rankings.payoutsChanged(tx, { seasonId, closedAts: plan.closedAts });
     tx.afterCommit(() => this.rankings.wake());

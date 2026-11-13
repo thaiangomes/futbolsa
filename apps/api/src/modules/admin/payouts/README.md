@@ -2,7 +2,7 @@
 
 Dono: módulo `admin` (quem recebe, aprovação, correção, estorno e caixa negativo). O desenho está no vault, em
 `Técnica/Planos/Plano dos dividendos e pagamentos.md`. As regras de valor ficam no motor (`eventsFor`, `diffEvents`,
-`settle`); os valores da temporada vêm do `dividends` (`SeasonValuesService`). **Feito: T0 a T10** (falta só o que a F13, a F14 e a F15 ligam).
+`settle`); os valores da temporada vêm do `dividends` (`SeasonValuesService`). **Feito: T0 a T10**; a F15 ligou a recompra (fechamento, liquidação e correção).
 
 ## Arquivos
 | Arquivo | O que faz |
@@ -28,3 +28,4 @@ Dono: módulo `admin` (quem recebe, aprovação, correção, estorno e caixa neg
 - Ordem das travas: temporada → clubes (ticker) → eventos de pagamento (id) → carteiras (id) → tesouraria. Nenhuma operação deste submódulo trava a tesouraria.
 - O `RankingsPort.payoutsChanged` entra na mesma transação que cria, muda, aprova ou corrige o evento; os lotes de crédito não avisam.
 - Nenhuma migração: o esquema da F4 tem tudo.
+- **Recompra corrigida (F15, T5):** com a negociação encerrada, a recompra é provedora de eventos na passada e no plano da correção (`BUYBACK_EVENTS`, em `correction-plan.ts` junto com `DIVIDEND_EVENTS`). A recompra "depois" é `buybackEvents` sobre os dividendos que os resultados de agora dão, com `closedAt` = D; a "antes" é a versão gravada. Antes da aprovação, a passada grava a versão nova `pending` com a foto de D copiada; depois, a recompra entra no `diffEvents`/`settle` pela foto de D e o `apply-correction` a aplica (estorno ou complemento só em dinheiro). Com a temporada em `trading_ended` a casa não é chamada a repor cotação, e a edição de jogo que reabriria uma competição (cadastrar, voltar para agendado, adiar, cancelar) é recusada com `season_trading_ended` (`admin/results/matches.service.ts`); o ajuste de ações do admin já é recusado fora de `trading` (`adjust_not_allowed`).
