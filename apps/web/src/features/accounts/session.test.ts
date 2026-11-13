@@ -13,6 +13,7 @@ const ready: SessionState = {
     role: "player",
     status: "active",
     termsAcceptedAt: "2027-03-20T12:00:00.000Z",
+    pendingNotices: [],
     season: null,
   },
 };

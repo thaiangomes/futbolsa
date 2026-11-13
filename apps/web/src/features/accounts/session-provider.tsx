@@ -4,6 +4,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { useRouter } from "next/navigation";
 import { ApiClient } from "../../lib/api";
 import { type AuthClient, getAuthClient } from "../../lib/auth";
+import { NoticeGate } from "../notices/notice-gate";
 import { loadSession, redirectForAccountPage, type SessionState } from "./session";
 
 interface SessionContextValue {
@@ -55,5 +56,8 @@ export function RequireAccount({ children }: { children: ReactNode }) {
     if (target) router.replace(target);
   }, [router, target]);
   if (state.status !== "ready") return null;
+  // o aviso do admin vem antes de qualquer tela, até o jogador confirmar (F14, T30)
+  const notice = state.me.pendingNotices[0];
+  if (notice) return <NoticeGate notice={notice} />;
   return <>{children}</>;
 }
