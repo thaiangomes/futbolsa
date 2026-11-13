@@ -13,3 +13,4 @@ export * from "./market-maker.js";
 export * from "./players.js";
 export * from "./trades.js";
 export * from "./bots.js";
+export * from "./fraud.js";

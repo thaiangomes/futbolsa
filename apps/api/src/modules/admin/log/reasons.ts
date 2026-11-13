@@ -43,6 +43,11 @@ export const ADMIN_ACTIONS = {
   "player.adjust": { reasonRequired: true },
   "bots.update": { reasonRequired: false },
   "season.bots_in_rankings": { reasonRequired: false },
+  // Trapaça entre contas (F14, parte 2): confirmar anula negócios, descartar e banir pedem motivo; abrir o relatório não
+  "fraud.open": { reasonRequired: false },
+  "fraud.confirm": { reasonRequired: true },
+  "fraud.dismiss": { reasonRequired: true },
+  "fraud.ban": { reasonRequired: true },
 } as const satisfies Record<string, { reasonRequired: boolean }>;
 
 export type AdminAction = keyof typeof ADMIN_ACTIONS;
