@@ -140,6 +140,12 @@ o jogador nunca vê a outra conta.
   O e-mail sai por uma tarefa de 1 minuto (`notice-mail`), até 5 tentativas, depois do `COMMIT`. Variáveis: `SMTP_URL`
   (`smtp://usuario:senha@servidor:587` ou `smtps://...:465`) e `MAIL_FROM`; sem `SMTP_URL` o `LogMailer` só registra o assunto no log.
   O cliente SMTP é próprio (`infra/mail/smtp-client.ts`, sem biblioteca).
+- **Configurar o Gmail (decidido em 2026-11-07):** conta `noreply.futbolsa@gmail.com` com senha de app (verificação em duas etapas ligada
+  e uma senha de app gerada na conta Google). No `.env` (nunca num arquivo commitado), uma destas duas formas:
+  `SMTP_URL=smtps://noreply.futbolsa%40gmail.com:SENHA_DE_APP@smtp.gmail.com:465` (TLS direto) ou
+  `SMTP_URL=smtp://noreply.futbolsa%40gmail.com:SENHA_DE_APP@smtp.gmail.com:587` (STARTTLS); o `@` do usuário vai como `%40` e a
+  senha de app sem espaços. `MAIL_FROM=FutBolsa <noreply.futbolsa@gmail.com>`. O Gmail deixa até 500 e-mails por dia. Para conferir sem
+  esperar uma trapaça: `npm run mail:check -w apps/api -- seu-email@exemplo.com` manda um e-mail de teste e diz se o servidor aceitou.
 
 ## Conferir o login no Supabase
 
