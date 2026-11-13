@@ -124,7 +124,13 @@ function SignupDone({ me, onContinue }: { me: Registered; onContinue(): void }) 
         )}
         {!season && <div className="kv"><span>Caixa agora</span><span>R$ 0,00 até abrir o IPO da próxima temporada</span></div>}
       </section>
-      <div className="row"><button type="button" className="btn btn-p btn-lg" onClick={onContinue}>Continuar</button></div>
+      <div className="row">
+        {season?.needsEntry ? (
+          <a className="btn btn-p btn-lg" href="/entrada">Escolher como entrar</a>
+        ) : (
+          <button type="button" className="btn btn-p btn-lg" onClick={onContinue}>Continuar</button>
+        )}
+      </div>
     </div>
   );
 }
