@@ -18,7 +18,7 @@ import type { Cents } from "../engine/money.js";
 import { Exchange, type Trade } from "../engine/orderbook.js";
 import { finishTime, kickoffTime, type Match } from "../engine/types.js";
 import type { SeasonFile } from "../data/season.js";
-import { AnalystBot, AnticipatorBot, CaptureBot, ConcentratorBot, DividendBot, FanBot, MomentumBot, PROFILES, RandomBot, TraderBot, type Bot, type BotProfile } from "./bots.js";
+import { createBot, FanBot, PROFILES, TraderBot, type Bot, type BotProfile } from "./bots.js";
 import { MarketView } from "./market.js";
 import { Rng } from "./rng.js";
 
@@ -167,15 +167,11 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
       const id = `${profile}-${String(i + 1).padStart(2, "0")}`;
       const botRng = new Rng(Math.floor(rng.next() * 2 ** 32));
       bots.push(
-        profile === "dividendos" ? new DividendBot(id, botRng)
-        : profile === "momentum" ? new MomentumBot(id, botRng)
-        : profile === "torcedor" ? new FanBot(id, botRng, clubIds[fanIndex++ % clubIds.length]!)
-        : profile === "captura" ? new CaptureBot(id, botRng)
-        : profile === "analista" ? new AnalystBot(id, botRng, lastYear)
-        : profile === "concentrador" ? new ConcentratorBot(id, botRng)
-        : profile === "antecipador" ? new AnticipatorBot(id, botRng)
-        : profile === "trader" ? new TraderBot(id, botRng, config.traderHitRates.length ? config.traderHitRates[i % config.traderHitRates.length] : undefined)
-        : new RandomBot(id, botRng),
+        createBot(profile, id, botRng, {
+          ...(profile === "torcedor" ? { fanClubId: clubIds[fanIndex++ % clubIds.length]! } : {}),
+          lastYear,
+          traderHitRate: config.traderHitRates.length ? config.traderHitRates[i % config.traderHitRates.length] : undefined,
+        }),
       );
       ledger.open(id, config.initialCash);
     }

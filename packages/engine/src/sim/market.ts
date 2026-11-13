@@ -11,6 +11,7 @@ import {
   type LeagueProjection,
   type PreparedCup,
 } from "../engine/fairValue.js";
+import type { BotView } from "./botView.js";
 import type { Ledger } from "../engine/ledger.js";
 import { MIN_PRICE, type Cents } from "../engine/money.js";
 import type { Exchange, Side } from "../engine/orderbook.js";
@@ -21,7 +22,7 @@ import { finishTime, kickoffTime, type Match } from "../engine/types.js";
  * histórico diário, tabela com os jogos já encerrados e uma estimativa do
  * valor justo de cada ação (dividendos que ainda devem vir na temporada).
  */
-export class MarketView {
+export class MarketView implements BotView {
   now = 0;
   readonly history = new Map<string, Cents[]>();
   private known: Match[] = [];
@@ -209,6 +210,22 @@ export class MarketView {
     let total = account.cash;
     for (const [clubId, p] of account.positions) total += p.shares * this.price(clubId);
     return total;
+  }
+
+  availableCash(accountId: string): Cents {
+    return this.ledger.availableCash(accountId);
+  }
+
+  availableShares(accountId: string, clubId: string): number {
+    return this.ledger.availableShares(accountId, clubId);
+  }
+
+  cashOf(accountId: string): Cents {
+    return this.ledger.get(accountId).cash;
+  }
+
+  cancelAll(accountId: string): void {
+    this.exchange.cancelAll(accountId);
   }
 
   /** Coloca ordem limitada ajustando preço mínimo e quantidade ao saldo livre. */
