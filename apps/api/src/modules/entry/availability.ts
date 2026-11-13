@@ -1,6 +1,6 @@
 import { and, count, eq } from "drizzle-orm";
 import { ENTRY_AVAILABILITY_MESSAGES, type EntryAvailability } from "@futbolsa/contracts";
-import { entryWindow, ENTRY_LEAGUE, type EntryWindow } from "@futbolsa/engine";
+import { entryWindow, ENTRY_LEAGUE, type EntryWindow, type Match } from "@futbolsa/engine";
 import type { Database, DrizzleTx } from "../../infra/db/index.js";
 import { ipoResults, matches, seasonClubs, wallets } from "../../infra/db/schema/index.js";
 import { currentSeason } from "../admin/current-season.js";
@@ -69,17 +69,18 @@ export async function ipoSettled(db: Db, seasonId: number): Promise<boolean> {
   return listed!.n > 0 && settled!.n >= listed!.n;
 }
 
-/** A janela da entrada a partir dos jogos da Série A (P4): sem coluna nova, calculada a cada chamada. */
-export async function loadEntryWindow(db: Db, seasonId: number, now: Date): Promise<EntryWindow> {
+/** Os jogos da Série A da temporada, no formato do motor (o ticker não importa aqui: só os horários). */
+export async function loadSerieAMatches(db: Db, seasonId: number): Promise<Match[]> {
   const rows = await db
     .select()
     .from(matches)
     .where(and(eq(matches.seasonId, seasonId), eq(matches.competition, ENTRY_LEAGUE)));
-  // só o instante de fechamento interessa: o ticker do motor não importa aqui
-  return entryWindow(
-    rows.map((r) => toEngineMatch(r, (id) => String(id))),
-    now.getTime(),
-  );
+  return rows.map((r) => toEngineMatch(r, (id) => String(id)));
+}
+
+/** A janela da entrada a partir dos jogos da Série A (P4): sem coluna nova, calculada a cada chamada. */
+export async function loadEntryWindow(db: Db, seasonId: number, now: Date): Promise<EntryWindow> {
+  return entryWindow(await loadSerieAMatches(db, seasonId), now.getTime());
 }
 
 export function statusOf(availability: EntryAvailability, extra: Partial<EntryStatus> = {}): EntryStatus {

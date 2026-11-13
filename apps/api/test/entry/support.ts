@@ -1,10 +1,19 @@
+import "reflect-metadata";
+import type { NestFastifyApplication } from "@nestjs/platform-fastify";
+import { afterAll, beforeAll } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { CLUBS } from "@futbolsa/engine/data/clubs";
 import type { Database } from "../../src/infra/db/index.js";
 import { lockWallets, withTransaction } from "../../src/infra/db/index.js";
 import { clubs, ipoResults, matches, seasonClubs, seasons } from "../../src/infra/db/schema/index.js";
 import { post } from "../../src/modules/portfolio/ledger/index.js";
+import { createAccount } from "../support/accounts.js";
+import { createTestApp } from "../support/app.js";
+import { type TestDatabase, useTestDatabase } from "../support/db.js";
 import { openWallets, seedSeason, T0 } from "../support/fixtures.js";
+import { FixedClock } from "../../src/infra/clock/index.js";
+import { EntryService } from "../../src/modules/entry/enter.service.js";
+import type { EntryOwner } from "../../src/modules/entry/availability.js";
 
 /** Ações de cada clube que a tesouraria guarda no começo (o que o IPO deixou para a casa). */
 export const TREASURY_SHARES = 1_000;
@@ -38,8 +47,8 @@ export interface EntryWorld {
 export async function entryWorld(db: Database, o: EntryWorldOptions = {}): Promise<EntryWorld> {
   const { seasonId, clubIds } = await seedSeason(db, 2027);
   const want = o.clubs ?? 20;
-  const tickers = CLUBS.slice(0, want).map((c) => c.id);
-  for (let i = 0; tickers.length < want; i++) {
+  const tickers = typeof o.prices === "object" ? Object.keys(o.prices) : CLUBS.slice(0, want).map((c) => c.id);
+  for (let i = 0; tickers.length < want && typeof o.prices !== "object"; i++) {
     const ticker = `Z${String.fromCharCode(65 + Math.floor(i / 26))}${String.fromCharCode(65 + (i % 26))}3`;
     const [row] = await db.insert(clubs).values({ ticker, name: `Clube extra ${ticker}` }).returning({ id: clubs.id });
     clubIds.set(ticker, row!.id);
@@ -118,4 +127,55 @@ export async function reopenWindow(db: Database, seasonId: number): Promise<void
     .update(matches)
     .set({ status: "scheduled", homeGoals: null, awayGoals: null, finishedAt: null })
     .where(and(eq(matches.seasonId, seasonId), eq(matches.round, 2)));
+}
+
+/** Quem entra: um jogador novo, ativo, sem carteira. */
+export type NewOwner = () => Promise<EntryOwner>;
+
+export interface EntryApp {
+  readonly app: NestFastifyApplication;
+  readonly db: Database;
+  readonly conn: TestDatabase;
+  readonly clock: FixedClock;
+  readonly world: EntryWorld;
+  readonly service: EntryService;
+  readonly newOwner: NewOwner;
+}
+
+/**
+ * A API inteira sobre um banco só do arquivo (ou do `describe`) com o mundo da entrada pronto. Chame dentro de um
+ * `describe`: os ganchos `beforeAll` e `afterAll` ficam no escopo dele.
+ */
+export function useEntryApp(options: EntryWorldOptions & { poolSize?: number; clockAt?: Date } = {}): EntryApp {
+  const database = useTestDatabase(options.poolSize ?? 10);
+  const clock = new FixedClock(options.clockAt ?? T0);
+  let app: NestFastifyApplication;
+  let world: EntryWorld;
+  beforeAll(async () => {
+    world = await entryWorld(database.db, options);
+    app = await createTestApp({ db: database.db, clock });
+  });
+  afterAll(() => app?.close());
+  return {
+    get app() {
+      return app;
+    },
+    get db() {
+      return database.db;
+    },
+    get conn() {
+      return database.conn;
+    },
+    clock,
+    get world() {
+      return world;
+    },
+    get service() {
+      return app.get(EntryService);
+    },
+    newOwner: async () => {
+      const account = await createAccount(database.db);
+      return { type: "user", userId: account.id, status: "active" };
+    },
+  } as EntryApp;
 }
