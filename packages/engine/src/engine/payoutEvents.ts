@@ -104,6 +104,20 @@ function pointsText(points: number): string {
   return `${points} ${points === 1 ? "ponto" : "pontos"}`;
 }
 
+/**
+ * Instante em que um campeonato de pontos corridos fecha: o fim do último jogo, inclusive o adiado disputado depois
+ * da última rodada; `undefined` enquanto falta jogo (ou se não há jogos). É o `closedAt` de `eventsFor` e o que a
+ * entrada no meio da temporada usa para fechar a janela (`entryWindow`).
+ */
+export function leagueClosedAt(matches: readonly Match[]): number | undefined {
+  if (matches.length === 0) return undefined;
+  const closes = roundCloseTimes(matches);
+  const finished = matches.filter((m) => matchPoints(m) !== undefined);
+  const allDone = matches.every((m) => m.status !== "scheduled");
+  const times = [...closes.values(), ...finished.map(finishTime)];
+  return allDone && times.length > 0 ? Math.max(...times) : undefined;
+}
+
 function leagueEvents(
   competition: string,
   matches: readonly Match[],
@@ -116,10 +130,8 @@ function leagueEvents(
   const closes = roundCloseTimes(matches);
   const rounds = [...closes].sort((a, b) => a[1] - b[1]); // [rodada, instante], do fechamento mais cedo ao mais tarde
   const finished = matches.filter((m) => matchPoints(m) !== undefined);
-  const allDone = matches.every((m) => m.status !== "scheduled");
-  const times = [...closes.values(), ...finished.map(finishTime)];
   // O campeonato fecha no fim do último jogo, inclusive o adiado disputado depois da última rodada.
-  const closedAt = allDone && times.length > 0 ? Math.max(...times) : undefined;
+  const closedAt = leagueClosedAt(matches);
 
   // Pontos por (rodada que fecha o pagamento, clube).
   const pending = new Map<string, { stage: string; at: number; clubId: string; points: number; postponed: string[] }>();
