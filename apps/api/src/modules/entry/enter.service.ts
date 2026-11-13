@@ -62,7 +62,8 @@ export class EntryService implements BotEntry {
     const known = await this.answerIfEntered(this.db, owner, mode);
     if (known) return known;
     try {
-      return await this.gate.run(() => this.transaction(owner, mode, options));
+      // o atalho se repete já na vez da fila: o clique repetido não trava os clubes só para cair no passo 8
+      return await this.gate.run(async () => (await this.answerIfEntered(this.db, owner, mode)) ?? this.transaction(owner, mode, options));
     } catch (error) {
       const code = pgErrorCode(error);
       // a trava não saiu em 5 s, ou um comando passou de 15 s: desfeito, e a tela tenta de novo
