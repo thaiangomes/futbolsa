@@ -107,3 +107,41 @@ describe("rotas da entrada no meio da temporada", () => {
     expect(statuses[5]).toBe(429);
   });
 });
+
+/** A carteira da F10 mostra a carteira criada pela entrada (critérios 15 e 16 da Carteira e gráficos). */
+describe("a carteira depois da entrada (F10, critérios 15 e 16)", () => {
+  const database = useTestDatabase(10);
+  const clock = new FixedClock(T0);
+  let app: NestFastifyApplication;
+  beforeAll(async () => {
+    await entryWorld(database.db, { clubs: 20, prices: 4400 });
+    app = await createTestApp({ db: database.db, clock, override: withTestAuth(clock) });
+  });
+  afterAll(() => app?.close());
+
+  const call = async (account: TestAccount, method: "GET" | "POST", url: string, payload?: object) =>
+    app.inject({ method, url, headers: bearer(await account.tokenWith({ at: clock.now() })), payload });
+
+  it("carteira índice: preço médio de R$ 44,00 e rentabilidade 0,00% sobre R$ 100.000,00", async () => {
+    const carla = await createAccount(database.db);
+    await call(carla, "POST", "/entry", { mode: "index" });
+    const res = await call(carla, "GET", "/portfolio");
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    const fla = body.positions.find((p: { club: { ticker: string } }) => p.club.ticker === "FLA3");
+    expect(fla).toBeDefined();
+    expect(fla.shares).toBe(Math.floor(7_000_000 / (20 * 4400)));
+    expect(fla.averagePrice).toBe(4400);
+    expect(body.returnBp).toBe(0);
+    expect(body.equity).toBe(10_000_000);
+  });
+
+  it("só caixa: R$ 100.000,00 em caixa e nenhuma posição", async () => {
+    const davi = await createAccount(database.db);
+    await call(davi, "POST", "/entry", { mode: "cash" });
+    const body = (await call(davi, "GET", "/portfolio")).json();
+    expect(body.positions).toHaveLength(0);
+    expect(body.cash.total).toBe(10_000_000);
+    expect(body.returnBp).toBe(0);
+  });
+});

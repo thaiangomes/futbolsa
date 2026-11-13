@@ -9,6 +9,7 @@ import { currentSeason } from "../admin/current-season.js";
 import { PortfolioLedger } from "../portfolio/index.js";
 import type { Movement, PostManyResult, PostResult } from "../portfolio/ledger/index.js";
 import { findWallet, ipoSettled, loadSerieAMatches, seasonGate, type EntryOwner } from "./availability.js";
+import type { BotEntry } from "./bot-entry.js";
 import { EntryGate } from "./entry-gate.js";
 import { EntryEvents } from "./events.js";
 import { entryError } from "./errors.js";
@@ -37,7 +38,7 @@ const STATEMENT_TIMEOUT = "15s";
  * no meio da temporada ("A transação, passo a passo") e a ordem das travas na Arquitetura da Fase 1 (decisão 4).
  */
 @Injectable()
-export class EntryService {
+export class EntryService implements BotEntry {
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly clock: Clock,
@@ -69,6 +70,14 @@ export class EntryService {
       }
       throw error;
     }
+  }
+
+  /**
+   * A entrada de um bot ligado depois do IPO (Admin, critério 30): sempre a carteira índice, sem escolha, com a mesma
+   * transação, a mesma janela e a mesma repetição da pessoa. Bot não tem login: sem aviso no WebSocket.
+   */
+  enterBot(botId: number, options: EnterOptions = {}): Promise<EnterOutcome> {
+    return this.enter({ type: "bot", botId }, "index", options);
   }
 
   private transaction(owner: EntryOwner, mode: EntryModeChoice, options: EnterOptions): Promise<EnterOutcome> {

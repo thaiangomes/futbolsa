@@ -6,6 +6,7 @@ import { Clock } from "../../infra/clock/index.js";
 import { DB, type Database, lockSeason, type Tx, withTransaction } from "../../infra/db/index.js";
 import { authIdentities, invites, seasons, users, wallets } from "../../infra/db/schema/index.js";
 import { currentSeason as openSeason } from "../admin/current-season.js";
+import { readAvailability } from "../entry/availability.js";
 import { PortfolioLedger } from "../portfolio/index.js";
 import { AccountsConfig } from "./accounts.config.js";
 import { accountError, mapUniqueViolation } from "./errors.js";
@@ -24,6 +25,15 @@ export class AccountsService {
     private readonly config: AccountsConfig,
   ) {}
 
+  /**
+   * A janela da entrada no meio ainda não fechou (a Série A tem jogo por disputar): só então a pessoa sem carteira vai para
+   * a tela de entrada (F11). `accounts` pergunta ao `entry`, nunca o contrário (P7). Roda só para quem ainda não tem carteira.
+   */
+  private async entryWindowOpen(user: ResolvedUser): Promise<boolean> {
+    const status = await readAvailability(this.db, { type: "user", userId: user.id, status: user.status }, this.clock.now());
+    return status.availability !== "window_closed";
+  }
+
   /** `GET /me`: sem conta, só se o e-mail da própria pessoa está liberado; com conta, a situação dela. */
   async me(identity: AuthIdentity, user: ResolvedUser | null): Promise<MeResponse> {
     if (!user) return { registered: false, invited: await this.isInvited(identity.email) };
@@ -40,7 +50,7 @@ export class AccountsService {
         status: season.status as never,
         ipoOpensAt: season.ipoOpensAt?.toISOString() ?? null,
         hasWallet: Boolean(wallet),
-        needsEntry: !wallet && ENTRY_STATUSES.has(season.status),
+        needsEntry: !wallet && ENTRY_STATUSES.has(season.status) && (await this.entryWindowOpen(user)),
       };
     }
     return {
