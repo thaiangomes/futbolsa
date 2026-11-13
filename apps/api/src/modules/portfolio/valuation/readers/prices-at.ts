@@ -13,8 +13,8 @@ export interface ClubPrice {
  * O preço exibido de cada clube listado em `at`, pela regra do dono (`market`: o último negócio até `at`, ou o preço
  * do IPO). Uma consulta de preços e uma da lista de ids, não importa quantas carteiras.
  */
-export async function pricesAt(tx: Tx, seasonId: number, at: Date): Promise<Map<number, ClubPrice>> {
-  const byTicker = await displayedPrices(tx.db, seasonId, at);
+export async function pricesAt(tx: Tx, seasonId: number, at: Date, options: { ignoreTrades?: ReadonlySet<number> } = {}): Promise<Map<number, ClubPrice>> {
+  const byTicker = await displayedPrices(tx.db, seasonId, at, options);
   const rows = await tx.db.execute(sql`
     select c.id as club_id, c.ticker from futbolsa.season_clubs sc join futbolsa.clubs c on c.id = sc.club_id where sc.season_id = ${seasonId}`);
   const out = new Map<number, ClubPrice>();
