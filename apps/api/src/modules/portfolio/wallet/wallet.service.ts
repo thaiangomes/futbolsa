@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { ClubResult, PortfolioClub, PositionView, WalletView } from "@futbolsa/contracts";
 import { COMMON_ERROR_MESSAGES } from "@futbolsa/contracts";
 import { type CostPosition, mulDivRound, returnBp, summarize, averagePrice } from "@futbolsa/engine";
@@ -44,6 +44,30 @@ export class WalletService {
       .where(and(eq(wallets.seasonId, season.id), eq(wallets.userId, userId)));
     if (!wallet) throw new DomainError(WALLET_NOT_FOUND, 404, "Você ainda não entrou na temporada.");
     return this.view(wallet.id);
+  }
+
+  /**
+   * Entre temporadas (Conta e login, critérios 16 e 17): a temporada encerrada deixou a carteira em R$ 0,00 e sem ações; a
+   * seguinte ainda não abriu o IPO (ou nem foi preparada). Mostra a carteira zerada, sem retorno, com o ano encerrado e a data
+   * em que o IPO seguinte abre, quando já marcada. Sem carteira em temporada encerrada, `null` (cai no 404 de sempre).
+   */
+  private async betweenSeasons(userId: string, nextIpoOpensAt: Date | null): Promise<WalletView | null> {
+    const [last] = await this.db
+      .select({ walletId: wallets.id, year: seasons.year })
+      .from(wallets)
+      .innerJoin(seasons, eq(seasons.id, wallets.seasonId))
+      .where(and(eq(wallets.userId, userId), eq(seasons.status, "closed")))
+      .orderBy(desc(seasons.year))
+      .limit(1);
+    if (!last) return null;
+    const view = await this.view(last.walletId);
+    return {
+      ...view,
+      returnBp: 0,
+      positions: [],
+      results: [],
+      between: { closedYear: last.year, nextIpoOpensAt: nextIpoOpensAt ? nextIpoOpensAt.toISOString() : null },
+    };
   }
 
   async view(walletId: number, now: Date = this.clock.now()): Promise<WalletView> {
