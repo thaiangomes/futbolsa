@@ -23,10 +23,10 @@ const level = { price: 4410, quantity: 10, orders: 1 };
 const trade = { id: 7, at: "2027-04-05T13:05:00.000Z", price: 4430, quantity: 50 };
 
 describe("contratos: códigos de recusa", () => {
-  it("contratos: os códigos de recusa são exatamente o RejectCode do motor mais os quatro do banco", () => {
+  it("contratos: os códigos de recusa são exatamente o RejectCode do motor mais os cinco do banco (um é do bot desligado, F14)", () => {
     // Igualdade nos dois sentidos, conferida pelo compilador: se o motor ganhar ou perder um código, o typecheck falha.
     type Engine = RejectCode;
-    type Database = "account_blocked" | "email_not_confirmed" | "club_suspended" | "market_closed";
+    type Database = "account_blocked" | "bot_inactive" | "email_not_confirmed" | "club_suspended" | "market_closed";
     type Contract = (typeof ORDER_REJECT_CODES)[number];
     const same: [Exclude<Engine | Database, Contract>, Exclude<Contract, Engine | Database>] extends [never, never] ? true : false = true;
     expect(same).toBe(true);
@@ -43,6 +43,7 @@ describe("contratos: códigos de recusa", () => {
         "self_trade",
         "club_in_auction",
         "account_blocked",
+        "bot_inactive",
         "email_not_confirmed",
         "club_suspended",
         "market_closed",

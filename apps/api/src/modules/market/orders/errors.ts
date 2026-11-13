@@ -19,6 +19,7 @@ const STATUS: Record<MarketErrorCode, number> = {
   self_trade: 422,
   club_in_auction: 422,
   account_blocked: 403,
+  bot_inactive: 409,
   email_not_confirmed: 403,
   club_suspended: 409,
   market_closed: 409,

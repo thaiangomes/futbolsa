@@ -139,6 +139,8 @@ export function leagueViewsAt(data: FairValueData, now: number): Map<string, Lea
     view.setKnownMatches(leagueMatches.filter((m) => m.status === "finished"));
     const closedAt = closes[competition];
     view.placementPaid = closedAt !== undefined && closedAt <= now && data.officialStandings[competition] !== undefined;
+    // todo clube do campeonato tem a visão (o adversário não listado entra na estimativa dos bots)
+    for (const club of clubs) if (!out.has(club)) out.set(club, view);
     for (const ticker of listed) {
       const mine = closed.filter((e) => e.clubId === ticker);
       const points = mine.filter((e) => e.kind === "points" && e.competition === competition).reduce((sum, e) => sum + e.perShare, 0);
