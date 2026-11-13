@@ -99,6 +99,7 @@ export class SeasonsService {
    * o `ipoClosesAt` antes da abertura é `ipo_not_open`.
    */
   async patch(actorId: string, id: number, body: PatchSeasonBody): Promise<SeasonView> {
+    if (body.botsInRankings !== undefined) return this.setBotsInRankings(actorId, id, body.botsInRankings, body.reason);
     if (body.ipoClosesAt === undefined) return this.patchPreparing(actorId, id, body);
     const newClosesAt = new Date(body.ipoClosesAt);
     return withTransaction(this.db, async (tx) => {
@@ -108,6 +109,28 @@ export class SeasonsService {
       // Em `preparing`, o adiamento recusa com `ipo_not_open` antes de gravar qualquer coisa.
       const updated = await this.closing.postponeClose(tx, id, newClosesAt, actorId, body.reason);
       return toSeasonView(updated);
+    });
+  }
+
+  /**
+   * A chave dos bots nos rankings (F14, T8; Rankings 6 a 8): em qualquer fase menos temporada encerrada, com registro. A F13 lê
+   * a chave a cada cálculo da parcial (vale na hora) e guarda `bots_included` no fechamento; aqui só se grava.
+   */
+  private async setBotsInRankings(actorId: string, id: number, on: boolean, reason?: string): Promise<SeasonView> {
+    return withTransaction(this.db, async (tx) => {
+      const season = await this.lockExisting(tx, id);
+      if (season.status === "closed") throw new DomainError("season_closed", 409, ADMIN_ERROR_MESSAGES.season_closed);
+      const [updated] = await tx.db.update(seasons).set({ botsInRankings: on }).where(eq(seasons.id, id)).returning();
+      await this.log.record(tx, {
+        actorId,
+        action: "season.bots_in_rankings",
+        targetType: "season",
+        targetId: String(id),
+        before: { botsInRankings: season.botsInRankings },
+        after: { botsInRankings: on },
+        reason,
+      });
+      return toSeasonView(updated!);
     });
   }
 

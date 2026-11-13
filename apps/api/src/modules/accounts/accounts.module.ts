@@ -35,6 +35,6 @@ import { RolesService } from "./roles.service.js";
     InvitesService,
     RolesService,
   ],
-  exports: [UserResolver, IdentityService, AccountsService, AccountClosureHooks, AccountDeletionService],
+  exports: [UserResolver, IdentityService, AccountsService, AccountsConfig, AccountClosureHooks, AccountDeletionService],
 })
 export class AccountsModule {}

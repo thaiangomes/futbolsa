@@ -91,6 +91,9 @@ export const trades = futbolsa.table(
   (t) => [
     index("trades_club_at_idx").on(t.clubId, t.at),
     index("trades_season_at_idx").on(t.seasonId, t.at),
+    // a auditoria do admin filtra por carteira (F14, T6)
+    index("trades_buyer_at_idx").on(t.buyerWalletId, t.at, t.id),
+    index("trades_seller_at_idx").on(t.sellerWalletId, t.at, t.id),
     check("trades_values_check", sql`${t.price} > 0 and ${t.quantity} > 0`),
   ],
 );
@@ -114,4 +117,25 @@ export const marketRefreshRequests = futbolsa.table(
     index("market_refresh_requests_pending_idx").on(t.clubId).where(sql`${t.doneAt} is null`),
     check("market_refresh_requests_reason_check", oneOf(t.reason, REFRESH_REASONS)),
   ],
+);
+
+/**
+ * Negócios anulados pelo admin (trapaça entre contas, F14). `trades` não se edita, então a marca de anulado é
+ * uma tabela, e o que desfaz o negócio são linhas novas (`trade_annulled`). Histórico: o gatilho proíbe editar e
+ * apagar. Um negócio só se anula uma vez.
+ */
+export const tradeAnnulments = futbolsa.table(
+  "trade_annulments",
+  {
+    tradeId: bigId("trade_id")
+      .primaryKey()
+      .references(() => trades.id),
+    /** O caso de trapaça que anulou (sem chave estrangeira: a tabela do caso é do `admin`). */
+    caseId: bigId("case_id").notNull(),
+    at: instant("at").notNull(),
+    sharesReturned: integer("shares_returned").notNull().default(0),
+    cashReturned: money("cash_returned").notNull().default(0),
+    sharesShort: integer("shares_short").notNull().default(0),
+  },
+  (t) => [check("trade_annulments_values_check", sql`${t.sharesReturned} >= 0 and ${t.sharesShort} >= 0`)],
 );

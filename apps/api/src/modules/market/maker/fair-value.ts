@@ -5,6 +5,7 @@ import {
   prepareCups,
   projectLeague,
   type Cents,
+  LeagueView,
   type LeagueProjection,
   type Match,
   type SeasonValues,
@@ -102,4 +103,51 @@ export function fairValuesAt(data: FairValueData, now: number): Map<string, Cent
     );
   }
   return result;
+}
+
+/**
+ * As visões do campeonato para os bots ao vivo (F14, T11): uma `LeagueView` por divisão, do mesmo motor que a simulação
+ * usa, montada da mesma foto do banco que o valor justo da casa (`fairValuesAt`) usa. O que está "pago" é o que o motor
+ * dá como fechado até o instante. Devolve a visão de cada clube listado (por ticker).
+ */
+export function leagueViewsAt(data: FairValueData, now: number): Map<string, LeagueView> {
+  const { matches, values } = data;
+  const { events, closes } = eventsFor({ matches, standings: data.officialStandings, values, listed: new Set(data.listed.keys()) });
+  const closed = events.filter((e) => e.closedAt <= now);
+  const cupMatches = CUPS.filter((c) => values.cups[c] !== undefined && matches.some((m) => m.competition === c && m.phase !== undefined)).map((c) => ({
+    rules: values.cups[c]!,
+    matches: matches.filter((m) => m.competition === c && m.phase !== undefined),
+  }));
+
+  const out = new Map<string, LeagueView>();
+  for (const division of ["A", "B"] as const) {
+    const competition = LEAGUE_OF[division];
+    const rules = values.leagues[competition];
+    const listed = [...data.listed].filter(([, d]) => d === division).map(([ticker]) => ticker);
+    if (!rules || listed.length === 0) continue;
+    const leagueMatches = matches.filter((m) => m.competition === competition && m.status !== "cancelled");
+    if (leagueMatches.length === 0) continue;
+    const clubs = new Set<string>();
+    for (const m of leagueMatches) {
+      clubs.add(m.home);
+      clubs.add(m.away);
+    }
+    const view = new LeagueView([...clubs], rules, leagueMatches);
+    view.now = now;
+    view.buybackMultiple = data.buybackMultiple;
+    view.setCups(cupMatches);
+    view.setKnownMatches(leagueMatches.filter((m) => m.status === "finished"));
+    const closedAt = closes[competition];
+    view.placementPaid = closedAt !== undefined && closedAt <= now && data.officialStandings[competition] !== undefined;
+    // todo clube do campeonato tem a visão (o adversário não listado entra na estimativa dos bots)
+    for (const club of clubs) if (!out.has(club)) out.set(club, view);
+    for (const ticker of listed) {
+      const mine = closed.filter((e) => e.clubId === ticker);
+      const points = mine.filter((e) => e.kind === "points" && e.competition === competition).reduce((sum, e) => sum + e.perShare, 0);
+      view.paidPoints.set(ticker, rules.perPoint > 0 ? Math.round(points / rules.perPoint) : 0);
+      view.cupPaid.set(ticker, mine.filter((e) => e.kind === "cup_phase" || e.kind === "cup_title").reduce((sum, e) => sum + e.perShare, 0));
+      out.set(ticker, view);
+    }
+  }
+  return out;
 }

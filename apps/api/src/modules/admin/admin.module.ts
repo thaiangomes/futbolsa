@@ -2,6 +2,9 @@ import { Module } from "@nestjs/common";
 import { IpoModule } from "../ipo/index.js";
 import { AdminLogModule } from "./log/index.js";
 import { OverviewController, OverviewService } from "./overview.service.js";
+import { BotsModule } from "./bots/bots.module.js";
+import { AuditModule } from "./audit/audit.module.js";
+import { PlayersModule } from "./players/players.module.js";
 import { PayoutsModule } from "./payouts/payouts.module.js";
 import { ResultsModule } from "./results/results.module.js";
 import { SeasonsModule } from "./seasons/seasons.module.js";
@@ -14,7 +17,7 @@ import { SuspensionModule } from "./suspension/suspension.module.js";
  * abrir o IPO (do módulo `ipo`, que nunca importa o `admin` de volta).
  */
 @Module({
-  imports: [AdminLogModule, ResultsModule, PayoutsModule, StandingsModule, SeasonsModule, SuspensionModule, IpoModule],
+  imports: [AdminLogModule, PlayersModule, AuditModule, BotsModule, ResultsModule, PayoutsModule, StandingsModule, SeasonsModule, SuspensionModule, IpoModule],
   controllers: [OverviewController],
   providers: [OverviewService],
 })

@@ -10,3 +10,6 @@ export * from "./overview.js";
 export * from "./events.js";
 export * from "./payouts.js";
 export * from "./market-maker.js";
+export * from "./players.js";
+export * from "./trades.js";
+export * from "./bots.js";

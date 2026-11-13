@@ -29,6 +29,13 @@
       "when": 1794518388974,
       "tag": "0003_rankings_recalculo",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794535997121,
+      "tag": "0004_admin_jogadores",
+      "breakpoints": true
     }
   ]
 }

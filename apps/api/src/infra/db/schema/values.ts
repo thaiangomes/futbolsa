@@ -59,6 +59,7 @@ export const WALLET_ENTRY_KINDS = [
   "buyback",
   "season_close",
   "account_deleted",
+  "trade_annulled",
 ] as const;
 export type WalletEntryKind = (typeof WALLET_ENTRY_KINDS)[number];
 
@@ -84,6 +85,7 @@ export const ORDER_CANCEL_REASONS = [
   "house_refresh",
   "suspension",
   "market_remainder",
+  "annulment",
 ] as const;
 export type OrderCancelReason = (typeof ORDER_CANCEL_REASONS)[number];
 
@@ -102,3 +104,13 @@ export type PayoutStatus = (typeof PAYOUT_STATUSES)[number];
 
 export const RANKING_PERIODS = ["month", "season"] as const;
 export type RankingPeriod = (typeof RANKING_PERIODS)[number];
+
+/** Caso de trapaça entre contas (F14, pista D): de onde veio e como está. */
+export const FRAUD_CASE_ORIGINS = ["alert", "manual"] as const;
+export type FraudCaseOrigin = (typeof FRAUD_CASE_ORIGINS)[number];
+export const FRAUD_CASE_STATUSES = ["open", "confirmed", "dismissed"] as const;
+export type FraudCaseStatus = (typeof FRAUD_CASE_STATUSES)[number];
+
+/** Avisos ao jogador (F14). */
+export const PLAYER_NOTICE_KINDS = ["fraud_warning", "fraud_ban"] as const;
+export type PlayerNoticeKind = (typeof PLAYER_NOTICE_KINDS)[number];

@@ -1,7 +1,7 @@
 import type { Bid, PriceBand } from "../engine/bookbuilding.js";
 import type { Cents } from "../engine/money.js";
 import { finishTime, kickoffTime, type Match } from "../engine/types.js";
-import type { MarketView } from "./market.js";
+import type { BotView } from "./botView.js";
 import type { Rng } from "./rng.js";
 
 /**
@@ -28,8 +28,8 @@ export interface Bot {
   readonly id: string;
   readonly profile: BotProfile;
   /** Intenções de compra no IPO (soma de quantidade × preço máximo <= caixa). */
-  ipoBids(view: MarketView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid>;
-  act(view: MarketView): void;
+  ipoBids(view: BotView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid>;
+  act(view: BotView): void;
 }
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -41,8 +41,8 @@ abstract class BaseBot implements Bot {
     readonly id: string,
     protected readonly rng: Rng,
   ) {}
-  abstract ipoBids(view: MarketView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid>;
-  abstract act(view: MarketView): void;
+  abstract ipoBids(view: BotView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid>;
+  abstract act(view: BotView): void;
 
   protected bid(quantity: number, maxPrice: number): Bid | undefined {
     const q = Math.floor(quantity);
@@ -60,7 +60,7 @@ abstract class ValueBot extends BaseBot {
     this.margin = rng.uniform(0.05, 0.2);
   }
 
-  protected estimate(view: MarketView, clubId: string): number {
+  protected estimate(view: BotView, clubId: string): number {
     let e = this.noise.get(clubId);
     if (e === undefined) {
       e = this.rng.normal(0, 0.1);
@@ -70,7 +70,7 @@ abstract class ValueBot extends BaseBot {
   }
 
   /** No IPO só entra nos clubes em que o justo menos a margem cabe na faixa. */
-  protected valueIpoBids(view: MarketView, bands: Map<string, PriceBand>, cash: Cents, skip?: string): Map<string, Bid> {
+  protected valueIpoBids(view: BotView, bands: Map<string, PriceBand>, cash: Cents, skip?: string): Map<string, Bid> {
     const bids = new Map<string, Bid>();
     const targets = [...bands].filter(
       ([clubId, band]) => clubId !== skip && this.estimate(view, clubId) * (1 - this.margin) >= band.min,
@@ -85,14 +85,14 @@ abstract class ValueBot extends BaseBot {
   }
 
   /** Compra abaixo do justo menos a margem; vende metade acima do justo mais `sellAbove`. */
-  protected tradeOnValue(view: MarketView, clubId: string, worth: number, sellAbove = this.margin): void {
+  protected tradeOnValue(view: BotView, clubId: string, worth: number, sellAbove = this.margin): void {
     const price = view.price(clubId);
     const fair = this.estimate(view, clubId);
     if (price < fair * (1 - this.margin)) {
       const limit = Math.min(fair * (1 - this.margin), price * 1.03);
       view.limit(this.id, clubId, "buy", (worth * 0.15) / limit, limit);
     } else if (price > fair * (1 + sellAbove)) {
-      const held = view.ledger.availableShares(this.id, clubId);
+      const held = view.availableShares(this.id, clubId);
       if (held > 0) view.limit(this.id, clubId, "sell", Math.ceil(held / 2), Math.max(fair * (1 + sellAbove), price * 0.97));
     }
   }
@@ -101,12 +101,12 @@ abstract class ValueBot extends BaseBot {
 export class DividendBot extends ValueBot {
   readonly profile = "dividendos";
 
-  ipoBids(view: MarketView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
+  ipoBids(view: BotView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
     return this.valueIpoBids(view, bands, cash * 0.9);
   }
 
-  act(view: MarketView): void {
-    view.exchange.cancelAll(this.id);
+  act(view: BotView): void {
+    view.cancelAll(this.id);
     const worth = view.netWorth(this.id);
     for (const clubId of this.rng.shuffle([...view.clubIds]).slice(0, 4)) this.tradeOnValue(view, clubId, worth);
   }
@@ -126,12 +126,12 @@ export class MomentumBot extends ValueBot {
     this.bias = rng.uniform(0.2, 0.4);
   }
 
-  ipoBids(view: MarketView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
+  ipoBids(view: BotView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
     return this.valueIpoBids(view, bands, cash * 0.9);
   }
 
-  act(view: MarketView): void {
-    view.exchange.cancelAll(this.id);
+  act(view: BotView): void {
+    view.cancelAll(this.id);
     const worth = view.netWorth(this.id);
     for (const clubId of this.rng.shuffle([...view.clubIds]).slice(0, 5)) {
       const price = view.price(clubId);
@@ -139,7 +139,7 @@ export class MomentumBot extends ValueBot {
       const hot = view.winStreak(clubId) >= 3 || (past !== undefined && price / past - 1 > this.threshold);
       // Às vezes (metade das vezes) se empolga com a fase boa e paga acima do justo.
       if (hot && this.rng.chance(0.5)) {
-        const held = view.ledger.availableShares(this.id, clubId);
+        const held = view.availableShares(this.id, clubId);
         const room = worth * 0.15 - held * price;
         const limit = Math.min(price * 1.01, this.estimate(view, clubId) * (1 + this.bias));
         if (room > 0) view.limit(this.id, clubId, "buy", Math.min(worth * 0.05, room) / limit, limit);
@@ -167,7 +167,7 @@ export class FanBot extends ValueBot {
     this.bias = rng.uniform(0.3, 0.5);
   }
 
-  ipoBids(view: MarketView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
+  ipoBids(view: BotView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
     // 40% do caixa no próprio time, aceitando pagar acima do justo; o resto pelo valor.
     const bids = this.valueIpoBids(view, bands, cash * 0.5, this.club);
     const band = bands.get(this.club)!;
@@ -177,8 +177,8 @@ export class FanBot extends ValueBot {
     return bids;
   }
 
-  act(view: MarketView): void {
-    view.exchange.cancelAll(this.id);
+  act(view: BotView): void {
+    view.cancelAll(this.id);
     const worth = view.netWorth(this.id);
     const last = view.lastResult(this.club);
     const newWin = last !== undefined && last.at > this.lastSeen && last.result === "W";
@@ -193,7 +193,7 @@ export class FanBot extends ValueBot {
     if (hype || (newWin && this.rng.chance(0.3))) {
       const price = view.price(this.club);
       const limit = Math.min(price * 1.03, this.estimate(view, this.club) * (1 + this.bias));
-      view.limit(this.id, this.club, "buy", (view.ledger.availableCash(this.id) * 0.3) / limit, limit);
+      view.limit(this.id, this.club, "buy", (view.availableCash(this.id) * 0.3) / limit, limit);
     } else {
       // Pelo valor, mas só vende o próprio time bem acima do justo.
       this.tradeOnValue(view, this.club, worth, this.bias);
@@ -213,7 +213,7 @@ export class RandomBot extends BaseBot {
     this.targetInStocks = rng.uniform(0.5, 0.8);
   }
 
-  ipoBids(view: MarketView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
+  ipoBids(view: BotView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
     const bids = new Map<string, Bid>();
     const chosen = this.rng.shuffle([...bands.keys()]).slice(0, 8);
     const budget = (cash * 0.9) / chosen.length;
@@ -226,21 +226,21 @@ export class RandomBot extends BaseBot {
     return bids;
   }
 
-  act(view: MarketView): void {
-    view.exchange.cancelAll(this.id);
+  act(view: BotView): void {
+    view.cancelAll(this.id);
     const worth = view.netWorth(this.id);
     // Mantém perto de uma fração-alvo do patrimônio em ações; fora da faixa,
     // pende para comprar ou vender. Sem isso o caixa sobrando só empurra preço.
-    const inStocks = (worth - view.ledger.get(this.id).cash) / worth;
+    const inStocks = (worth - view.cashOf(this.id)) / worth;
     const buyChance = inStocks < this.targetInStocks - 0.05 ? 0.8 : inStocks > this.targetInStocks + 0.05 ? 0.2 : 0.5;
     const orders = this.rng.int(1, 2);
     for (let i = 0; i < orders; i++) {
       const side = this.rng.chance(buyChance) ? "buy" : "sell";
-      const owned = view.clubIds.filter((id) => view.ledger.availableShares(this.id, id) > 0);
+      const owned = view.clubIds.filter((id) => view.availableShares(this.id, id) > 0);
       if (side === "sell" && owned.length === 0) continue;
       const clubId = this.rng.pick(side === "sell" ? owned : view.clubIds);
       const price = view.price(clubId);
-      const held = view.ledger.availableShares(this.id, clubId);
+      const held = view.availableShares(this.id, clubId);
       const quantity = Math.max(1, (worth * this.rng.uniform(0.01, 0.03)) / price);
       const limit = price * (1 + this.rng.normal(0, 0.015));
       // Não compra mais de 10% acima do justo nem vende mais de 10% abaixo dele.
@@ -287,7 +287,7 @@ export class TraderBot extends BaseBot {
     this.horizon = rng.uniform(24, 72) * HOUR_MS;
   }
 
-  ipoBids(view: MarketView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
+  ipoBids(view: BotView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
     const bids = new Map<string, Bid>();
     // No IPO só entra onde o preço cabe no valor justo; o resto do caixa fica para os jogos.
     const targets = [...bands].filter(([clubId, band]) => view.fairValue(clubId) >= band.min);
@@ -300,7 +300,7 @@ export class TraderBot extends BaseBot {
     return bids;
   }
 
-  private expectsWin(view: MarketView, clubId: string, match: Match): boolean {
+  private expectsWin(view: BotView, clubId: string, match: Match): boolean {
     if (this.hitRate === undefined) return view.matchEdge(clubId, match) > this.threshold;
     let guess = this.guesses.get(match.id);
     if (guess === undefined) {
@@ -311,13 +311,13 @@ export class TraderBot extends BaseBot {
     return guess === (match.home === clubId ? "H" : "A");
   }
 
-  act(view: MarketView): void {
-    view.exchange.cancelAll(this.id);
+  act(view: BotView): void {
+    view.cancelAll(this.id);
     const worth = view.netWorth(this.id);
     for (const clubId of view.clubIds) {
       const price = view.price(clubId);
       const fair = view.fairValue(clubId);
-      const held = view.ledger.availableShares(this.id, clubId);
+      const held = view.availableShares(this.id, clubId);
       const bet = this.bets.get(clubId);
       // Segura a ação até sair o resultado do jogo em que apostou.
       if (held > 0 && bet && view.now < finishTime(bet)) continue;
@@ -357,12 +357,12 @@ export class CaptureBot extends BaseBot {
     return new Map();
   }
 
-  act(view: MarketView): void {
-    view.exchange.cancelAll(this.id);
+  act(view: BotView): void {
+    view.cancelAll(this.id);
     const worth = view.netWorth(this.id);
     for (const clubId of view.clubIds) {
       const price = view.price(clubId);
-      const held = view.ledger.availableShares(this.id, clubId);
+      const held = view.availableShares(this.id, clubId);
       const pending = view.unpaidDividend(clubId);
       if (pending > 0 && pending / price >= this.minYield) {
         // Até 10% do patrimônio por clube.
@@ -396,7 +396,7 @@ export class AnalystBot extends ValueBot {
   }
 
   /** Pontos por jogo esperados: palpite do ano anterior com peso de 8 jogos, mais pontos e saldo de gols. */
-  private ppg(view: MarketView, clubId: string): number {
+  private ppg(view: BotView, clubId: string): number {
     const prior = 1.9 - ((this.lastYear.get(clubId) ?? 10) - 1) * 0.045;
     const row = view.standing(clubId);
     const played = row?.played ?? 0;
@@ -406,7 +406,7 @@ export class AnalystBot extends ValueBot {
     return (prior * 8 + ((byPoints + byGoals) / 2) * played) / (8 + played);
   }
 
-  protected override estimate(view: MarketView, clubId: string): number {
+  protected override estimate(view: BotView, clubId: string): number {
     if (this.cacheAt !== view.now) {
       this.cache.clear();
       this.cacheAt = view.now;
@@ -419,12 +419,12 @@ export class AnalystBot extends ValueBot {
     return v;
   }
 
-  ipoBids(view: MarketView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
+  ipoBids(view: BotView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
     return this.valueIpoBids(view, bands, cash * 0.9);
   }
 
-  act(view: MarketView): void {
-    view.exchange.cancelAll(this.id);
+  act(view: BotView): void {
+    view.cancelAll(this.id);
     const worth = view.netWorth(this.id);
     for (const clubId of this.rng.shuffle([...view.clubIds]).slice(0, 4)) this.tradeOnValue(view, clubId, worth);
   }
@@ -445,12 +445,12 @@ export class ConcentratorBot extends ValueBot {
     this.size = rng.int(3, 6);
   }
 
-  ipoBids(view: MarketView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
+  ipoBids(view: BotView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
     return this.valueIpoBids(view, bands, cash * 0.9);
   }
 
-  act(view: MarketView): void {
-    view.exchange.cancelAll(this.id);
+  act(view: BotView): void {
+    view.cancelAll(this.id);
     const worth = view.netWorth(this.id);
     const ranked = view.clubIds
       .map((clubId) => ({ clubId, price: view.price(clubId), fair: this.estimate(view, clubId) }))
@@ -458,7 +458,7 @@ export class ConcentratorBot extends ValueBot {
       .sort((a, b) => a.ratio - b.ratio);
     const best = new Set(ranked.filter((c) => c.ratio < 1 - this.margin).slice(0, this.size).map((c) => c.clubId));
     for (const c of ranked) {
-      const held = view.ledger.availableShares(this.id, c.clubId);
+      const held = view.availableShares(this.id, c.clubId);
       if (best.has(c.clubId)) {
         const room = (worth * 0.95) / this.size - held * c.price;
         const limit = Math.min(c.fair * (1 - this.margin), c.price * 1.03);
@@ -485,17 +485,17 @@ export class AnticipatorBot extends ValueBot {
     this.horizon = rng.uniform(24, 72) * 60 * 60 * 1000;
   }
 
-  ipoBids(view: MarketView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
+  ipoBids(view: BotView, bands: Map<string, PriceBand>, cash: Cents): Map<string, Bid> {
     return this.valueIpoBids(view, bands, cash * 0.9);
   }
 
-  act(view: MarketView): void {
-    view.exchange.cancelAll(this.id);
+  act(view: BotView): void {
+    view.cancelAll(this.id);
     const worth = view.netWorth(this.id);
     const done = new Set<string>();
     for (const clubId of view.clubIds) {
       const streak = view.winStreak(clubId);
-      const held = view.ledger.availableShares(this.id, clubId);
+      const held = view.availableShares(this.id, clubId);
       const price = view.price(clubId);
       const fair = this.estimate(view, clubId);
       const next = view.nextMatch(clubId);
@@ -512,5 +512,43 @@ export class AnticipatorBot extends ValueBot {
     }
     const rest = view.clubIds.filter((id) => !done.has(id));
     for (const clubId of this.rng.shuffle(rest).slice(0, 4)) this.tradeOnValue(view, clubId, worth);
+  }
+}
+
+/** O que cada perfil precisa de fora para nascer. */
+export interface CreateBotOptions {
+  /** O clube do torcedor. */
+  fanClubId?: string;
+  /** A colocação de cada clube no ano anterior (o analista). */
+  lastYear?: ReadonlyMap<string, number>;
+  /** A taxa de acerto do trader; sem ela, ele palpita pela campanha. */
+  traderHitRate?: number;
+}
+
+/**
+ * Cria o bot de um perfil. A simulação e a API ao vivo (F14) usam a mesma fábrica, então o mesmo perfil, o mesmo `Rng` e
+ * as mesmas opções dão o mesmo bot nos dois lugares.
+ */
+export function createBot(profile: BotProfile, id: string, rng: Rng, options: CreateBotOptions = {}): Bot {
+  switch (profile) {
+    case "dividendos":
+      return new DividendBot(id, rng);
+    case "momentum":
+      return new MomentumBot(id, rng);
+    case "torcedor":
+      if (options.fanClubId === undefined) throw new Error("o torcedor precisa do clube dele");
+      return new FanBot(id, rng, options.fanClubId);
+    case "captura":
+      return new CaptureBot(id, rng);
+    case "analista":
+      return new AnalystBot(id, rng, options.lastYear ?? new Map());
+    case "concentrador":
+      return new ConcentratorBot(id, rng);
+    case "antecipador":
+      return new AnticipatorBot(id, rng);
+    case "trader":
+      return new TraderBot(id, rng, options.traderHitRate);
+    case "aleatorio":
+      return new RandomBot(id, rng);
   }
 }

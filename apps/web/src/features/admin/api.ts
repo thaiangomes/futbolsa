@@ -1,4 +1,19 @@
 import {
+  type AdjustBody,
+  adjustResponseSchema,
+  auditResponseSchema,
+  type AuditQuery,
+  blockResponseSchema,
+  botsViewSchema,
+  type BotsView,
+  deletePlayerResponseSchema,
+  entriesResponseSchema,
+  type EntriesQuery,
+  type PatchBotsBody,
+  patchBotsResponseSchema,
+  playerDetailSchema,
+  playersListSchema,
+  type PlayersQuery,
   adminLogResponseSchema,
   adminMatchSchema,
   type AdminLogQuery,
@@ -88,6 +103,22 @@ export function adminApi(api: ApiClient) {
     approvePayouts: (body: ApprovePayoutsBody) => api.request(approvePayoutsResponseSchema, "/admin/payouts/approve", { method: "POST", body }),
     correctionPreview: () => api.request(correctionPreviewSchema, "/admin/payouts/corrections"),
     applyCorrection: (body: ApplyCorrectionBody) => api.request(applyCorrectionResponseSchema, "/admin/payouts/corrections", { method: "POST", body }),
+
+    players: (query: Partial<PlayersQuery> = {}) => api.request(playersListSchema, `/admin/players${queryString(query)}`),
+    player: (id: string) => api.request(playerDetailSchema, `/admin/players/${id}`),
+    playerEntries: (id: string, query: Partial<EntriesQuery> = {}) => api.request(entriesResponseSchema, `/admin/players/${id}/entries${queryString(query)}`),
+    blockPlayer: (id: string, reason: string) => api.request(blockResponseSchema, `/admin/players/${id}/block`, { method: "POST", body: { reason } }),
+    unblockPlayer: (id: string, reason: string) => api.request(blockResponseSchema, `/admin/players/${id}/unblock`, { method: "POST", body: { reason } }),
+    deletePlayer: (id: string, confirmNickname: string, reason: string) =>
+      api.request(deletePlayerResponseSchema, `/admin/players/${id}`, { method: "DELETE", body: { confirmNickname, reason } }),
+    /** Um clique duplo não credita duas vezes: a chave do envio é a mesma até a resposta chegar (proposta 7). */
+    adjustPlayer: (id: string, body: AdjustBody, idempotencyKey: string) =>
+      api.request(adjustResponseSchema, `/admin/players/${id}/adjust`, { method: "POST", body, headers: { "idempotency-key": idempotencyKey } }),
+
+    trades: (query: Partial<AuditQuery> = {}) => api.request(auditResponseSchema, `/admin/trades${queryString(query)}`),
+
+    bots: (): Promise<BotsView> => api.request(botsViewSchema, "/admin/bots"),
+    updateBots: (body: PatchBotsBody) => api.request(patchBotsResponseSchema, "/admin/bots", { method: "PATCH", body }),
 
     log: (query: Partial<AdminLogQuery> = {}) => api.request(adminLogResponseSchema, `/admin/log${queryString(query)}`),
   };

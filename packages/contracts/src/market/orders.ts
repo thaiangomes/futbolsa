@@ -20,6 +20,7 @@ export const orderCancelReasonSchema = z.enum([
   "house_refresh",
   "suspension",
   "market_remainder",
+  "annulment",
 ]);
 
 /**
@@ -41,6 +42,7 @@ export const ORDER_REJECT_CODES = [
   "club_in_auction",
   // do banco e do relógio
   "account_blocked",
+  "bot_inactive",
   "email_not_confirmed",
   "club_suspended",
   "market_closed",
@@ -60,6 +62,7 @@ export const MARKET_ERROR_MESSAGES = {
   self_trade: "Esta ordem cruzaria com uma ordem sua neste clube. Cancele a outra ou mude o preço.",
   club_in_auction: "Este clube está em leilão: use ordem limitada.",
   account_blocked: "Sua conta está bloqueada e não pode mandar ordens.",
+  bot_inactive: "Este bot está desligado e não manda ordens.",
   email_not_confirmed: "Confirme seu e-mail para mandar ordens.",
   club_suspended: "A negociação deste clube está suspensa.",
   market_closed: "A negociação não está aberta.",

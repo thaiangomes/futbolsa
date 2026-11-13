@@ -31,3 +31,9 @@ export * from "./engine/auction.js";
 export { CLUBS, CLUBE_DOS_TREZE, clubIdFromName, clubName, type ClubInfo } from "./data/clubs.js";
 export { markOutOfWindow } from "./data/season.js";
 export * from "./engine/slices.js";
+
+export * from "./sim/botView.js";
+export * from "./sim/bots.js";
+export * from "./sim/leagueView.js";
+export * from "./sim/market.js";
+export * from "./sim/rng.js";

@@ -29,11 +29,18 @@ export const patchSeasonBodySchema = z
     firstKickoff: isoInstantSchema.optional(),
     /** Novo fechamento do IPO, só para adiar com as ofertas abertas (F8; antecipar é recusado). */
     ipoClosesAt: isoInstantSchema.optional(),
+    /** A chave dos bots nos rankings (F14): vale na hora; aceita em qualquer fase menos temporada encerrada. */
+    botsInRankings: z.boolean().optional(),
     reason: adminReasonSchema.optional(),
   })
-  .refine((b) => b.offerSize !== undefined || b.firstKickoff !== undefined || b.ipoClosesAt !== undefined, {
+  .refine((b) => b.offerSize !== undefined || b.firstKickoff !== undefined || b.ipoClosesAt !== undefined || b.botsInRankings !== undefined, {
     message: "Nada para mudar.",
     path: ["(corpo)"],
+  })
+  // a chave dos bots tem a própria regra (vale em qualquer fase menos temporada encerrada): vai sozinha
+  .refine((b) => b.botsInRankings === undefined || (b.offerSize === undefined && b.firstKickoff === undefined && b.ipoClosesAt === undefined), {
+    message: "A chave dos bots nos rankings vai sozinha, sem outros campos.",
+    path: ["botsInRankings"],
   });
 export type PatchSeasonBody = z.infer<typeof patchSeasonBodySchema>;
 

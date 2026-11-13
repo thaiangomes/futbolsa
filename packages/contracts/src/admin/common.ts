@@ -46,5 +46,20 @@ export const ADMIN_ERROR_MESSAGES = {
   payout_settling:
     "Um pagamento aprovado ainda está sendo creditado: espere terminar para a correção não ser calculada sobre um pagamento pela metade.",
   correction_stale: "Os resultados mudaram desde a prévia da correção: confira a prévia nova antes de aplicar.",
+  player_not_found: "Jogador não encontrado.",
+  cannot_target_self: "Você não pode fazer isto com a sua própria conta.",
+  already_blocked: "Esta conta já está bloqueada.",
+  not_blocked: "Esta conta não está bloqueada.",
+  nickname_mismatch: "O apelido digitado não é o desta conta.",
+  adjust_insufficient_cash: "O jogador não tem tanto caixa livre para este débito.",
+  adjust_insufficient_shares: "O jogador não tem tantas ações livres para este débito.",
+  treasury_insufficient_shares: "A tesouraria não tem tantas ações livres neste clube para este crédito.",
+  adjust_not_allowed: "Neste momento da temporada não dá para ajustar este saldo.",
+  no_wallet: "O jogador ainda não tem carteira nesta temporada.",
+  bot_entry_closed: "A janela de entrada já fechou: bot sem carteira não entra mais.",
+  bot_inactive: "Este bot está desligado.",
+  idempotency_key_required: "Mande o cabeçalho Idempotency-Key: ele evita creditar duas vezes num clique duplo.",
+  idempotency_conflict: "Esta chave de envio já foi usada com outro pedido.",
+  last_admin: "Esta ação deixaria o jogo sem nenhum admin ativo.",
 } as const;
 export type AdminErrorCode = keyof typeof ADMIN_ERROR_MESSAGES;
