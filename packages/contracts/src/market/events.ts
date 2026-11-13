@@ -37,6 +37,13 @@ export const candleEventSchema = z.strictObject({
 });
 export type CandleEvent = z.infer<typeof candleEventSchema>;
 
+/**
+ * `history_changed`, no canal `club:<ticker>` (F14): negócios do clube foram anulados por trapaça e o histórico
+ * (preço, candles, últimos negócios) mudou para trás. Sem detalhes: quem mostra o gráfico recarrega pela REST.
+ */
+export const historyChangedEventSchema = z.strictObject({});
+export type HistoryChangedEvent = z.infer<typeof historyChangedEventSchema>;
+
 /** `order.updated`, no canal `me` (só o dono): a ordem executou em parte ou por inteiro, ou foi cancelada. */
 export const orderUpdatedEventSchema = z.strictObject({
   id: z.number().int(),

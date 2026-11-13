@@ -13,6 +13,8 @@ export const EVENT_CATALOG = {
   book: "club",
   match_mode: "club",
   candle: "club",
+  // F14: negócios anulados por trapaça; o gráfico do clube recarrega pela REST (sem detalhes)
+  history_changed: "club",
   "order.updated": "me",
   "wallet.changed": "me",
   "entry.added": "me",

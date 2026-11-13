@@ -153,7 +153,7 @@ describe("contratos do tempo real (T2)", () => {
 
     it("C4: todos os eventos da arquitetura estão no catálogo", () => {
       const esperados: EventType[] = [
-        "season.status", "market.suspended", "market.resumed", "price", "trade", "book", "match_mode", "candle",
+        "season.status", "market.suspended", "market.resumed", "price", "trade", "book", "match_mode", "candle", "history_changed",
         "order.updated", "wallet.changed", "entry.added", "payout.credited", "rankings.live", "admin.pending",
       ];
       expect(Object.keys(EVENT_CATALOG).sort()).toEqual([...esperados].sort());
