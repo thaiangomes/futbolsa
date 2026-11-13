@@ -8,6 +8,7 @@ import { StandingsModule } from "../standings/standings.module.js";
 import { ApplyCorrectionService } from "./apply-correction.service.js";
 import { ApproveService } from "./approve.service.js";
 import { BuybackCloseService } from "./buyback-close.service.js";
+import { BuybackSettleService } from "./buyback-settle.js";
 import { SettleReversalService } from "./settle-reversal.js";
 import { CloseEventsJob } from "./close-events.job.js";
 import { CloseEventsService } from "./close-events.service.js";
@@ -47,6 +48,7 @@ import { SettleJob } from "./settle.job.js";
     PayoutsStatusService,
     PayoutEvents,
     SettleReversalService,
+    BuybackSettleService,
     SettleCreditsService,
     SettleJob,
   ],

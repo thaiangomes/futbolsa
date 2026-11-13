@@ -159,16 +159,23 @@ export class SettleReversalService {
   /**
    * Lança um crédito (dividendo, complemento ou estorno) com a carteira travada e grava a linha em `payout_credits`,
    * com o aviso `wallet.changed` ao dono depois do `COMMIT`.
+   *
+   * Recompra (F15, T4; Dividendos e recompra, critérios 21 e 24; Carteira e gráficos, critério 21): na versão sem
+   * correção, a carteira da foto vende as ações dela à casa pelo valor da recompra, numa linha `buyback` só (o caixa
+   * ações × valor, as ações saindo com o resultado realizado, inclusive a R$ 0,00). Na versão gravada por uma correção
+   * as ações já saíram: o complemento ou o estorno é só em dinheiro, como nos dividendos.
    */
-  async postCredit(tx: Tx, context: SettleEventContext, due: Pick<Due, "walletId" | "amount">): Promise<Credit> {
+  async postCredit(tx: Tx, context: SettleEventContext, due: Pick<Due, "walletId" | "amount" | "shares">): Promise<Credit> {
     const { row, ticker, correctionReason } = context;
-    const movement = creditMovement(due.amount, row.reason, correctionReason);
+    const sale = row.kind === "buyback" && correctionReason === null && due.shares > 0;
+    const movement: CreditMovement = sale ? { kind: "buyback", reason: row.reason } : creditMovement(due.amount, row.reason, correctionReason);
     const result = await this.ledger.post(tx, {
       walletId: due.walletId,
       at: this.clock.now(),
       kind: movement.kind,
       clubId: row.clubId,
       cashDelta: due.amount,
+      ...(sale ? { sharesDelta: -due.shares, price: row.perShare, costBasis: "sale" as const } : {}),
       ref: { type: "payout_event", id: row.id },
       reason: movement.reason,
     });

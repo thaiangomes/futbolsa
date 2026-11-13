@@ -87,20 +87,44 @@ export async function assertLedgerConsistent(db: Database, seasonId: number): Pr
 
 /**
  * As ações de cada clube, somadas em todas as carteiras (inclusive a tesouraria), são
- * `season_clubs.total_shares`: oferta + lote + emitidas para novatos.
+ * `season_clubs.total_shares`: oferta + lote + emitidas para novatos, menos as que a recompra tirou (linhas
+ * `buyback`). Com a recompra do clube liquidada (aprovada e com todas as carteiras da foto que recebem já
+ * creditadas), nenhuma conta tem ação do clube (Dividendos e recompra, critério 22; F15, T4).
  */
 export async function assertSharesConserved(db: Database, seasonId: number): Promise<void> {
   fail(
     "ações do clube diferentes do total emitido",
     await problems(
       db,
-      sql`select sc.club_id, sc.total_shares, coalesce(sum(p.shares), 0)::bigint as held
+      sql`select sc.club_id, sc.total_shares, coalesce(h.held, 0)::bigint as held, coalesce(b.bought_back, 0)::bigint as bought_back
           from futbolsa.season_clubs sc
-          left join futbolsa.wallets w on w.season_id = sc.season_id
-          left join futbolsa.positions p on p.wallet_id = w.id and p.club_id = sc.club_id
+          left join lateral (
+            select sum(p.shares) as held from futbolsa.positions p join futbolsa.wallets w on w.id = p.wallet_id
+            where w.season_id = sc.season_id and p.club_id = sc.club_id) h on true
+          left join lateral (
+            select -sum(e.shares_delta) as bought_back from futbolsa.wallet_entries e join futbolsa.wallets w on w.id = e.wallet_id
+            where w.season_id = sc.season_id and e.club_id = sc.club_id and e.kind = 'buyback') b on true
           where sc.season_id = ${seasonId}
-          group by sc.club_id, sc.total_shares
-          having sc.total_shares <> coalesce(sum(p.shares), 0)`,
+            and sc.total_shares <> coalesce(h.held, 0) + coalesce(b.bought_back, 0)`,
+    ),
+  );
+  fail(
+    "ações do clube numa conta depois da recompra liquidada",
+    await problems(
+      db,
+      sql`select e.club_id, p.wallet_id, p.shares
+          from futbolsa.payout_events e
+          join futbolsa.wallets w on w.season_id = e.season_id
+          join futbolsa.positions p on p.wallet_id = w.id and p.club_id = e.club_id and p.shares <> 0
+          where e.season_id = ${seasonId} and e.kind = 'buyback' and e.status = 'approved'
+            and not exists (
+              select 1 from futbolsa.payout_holdings h
+              join futbolsa.wallets hw on hw.id = h.wallet_id
+              left join futbolsa.users u on u.id = hw.user_id
+              where h.event_id = e.id and (hw.owner_type = 'bot' or (hw.owner_type = 'user' and u.status <> 'deleted'))
+                and not exists (
+                  select 1 from futbolsa.payout_credits pc join futbolsa.payout_events o on o.id = pc.event_id
+                  where pc.wallet_id = h.wallet_id and o.season_id = e.season_id and o.club_id = e.club_id and o.event_key = e.event_key))`,
     ),
   );
 }

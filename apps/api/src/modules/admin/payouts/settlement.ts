@@ -13,7 +13,11 @@ export interface Due {
   walletId: number;
   /** Ações da carteira na foto desta versão (0 quando ela só está nas versões anteriores). */
   shares: number;
-  /** Positivo cai no caixa (dividendo ou complemento); negativo é o estorno. Nunca zero. */
+  /**
+   * Positivo cai no caixa (dividendo ou complemento); negativo é o estorno. Nunca zero, menos na recompra sem versão
+   * anterior com crédito (a primeira liquidação dela, F15): ali a carteira da foto entra mesmo com R$ 0,00, porque as
+   * ações do clube saem dela (Dividendos e recompra, critério 24).
+   */
   amount: number;
 }
 
@@ -64,7 +68,7 @@ export function duesQuery(filter: DuesFilter): SQL {
   };
   return sql`
     with ev as (
-      select e.id, e.season_id, e.club_id, e.event_key, e.version, e.per_share
+      select e.id, e.season_id, e.club_id, e.event_key, e.version, e.per_share, e.kind
       from futbolsa.payout_events e
       where ${sql.join(where, sql` and `)}
     ),
@@ -86,7 +90,8 @@ export function duesQuery(filter: DuesFilter): SQL {
       select coalesce(hold.event_id, prev.event_id) as event_id,
         coalesce(hold.wallet_id, prev.wallet_id) as wallet_id,
         coalesce(hold.shares, 0) as shares,
-        coalesce(prev.paid, 0)::bigint as paid
+        coalesce(prev.paid, 0)::bigint as paid,
+        prev.event_id is not null as has_prev
       from hold full join prev on prev.event_id = hold.event_id and prev.wallet_id = hold.wallet_id
     )
     select d.event_id, d.wallet_id, d.shares, d.shares::bigint * ev.per_share - d.paid as amount
@@ -94,7 +99,8 @@ export function duesQuery(filter: DuesFilter): SQL {
     join ev on ev.id = d.event_id
     join futbolsa.wallets w on w.id = d.wallet_id
     left join futbolsa.users u on u.id = w.user_id
-    where ${RECEIVES} and d.shares::bigint * ev.per_share - d.paid <> 0
+    where ${RECEIVES}
+      and (d.shares::bigint * ev.per_share - d.paid <> 0 or (ev.kind = 'buyback' and d.shares > 0 and not d.has_prev))
       and not exists (select 1 from futbolsa.payout_credits pc where pc.event_id = d.event_id and pc.wallet_id = d.wallet_id)
     order by d.event_id, d.wallet_id
     ${filter.limit === undefined ? sql`` : sql`limit ${filter.limit}`}`;
@@ -114,14 +120,24 @@ export async function dues(executor: Executor, filter: DuesFilter): Promise<Due[
 /**
  * Os eventos vigentes aprovados da temporada que ainda estão **liquidando**: com alguma carteira que recebe e ainda não
  * tem a linha em `payout_credits` do que falta (veja `dues`). Na aprovação comum é a carteira da foto sem o dividendo;
- * na correção, a carteira com o líquido diferente de zero sem o complemento ou o estorno.
+ * na correção, a carteira com o líquido diferente de zero sem o complemento ou o estorno. A recompra aprovada (F15, T4)
+ * também está liquidando enquanto alguma conta da temporada ainda tem ação do clube (a tesouraria e a conta excluída,
+ * que saem no último passo, `BuybackSettleService.sweep`): liquidada é sem crédito a lançar e sem ação em conta nenhuma.
  *
  * A correção recusa enquanto houver algum (`payout_settling`), para o estorno não ser calculado sobre um pagamento
  * pela metade, e a tarefa de liquidação continua por eles (Plano dos dividendos e pagamentos, "Plano da correção").
  */
 export async function settlingEventIds(executor: Executor, seasonId: number, eventIds?: readonly number[]): Promise<number[]> {
+  const only = eventIds === undefined ? sql`` : eventIds.length === 0 ? sql`and false` : sql`and e.id in (${list(eventIds)})`;
   const result = await executorOf(executor).execute(sql`
-    select distinct q.event_id from (${duesQuery({ seasonId, eventIds })}) q order by q.event_id`);
+    select q.event_id from (${duesQuery({ seasonId, eventIds })}) q
+    union
+    select e.id from futbolsa.payout_events e
+    where e.season_id = ${seasonId} and e.status = 'approved' and e.kind = 'buyback' ${only}
+      and exists (
+        select 1 from futbolsa.positions p join futbolsa.wallets w on w.id = p.wallet_id
+        where w.season_id = e.season_id and p.club_id = e.club_id and p.shares > 0)
+    order by 1`);
   return result.rows.map((r) => Number(r.event_id));
 }
 

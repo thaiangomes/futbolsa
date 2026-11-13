@@ -15,7 +15,8 @@ Dono: módulo `admin` (quem recebe, aprovação, correção, estorno e caixa neg
 | `preview.service.ts`, `payouts.controller.ts` | `GET /admin/payouts` (prévia) e `GET /admin/payouts/:id/holders`. |
 | `approve.service.ts` | `POST /admin/payouts/approve`: cada evento passa a `approved` numa transação curta, com o registro do admin e o aviso aos rankings. |
 | `settle-credits.ts`, `settle.job.ts` | O crédito em lotes de até 50 carteiras (`SETTLE_BATCH`, medido na T10), retomável (tarefa de cada minuto e ao subir a API). |
-| `settlement.ts` | Quais eventos aprovados ainda estão liquidando. |
+| `settlement.ts` | Quais eventos aprovados ainda estão liquidando (a recompra também enquanto o clube tem ação em alguma conta). |
+| `buyback-settle.ts` | A recompra aprovada (F15, T4): cada carteira da foto vende as ações à casa no lote da F12 (`postCredit` com linha `buyback`, custo `sale`, inclusive a R$ 0,00, e `payout_credits` mesmo com valor zero); depois de todas, `sweep` tira, sem pagar, as ações do clube que sobraram (tesouraria, conta excluída), com a tesouraria por último. Correção da recompra já paga: só dinheiro. |
 | `correction-plan.ts`, `corrections.controller.ts` | `GET /admin/payouts/corrections`: o plano e a prévia da correção, com o código do plano. Não aplica nada. |
 | `apply-correction.service.ts`, `settle-reversal.ts` | `POST /admin/payouts/corrections`: versões novas `approved` e antigas `superseded` numa transação (código do plano, `correction_stale`); o estorno por carteira cancela as compras de quem não cobre (`cancelBuysToCover`, usado também pela F14 com `annulment`) e o caixa pode ficar negativo. |
 | `events.ts`, `outstanding.ts` | `payout.credited` (canal `me`) e `admin.pending` depois do `COMMIT`; `outstanding(temporada)` para o encerramento e `perShareTotals(temporada, clube)` para o simulador. |
