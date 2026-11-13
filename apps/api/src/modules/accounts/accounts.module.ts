@@ -11,6 +11,8 @@ import { AccountDeletionService } from "./deletion.service.js";
 import { IdentityService } from "./identity.service.js";
 import { InvitesController } from "./invites.controller.js";
 import { InvitesService } from "./invites.service.js";
+import { NoticesController } from "./notices.controller.js";
+import { NoticesService } from "./notices.service.js";
 import { PlayersController } from "./players.controller.js";
 import { RolesController } from "./roles.controller.js";
 import { RolesService } from "./roles.service.js";
@@ -24,7 +26,7 @@ import { RolesService } from "./roles.service.js";
 @Global()
 @Module({
   imports: [PortfolioModule, AdminLogModule, RealtimeModule],
-  controllers: [AccountsController, PlayersController, InvitesController, RolesController],
+  controllers: [AccountsController, NoticesController, PlayersController, InvitesController, RolesController],
   providers: [
     IdentityService,
     { provide: UserResolver, useExisting: IdentityService },
@@ -32,9 +34,10 @@ import { RolesService } from "./roles.service.js";
     AccountsService,
     AccountClosureHooks,
     AccountDeletionService,
+    NoticesService,
     InvitesService,
     RolesService,
   ],
-  exports: [UserResolver, IdentityService, AccountsService, AccountsConfig, AccountClosureHooks, AccountDeletionService],
+  exports: [UserResolver, IdentityService, AccountsService, AccountsConfig, AccountClosureHooks, AccountDeletionService, NoticesService],
 })
 export class AccountsModule {}

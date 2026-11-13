@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { snapshotSchema } from "../portfolio/snapshot.js";
+import { pendingNoticeSchema } from "./notices.js";
 
 /**
  * Apelidos que ninguém escolhe, em qualquer combinação de maiúsculas, para ninguém se passar
@@ -46,6 +47,8 @@ export const meResponseSchema = z.discriminatedUnion("registered", [
     role: userRoleSchema,
     status: userStatusSchema,
     termsAcceptedAt: z.string(),
+    /** Avisos por confirmar (F14): a tela mostra o primeiro antes de qualquer outra, até o jogador confirmar. */
+    pendingNotices: z.array(pendingNoticeSchema),
     season: z
       .strictObject({
         year: z.number().int(),
