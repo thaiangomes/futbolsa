@@ -36,6 +36,11 @@ export const patchSeasonBodySchema = z
   .refine((b) => b.offerSize !== undefined || b.firstKickoff !== undefined || b.ipoClosesAt !== undefined || b.botsInRankings !== undefined, {
     message: "Nada para mudar.",
     path: ["(corpo)"],
+  })
+  // a chave dos bots tem a própria regra (vale em qualquer fase menos temporada encerrada): vai sozinha
+  .refine((b) => b.botsInRankings === undefined || (b.offerSize === undefined && b.firstKickoff === undefined && b.ipoClosesAt === undefined), {
+    message: "A chave dos bots nos rankings vai sozinha, sem outros campos.",
+    path: ["botsInRankings"],
   });
 export type PatchSeasonBody = z.infer<typeof patchSeasonBodySchema>;
 
