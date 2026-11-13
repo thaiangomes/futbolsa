@@ -9,6 +9,7 @@ export * from "./engine/dividends.js";
 export * from "./engine/rounding.js";
 export * from "./engine/cost.js";
 export * from "./engine/indexPortfolio.js";
+export * from "./engine/entry.js";
 export * from "./engine/equity.js";
 export * from "./engine/ranking.js";
 export * from "./engine/brasilia.js";

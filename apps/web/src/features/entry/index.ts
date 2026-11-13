@@ -1,2 +1,3 @@
-// Telas e cliente do módulo entry entram aqui na fase dona.
-export {};
+export { entryApi, type EntryApi } from "./api";
+export { EntryScreen, changedFromPreview } from "./entry-screen";
+export { useEntryApi } from "./use-entry-api";

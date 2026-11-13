@@ -41,6 +41,8 @@ export class ErrorFilter implements ExceptionFilter {
     const { status, body } = toErrorResponse(error);
     if (status >= 500) this.logger.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
     const reply = host.switchToHttp().getResponse<FastifyReply>();
+    // a fila de entradas cheia (503): a tela tenta de novo depois de alguns segundos
+    if (status === 503) void reply.header("retry-after", "5");
     void reply.status(status).send(body);
   }
 }
