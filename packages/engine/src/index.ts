@@ -34,3 +34,4 @@ export * from "./engine/slices.js";
 
 export * from "./sim/botView.js";
 export * from "./sim/bots.js";
+export * from "./sim/leagueView.js";
