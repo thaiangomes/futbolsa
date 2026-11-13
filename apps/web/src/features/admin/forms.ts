@@ -33,6 +33,12 @@ export { formatCents, formatInstant } from "../../lib/format";
 
 /** Nome de cada ação do registro, em português. */
 export const ACTION_LABELS: Record<string, string> = {
+  "player.block": "Jogador bloqueado",
+  "player.unblock": "Jogador desbloqueado",
+  "player.delete": "Conta excluída pelo admin",
+  "player.adjust": "Saldo ajustado",
+  "bots.update": "Bots ligados ou desligados",
+  "season.bots_in_rankings": "Bots nos rankings",
   "match.create": "Jogo cadastrado",
   "match.update": "Jogo corrigido",
   "standings.update": "Classificação corrigida",
