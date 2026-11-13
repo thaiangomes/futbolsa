@@ -25,10 +25,17 @@ export interface AuditTradesFilter {
 export interface AuditTradeRow {
   id: number;
   at: Date;
+  clubId: number;
   ticker: string;
   quantity: number;
   price: number;
   inAuction: boolean;
+  /** O preço exibido antes do negócio (a base do alerta de trapaça e do relatório). */
+  priceBefore: number;
+  /** Um dos lados é a casa. */
+  withHouse: boolean;
+  /** O negócio já foi anulado por um caso de trapaça. */
+  annulled: boolean;
   buyerWalletId: number;
   sellerWalletId: number;
 }
@@ -56,10 +63,14 @@ export async function auditTrades(db: Db, f: AuditTradesFilter): Promise<AuditTr
     .select({
       id: trades.id,
       at: trades.at,
+      clubId: trades.clubId,
       ticker: sql<string>`${clubs.ticker}`,
       quantity: trades.quantity,
       price: trades.price,
       inAuction: trades.inAuction,
+      priceBefore: trades.priceBefore,
+      withHouse: trades.withHouse,
+      annulled: sql<boolean>`exists (select 1 from futbolsa.trade_annulments ta where ta.trade_id = ${trades.id})`,
       buyerWalletId: trades.buyerWalletId,
       sellerWalletId: trades.sellerWalletId,
     })

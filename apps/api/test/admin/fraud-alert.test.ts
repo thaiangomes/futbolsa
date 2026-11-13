@@ -183,5 +183,7 @@ describe("alerta de trapaça", () => {
 
   it("admin 31: só o admin lê a lista de casos", async () => {
     await expectAdminOnly(app, database.db, { method: "GET", url: "/admin/fraud/cases" });
+    await expectAdminOnly(app, database.db, { method: "GET", url: "/admin/fraud/cases/1" }, { okStatus: 200 });
+    await expectAdminOnly(app, database.db, { method: "POST", url: "/admin/fraud/cases", payload: {} }, { okStatus: 400 });
   });
 });

@@ -157,6 +157,19 @@ export const fraudReportSchema = z.strictObject({
 });
 export type FraudReport = z.infer<typeof fraudReportSchema>;
 
+/**
+ * `GET /admin/fraud/cases/:id?without=1,2,3`: com o caso aberto, os negócios a tirar do "com e sem" (o efeito da decisão antes
+ * de confirmar); sem o parâmetro, os suspeitos. Caso decidido ignora: a foto guardada não muda.
+ */
+export const fraudCaseQuerySchema = z.strictObject({
+  without: z
+    .string()
+    .max(4000)
+    .regex(/^[0-9]+(,[0-9]+)*$/, "Informe ids separados por vírgula.")
+    .optional(),
+});
+export type FraudCaseQuery = z.infer<typeof fraudCaseQuerySchema>;
+
 /** `GET /admin/fraud/cases/:id`: aberto, calculado na hora; decidido, a foto guardada. */
 export const fraudCaseDetailSchema = z.strictObject({
   id: z.number().int(),

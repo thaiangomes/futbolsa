@@ -5,6 +5,7 @@ import { AlertScan } from "./alert-scan.js";
 import { FraudCasesController } from "./cases.controller.js";
 import { FraudCasesService } from "./cases.service.js";
 import { FraudJobs } from "./fraud.jobs.js";
+import { FraudReportService } from "./report.service.js";
 
 /**
  * Trapaça entre contas no admin (F14, parte 2, T20 a T27): alerta, relatório, decisão e banimento. A pasta cresce
@@ -14,7 +15,7 @@ import { FraudJobs } from "./fraud.jobs.js";
 @Module({
   imports: [AdminLogModule, ResultsModule],
   controllers: [FraudCasesController],
-  providers: [AlertScan, FraudCasesService, FraudJobs],
-  exports: [AlertScan, FraudCasesService, FraudJobs],
+  providers: [AlertScan, FraudCasesService, FraudReportService, FraudJobs],
+  exports: [AlertScan, FraudCasesService, FraudReportService, FraudJobs],
 })
 export class FraudModule {}
