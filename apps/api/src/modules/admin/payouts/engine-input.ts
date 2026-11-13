@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { asc, eq, inArray } from "drizzle-orm";
 import type { EventsInput } from "@futbolsa/engine";
 import { type DrizzleTx, Tx } from "../../../infra/db/index.js";
-import { clubs, matches, seasonClubs, standings } from "../../../infra/db/schema/index.js";
+import { clubs, matches, seasonClubs, seasonRules, seasons, standings } from "../../../infra/db/schema/index.js";
 import { SeasonValuesService } from "../../dividends/season-values/season-values.service.js";
 import { toEngineMatch } from "../results/to-engine.js";
 import { type Executor, executorOf } from "./holdings.js";
@@ -25,6 +25,13 @@ export interface SeasonEngineInput {
    * Sem isso a colocação e o acesso não são aprovados (`standings_not_confirmed`).
    */
   standingsConfirmed(competition: string): boolean;
+  /**
+   * O fim da negociação gravado (`seasons.trading_ended_at`, o instante D da recompra, F15), ou `null` enquanto a
+   * recompra não fechou. Com ele, a fonte da recompra (`BUYBACK_EVENTS`) calcula os eventos de recompra.
+   */
+  tradingEndedAt: Date | null;
+  /** O múltiplo da recompra da temporada, em pontos-base (`season_rules.buyback_multiple_bp`; 15.000 = 1,5×). */
+  buybackMultipleBp: number;
 }
 
 /**
@@ -59,6 +66,8 @@ export class EngineInputService {
       .where(eq(standings.seasonId, seasonId))
       .orderBy(asc(standings.competition), asc(standings.position), asc(standings.clubId));
     const listedRows = await db.select({ clubId: seasonClubs.clubId }).from(seasonClubs).where(eq(seasonClubs.seasonId, seasonId));
+    const [season] = await db.select({ tradingEndedAt: seasons.tradingEndedAt }).from(seasons).where(eq(seasons.id, seasonId));
+    const [rules] = await db.select({ bp: seasonRules.buybackMultipleBp }).from(seasonRules).where(eq(seasonRules.seasonId, seasonId));
 
     const clubIds = new Set<number>(listedRows.map((r) => r.clubId));
     for (const m of matchRows) {
@@ -113,6 +122,9 @@ export class EngineInputService {
       tickerOf,
       clubIdOf,
       standingsConfirmed: (competition) => confirmed.get(competition) ?? false,
+      tradingEndedAt: season?.tradingEndedAt ?? null,
+      // `loadSeasonValues` acima já recusou a temporada sem valores
+      buybackMultipleBp: rules!.bp,
     };
   }
 }

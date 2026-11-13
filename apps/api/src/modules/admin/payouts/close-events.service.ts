@@ -1,8 +1,9 @@
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { and, eq, inArray, ne } from "drizzle-orm";
-import { eventsFor, type PayoutEvent, type PayoutEventKind } from "@futbolsa/engine";
+import { type EventsResult, eventsFor, type PayoutEvent, type PayoutEventKind } from "@futbolsa/engine";
 import { DB, type Database, lockSeason, type Tx, withTransaction } from "../../../infra/db/index.js";
 import { payoutEvents, seasons } from "../../../infra/db/schema/index.js";
+import { COMPETITIONS } from "../../../infra/db/schema/values.js";
 import { MarketPort } from "../results/ports.js";
 import { EngineInputService, LEAGUE_COMPETITIONS, type SeasonEngineInput } from "./engine-input.js";
 import { copyHoldings, holdingsAt, writeHoldings } from "./holdings.js";
@@ -27,13 +28,40 @@ export interface PayoutEventSource {
   /** Os tipos de evento que esta fonte calcula (e cujas linhas gravadas ela pode substituir). */
   kinds: readonly PayoutEventKind[];
   events(loaded: SeasonEngineInput): readonly PayoutEvent[];
+  /**
+   * Se a fonte vale nesta passada (padrão: sempre). Fonte inativa não é dona de nada na passada: as linhas dos tipos
+   * dela ficam como estão. A recompra só vale com a negociação encerrada (`tradingEndedAt`); sem isso, uma passada que
+   * leu a temporada antes do fechamento da recompra substituiria os eventos de recompra que outra acabou de gravar.
+   */
+  active?(loaded: SeasonEngineInput): boolean;
 }
+
+/** O `eventsFor` da entrada carregada, calculado uma vez por entrada (os dividendos e a recompra usam o mesmo). */
+const RESULTS = new WeakMap<SeasonEngineInput, EventsResult>();
+export function eventsResultOf(loaded: SeasonEngineInput): EventsResult {
+  let result = RESULTS.get(loaded);
+  if (!result) RESULTS.set(loaded, (result = eventsFor(loaded.input)));
+  return result;
+}
+
+/**
+ * A competição gravada em `payout_events.competition`: a do motor, ou `null` quando não é uma das competições do
+ * esquema (a recompra é da `temporada`; a chave `buyback|temporada|fim|<clube>` guarda o resto).
+ */
+export const storedCompetition = (competition: string): string | null =>
+  (COMPETITIONS as readonly string[]).includes(competition) ? competition : null;
+
+/**
+ * Um passo no fim de cada passada, com a entrada que ela leu: o ponto onde a F15 fecha a recompra. O erro vai para
+ * `CloseSummary.errors` e não desfaz o que a passada gravou.
+ */
+export type AfterPassHook = (seasonId: number, loaded: SeasonEngineInput, now: Date) => Promise<void>;
 
 /** Os dividendos: pontos, colocação, acesso, fases e títulos das copas, pelo `eventsFor` do motor. A recompra fica de fora. */
 export const DIVIDEND_EVENTS: PayoutEventSource = {
   name: "dividendos",
   kinds: ["points", "placement", "promotion", "cup_phase", "cup_title"],
-  events: (loaded) => eventsFor(loaded.input).events,
+  events: (loaded) => eventsResultOf(loaded).events,
 };
 
 /** O que uma passada fez. */
@@ -107,6 +135,7 @@ export const groupOfKey = (key: string) => key.split("|").slice(1, 3).join("|");
 export class CloseEventsService {
   private readonly logger = new Logger("Pagamentos");
   private readonly sources: PayoutEventSource[] = [DIVIDEND_EVENTS];
+  private readonly afterPass: AfterPassHook[] = [];
   /** A passada em curso de cada temporada: a seguinte espera ela acabar. */
   private readonly running = new Map<number, Promise<unknown>>();
 
@@ -121,6 +150,11 @@ export class CloseEventsService {
   /** Acrescenta uma fonte de eventos (a F15 registra a da recompra). */
   registerSource(source: PayoutEventSource): void {
     this.sources.push(source);
+  }
+
+  /** Acrescenta um passo no fim de cada passada (a F15 fecha a recompra nele). */
+  registerAfterPass(hook: AfterPassHook): void {
+    this.afterPass.push(hook);
   }
 
   /** Roda a passada da temporada no instante `now`. Temporada encerrada (ou inexistente): não faz nada. */
@@ -153,9 +187,10 @@ export class CloseEventsService {
 
     // 1. fora de transação: a entrada do motor e as funções puras
     const loaded = await this.engineInput.load(this.db, seasonId);
-    const managed = new Set<string>(this.sources.flatMap((s) => s.kinds));
+    const sources = this.sources.filter((s) => s.active?.(loaded) ?? true);
+    const managed = new Set<string>(sources.flatMap((s) => s.kinds));
     const computed = new Map<string, PayoutEvent>();
-    for (const source of this.sources) {
+    for (const source of sources) {
       const own = new Set<string>(source.kinds);
       for (const event of source.events(loaded)) {
         // só os tipos de que a fonte é dona: a recompra (`buyback`) fica de fora até a F15 registrar a dela
@@ -219,6 +254,17 @@ export class CloseEventsService {
         summary.errors.push(message);
       }
     }
+
+    // 7. os passos registrados (o fechamento da recompra, F15), com os eventos regulares já gravados
+    for (const hook of this.afterPass) {
+      try {
+        await hook(seasonId, loaded, now);
+      } catch (error) {
+        const message = `depois da passada: ${(error as Error).message}`;
+        this.logger.error(`fechamento da temporada ${seasonId} falhou ${message}`);
+        summary.errors.push(message);
+      }
+    }
     return summary;
   }
 
@@ -263,8 +309,8 @@ export class CloseEventsService {
     change.closedAts = closedAts;
     // o "a receber" do mês de cada fechamento muda, inclusive quando o evento nasce depois de o mês fechar
     await this.rankings.payoutsChanged(tx, { seasonId, closedAts });
-    // o valor do clube mudou: a casa repõe a cotação
-    await this.market.requestRefresh(tx, [plan.ticker], "close");
+    // o valor do clube mudou: a casa repõe a cotação (com a negociação encerrada, a casa não cota mais)
+    if (season.status !== "trading_ended") await this.market.requestRefresh(tx, [plan.ticker], "close");
     tx.afterCommit(async () => {
       await this.rankings.wake();
       this.onChanged(change);
@@ -290,7 +336,7 @@ export class CloseEventsService {
         eventKey: event.key,
         kind: event.kind,
         reason: event.reason,
-        competition: event.competition,
+        competition: storedCompetition(event.competition),
         ...roundAndPhase(event),
         perShare: event.perShare,
         closedAt: new Date(event.closedAt),
