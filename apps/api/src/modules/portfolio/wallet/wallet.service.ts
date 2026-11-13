@@ -37,6 +37,11 @@ export class WalletService {
   /** A carteira do usuário na temporada atual. */
   async viewForUser(userId: string): Promise<WalletView> {
     const season = await currentSeason(this.db);
+    // entre temporadas: nenhuma em andamento, ou a seguinte ainda em preparação (o IPO não abriu, ninguém tem carteira nela)
+    if (!season || season.status === "preparing") {
+      const between = await this.betweenSeasons(userId, season?.ipoOpensAt ?? null);
+      if (between) return between;
+    }
     if (!season) throw new DomainError(WALLET_NOT_FOUND, 404, COMMON_ERROR_MESSAGES.not_found);
     const [wallet] = await this.db
       .select({ id: wallets.id })
