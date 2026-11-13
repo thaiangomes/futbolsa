@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, Res } from "@nestjs/common";
+import type { FastifyReply } from "fastify";
 import {
   createFraudCaseBodySchema,
   fraudCaseQuerySchema,
@@ -12,6 +13,7 @@ import {
 import { AdminOnly, CurrentUser, type ResolvedUser } from "../../../infra/auth-adapter/index.js";
 import { ZodValidationPipe } from "../../../infra/http/index.js";
 import { FraudCasesService } from "./cases.service.js";
+import { fraudReportHtml } from "./report-file.js";
 import { FraudReportService } from "./report.service.js";
 
 /** Os casos de trapaça da temporada atual e o relatório de cada um (T21 e T22). Só admin. */
@@ -32,6 +34,15 @@ export class FraudCasesController {
   @Post()
   open(@CurrentUser() admin: ResolvedUser, @Body(new ZodValidationPipe(createFraudCaseBodySchema)) body: CreateFraudCaseBody): Promise<FraudCaseDetail> {
     return this.reports.open(admin.id, body);
+  }
+
+  /** O relatório como arquivo HTML que abre sozinho e imprime em PDF (T23), feito da foto do caso. */
+  @Get(":id/download")
+  async download(@Param("id", ParseIntPipe) id: number, @Res({ passthrough: true }) reply: FastifyReply): Promise<string> {
+    const detail = await this.reports.detail(id);
+    void reply.header("content-type", "text/html; charset=utf-8");
+    void reply.header("content-disposition", `attachment; filename="relatorio-trapaca-${id}.html"`);
+    return fraudReportHtml(detail);
   }
 
   @Get(":id")

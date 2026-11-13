@@ -2,6 +2,8 @@ import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { count } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fraudCaseDetailSchema, type FraudCaseDetail } from "@futbolsa/contracts";
+import { formatBRL } from "@futbolsa/engine";
+import { AccountDeletionService } from "../../src/modules/accounts/index.js";
 import { FixedClock } from "../../src/infra/clock/index.js";
 import { adminLog, fraudCases } from "../../src/infra/db/schema/index.js";
 import { createAccount, type TestAccount } from "../support/accounts.js";
@@ -10,6 +12,7 @@ import { bearer, withTestAuth } from "../support/auth.js";
 import { useTestDatabase } from "../support/db.js";
 import { openWallets } from "../support/fixtures.js";
 import { insertTrade } from "../market/helpers.js";
+import { openTreasury } from "../market/order-helpers.js";
 import { applyMovements, ipoBuy, portfolioSeason, type PortfolioSeason } from "../portfolio/support.js";
 
 // F14, T22: o relatório do caso (Admin 41). Julho de 2027 fechado, "hoje" em 10 de agosto.
@@ -144,6 +147,38 @@ describe("relatório de trapaça", () => {
     await get(created!.id, `?without=${tradeIds[0]}`);
     const after = [(await database.db.select({ n: count() }).from(fraudCases))[0]!.n, (await database.db.select({ n: count() }).from(adminLog))[0]!.n];
     expect(after).toEqual(before);
+  });
+
+  it("admin 41: o arquivo baixado tem os mesmos números da foto e abre sozinho", async () => {
+    const [created] = await database.db.select().from(fraudCases);
+    const detail = await get(created!.id);
+    const res = await app.inject({ method: "GET", url: `/admin/fraud/cases/${created!.id}/download`, headers: bearer(token) });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/html");
+    expect(res.headers["content-disposition"]).toContain("attachment");
+    const html = res.body;
+    expect(html).toMatch(/^<!doctype html>/);
+    expect(html).toContain("<style>");
+    expect(html).toContain("<svg");
+    expect(html).not.toMatch(/<script|src=|href=/);
+    // os números da foto: preço de cada negócio e o preço do fim do período
+    for (const t of detail.report.trades) expect(html).toContain(formatBRL(t.price));
+    expect(html).toContain(formatBRL(detail.report.clubs[0]!.priceTo));
+    expect(html).toContain("Ana");
+    expect(html).toContain(ana.account.nickname);
+    expect(html).not.toContain(ana.account.email);
+  });
+
+  it("admin 41: depois da exclusão de uma conta o arquivo não tem o e-mail nem o apelido dela", async () => {
+    const res0 = await open({ accountA: { userId: bruno.account.id }, accountB: { userId: carla.account.id }, from: "2027-07-01T00:00:00Z", to: "2027-07-31T23:59:59Z" });
+    const id = fraudCaseDetailSchema.parse(res0.json()).id;
+    await openTreasury(database.db, s.seasonId);
+    await app.get(AccountDeletionService).deleteAccount(carla.account.id);
+    const res = await app.inject({ method: "GET", url: `/admin/fraud/cases/${id}/download`, headers: bearer(token) });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.body).toContain("conta excluída");
+    expect(res.body).not.toContain("Carla");
+    expect(res.body).not.toContain(carla.account.email);
   });
 
   it("caso inexistente dá case_not_found", async () => {
