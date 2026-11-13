@@ -44,7 +44,7 @@ describe("protocolo do gateway (T5)", () => {
       }
       bus.publish("season", "season.status", seasonStatusData("ipo_open"));
       bus.publish("prices", "price", priceData(100));
-      bus.publish("rankings", "rankings.live", { top: [] });
+      bus.publish("rankings", "rankings.live", { period: "month", periodKey: "2027-06", computedAt: "2027-06-01T00:00:00.000Z", total: 0, top: [] });
       bus.publish("club:FLA3", "trade", tradeData(1));
       const recebidos = [await client.next(), await client.next(), await client.next(), await client.next()] as Array<{
         type: string;

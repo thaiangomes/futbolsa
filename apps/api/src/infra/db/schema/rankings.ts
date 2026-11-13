@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, integer, primaryKey, text, unique } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, primaryKey, text, unique, uniqueIndex } from "drizzle-orm/pg-core";
 import { bigId, futbolsa, instant, money, oneOf } from "./base.js";
 import { seasons } from "./admin.js";
 import { wallets } from "./portfolio.js";
@@ -45,6 +45,29 @@ export const rankingRows = futbolsa.table(
   },
   (t) => [
     primaryKey({ columns: [t.snapshotId, t.walletId] }),
-    check("ranking_rows_values_check", sql`${t.base} > 0 and ${t.position} >= 1`),
+    check("ranking_rows_values_check", sql`${t.base} is not null and ${t.position} >= 1`),
+  ],
+);
+
+/**
+ * Pedido de recálculo dos rankings já fechados (P3 do Plano dos rankings), gravado na transação que mudou um
+ * pagamento (ou anulou um negócio). No máximo um pedido aberto por temporada: um novo pedido acumula o menor `from_at`.
+ */
+export const rankingRecalcRequests = futbolsa.table(
+  "ranking_recalc_requests",
+  {
+    id: bigId("id").primaryKey().generatedAlwaysAsIdentity(),
+    seasonId: integer("season_id")
+      .notNull()
+      .references(() => seasons.id),
+    /** Recalcula todo ranking fechado com `closed_at` a partir deste instante. */
+    fromAt: instant("from_at").notNull(),
+    reason: text("reason").notNull(),
+    requestedAt: instant("requested_at").notNull(),
+    doneAt: instant("done_at"),
+  },
+  (t) => [
+    uniqueIndex("ranking_recalc_requests_open_key").on(t.seasonId).where(sql`${t.doneAt} is null`),
+    index("ranking_recalc_requests_season_idx").on(t.seasonId),
   ],
 );

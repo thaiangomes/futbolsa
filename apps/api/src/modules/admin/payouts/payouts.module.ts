@@ -16,7 +16,9 @@ import { EngineInputService } from "./engine-input.js";
 import { PayoutsController } from "./payouts.controller.js";
 import { PayoutEvents } from "./events.js";
 import { PayoutsStatusService } from "./outstanding.js";
-import { NoopRankingsPort, RankingsPort } from "./ports.js";
+import { RankingsPort } from "./ports.js";
+import { RankingsModule } from "../../rankings/rankings.module.js";
+import { RankingsPortAdapter } from "../../rankings/recalc.service.js";
 import { PreviewService } from "./preview.service.js";
 import { SettleCreditsService } from "./settle-credits.js";
 import { SettleJob } from "./settle.job.js";
@@ -29,10 +31,10 @@ import { SettleJob } from "./settle.job.js";
  * `StandingsEvents`; do `PortfolioModule`, o `PortfolioLedger` (o crédito); do `AdminLogModule`, o registro.
  */
 @Module({
-  imports: [RealtimeModule, DividendsModule, ResultsModule, StandingsModule, PortfolioModule, AdminLogModule],
+  imports: [RankingsModule, RealtimeModule, DividendsModule, ResultsModule, StandingsModule, PortfolioModule, AdminLogModule],
   controllers: [PayoutsController, CorrectionsController],
   providers: [
-    { provide: RankingsPort, useClass: NoopRankingsPort },
+    { provide: RankingsPort, useExisting: RankingsPortAdapter },
     EngineInputService,
     CloseEventsService,
     CloseEventsJob,

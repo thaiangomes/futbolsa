@@ -45,7 +45,8 @@ vi.mock("../../src/infra/db/transaction.js", async (importOriginal) => {
     return actual.withTransaction(db, fn, {
       ...options,
       onRetry: (attempt, code) => {
-        watch.retries.push(`${code} (repetição ${attempt})`);
+        // só *deadlock* (40P01): o conflito de serialização (40001) é das leituras `repeatable read` (recálculo dos rankings, fotos) e a repetição é a esperada
+        if (code === "40P01") watch.retries.push(`${code} (repetição ${attempt})`);
         options.onRetry?.(attempt, code);
       },
     });

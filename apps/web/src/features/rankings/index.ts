@@ -1,2 +1,2 @@
-// Telas e cliente do módulo rankings entram aqui na fase dona.
-export {};
+export { RankingsScreen, RankingsContent, RankingTable, Podium } from "./rankings-screen";
+export { rankingsApi, type RankingsApi } from "./api";

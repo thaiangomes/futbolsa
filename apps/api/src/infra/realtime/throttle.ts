@@ -18,7 +18,8 @@ function tickerOf(data: unknown): string | undefined {
 export const THROTTLE_RULES: ThrottleRules = {
   book: { intervalMs: 250 },
   price: { intervalMs: 1_000, key: tickerOf },
-  "rankings.live": { intervalMs: 10_000 },
+  // uma janela por período: a parcial do mês e a da temporada não se atropelam
+  "rankings.live": { intervalMs: 10_000, key: (data) => (data as { period?: unknown } | null)?.period?.toString() },
 };
 
 interface Window {
