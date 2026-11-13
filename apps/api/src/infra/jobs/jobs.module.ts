@@ -4,13 +4,18 @@ import { MarketModule } from "../../modules/market/market.module.js";
 import { RankingsModule } from "../../modules/rankings/rankings.module.js";
 import { PortfolioModule } from "../../modules/portfolio/portfolio.module.js";
 import { AccountJobs } from "./account-jobs.js";
+import { NoticeMailJob } from "./notice-mail.js";
 import { MarketJobs } from "./market-jobs.js";
 import { PortfolioJobs } from "./portfolio-jobs.js";
 import { RankingsJobs } from "./rankings-jobs.js";
 
-/** Tarefas agendadas, cada uma chamando o serviço do módulo dono (Arquitetura da Fase 1). */
+/**
+ * Tarefas agendadas, cada uma chamando o serviço do módulo dono (Arquitetura da Fase 1). Exporta a `NoticeMailJob`
+ * para a decisão do caso de trapaça (F14, T25) acordar o envio dos e-mails depois do `COMMIT`.
+ */
 @Module({
   imports: [ScheduleModule.forRoot(), MarketModule, PortfolioModule, RankingsModule],
-  providers: [AccountJobs, MarketJobs, PortfolioJobs, RankingsJobs],
+  providers: [AccountJobs, NoticeMailJob, MarketJobs, PortfolioJobs, RankingsJobs],
+  exports: [NoticeMailJob],
 })
 export class JobsModule {}

@@ -4,6 +4,7 @@ import type { Cents } from "@futbolsa/engine";
 import type { Database, DrizzleTx, Tx } from "../../../infra/db/index.js";
 import { orders, seasonClubs, trades } from "../../../infra/db/schema/index.js";
 import type { OrderCancelReason, OrderStatus } from "../../../infra/db/schema/index.js";
+import { notAnnulled } from "../state/displayed-price.js";
 import { toPublicTrades } from "./book-view.js";
 
 type Db = Database | DrizzleTx;
@@ -115,14 +116,14 @@ export async function readBookLevels(db: Db, clubId: number, depth = BOOK_DEPTH)
 }
 
 /**
- * Os últimos negócios do clube como o público os vê. Junto de `lastTradeUntil` (preço do passado), é o único lugar
- * que lê `trades` por clube, para a F14 acrescentar o filtro dos negócios anulados sem caçar consultas.
+ * Os últimos negócios do clube como o público os vê, sem os anulados por trapaça (F14): o anulado some da lista como
+ * se nunca tivesse saído. Junto de `lastTradeUntil` (preço do passado), é o único lugar que lê `trades` por clube.
  */
 export async function readRecentTrades(db: Db, clubId: number, limit = RECENT_TRADES): Promise<PublicTrade[]> {
   const rows = await db
     .select({ id: trades.id, at: trades.at, price: trades.price, quantity: trades.quantity })
     .from(trades)
-    .where(eq(trades.clubId, clubId))
+    .where(and(eq(trades.clubId, clubId), notAnnulled))
     .orderBy(desc(trades.at), desc(trades.id))
     .limit(limit);
   return toPublicTrades(rows, limit);

@@ -12,6 +12,7 @@ export const ADMIN_MENU = [
   { href: "/admin/classificacao", label: "Classificação oficial" },
   { href: "/admin/jogadores", label: "Jogadores" },
   { href: "/admin/negocios", label: "Auditoria de negócios" },
+  { href: "/admin/trapaca", label: "Trapaça entre contas" },
   { href: "/admin/bots", label: "Bots" },
   { href: "/admin/pagamentos", label: "Pagamentos" },
   { href: "/admin/pagamentos/correcao", label: "Correção de pagamentos" },

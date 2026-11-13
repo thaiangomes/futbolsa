@@ -51,6 +51,7 @@ describe("visão geral do admin", () => {
       pendingPayouts: 0,
       settlingPayouts: 0,
       correctionToApply: false,
+      openFraudCases: 0,
     });
 
     // jogo pendente

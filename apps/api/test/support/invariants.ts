@@ -204,7 +204,8 @@ export async function totalCash(db: Database, seasonId: number): Promise<number>
 
 /**
  * Os candles de 15 minutos e diários de cada clube são iguais à soma dos negócios (abertura = primeiro, fechamento =
- * último, máxima, mínima e volume). O dia é de 0h a 24h de Brasília. A F16 reaproveita.
+ * último, máxima, mínima e volume). O dia é de 0h a 24h de Brasília. Os negócios anulados por trapaça (F14,
+ * `trade_annulments`) não contam: os candles refeitos são os de quem nunca os teve. A F16 reaproveita.
  */
 export async function assertCandlesMatchTrades(db: Database, seasonId: number): Promise<void> {
   const found: string[] = [];
@@ -222,7 +223,10 @@ export async function assertCandlesMatchTrades(db: Database, seasonId: number): 
                    max(t.price) as high, min(t.price) as low,
                    (array_agg(t.price order by t.at desc, t.id desc))[1] as close,
                    sum(t.quantity) as volume
-            from futbolsa.trades t where t.season_id = ${seasonId} group by 1, 2
+            from futbolsa.trades t
+            where t.season_id = ${seasonId}
+              and not exists (select 1 from futbolsa.trade_annulments ta where ta.trade_id = t.id)
+            group by 1, 2
           )
           select coalesce(a.club_id, c.club_id) as club_id, ${interval}::text as interval, coalesce(a.start, c.start) as start,
                  a.open as trades_open, c.open as candle_open, a.close as trades_close, c.close as candle_close,

@@ -26,6 +26,7 @@ import { MarketPortImpl } from "./ports/market-port.js";
 import { BookPublisher } from "./realtime/book-publisher.js";
 import { MarketEvents } from "./realtime/events.js";
 import { AuctionCloser } from "./state/tunnel-state.js";
+import { TradeAnnulService } from "./annul/annul-trades.js";
 
 /**
  * Mercado secundário (F9: livro de ofertas e formador de mercado): a porta `MatchingEngine` ligada à implementação do
@@ -49,6 +50,9 @@ import { AuctionCloser } from "./state/tunnel-state.js";
  * (`ports/market-port.ts`); o `ResultsModule` do admin importa este módulo e o reexporta para a suspensão, a
  * importação e os pagamentos. Este módulo não importa módulos do admin além do `AdminLogModule` (só arquivos), e a
  * dependência fica num sentido só. O `EndTradingService` (T14) é o fim da negociação que a F15 chama na transação dela.
+ *
+ * Trapaça (F14): o `TradeAnnulService` (`annul/annul-trades.ts`, T24) tira negócios anulados do preço, dos candles e
+ * da referência do túnel, na transação da decisão do caso (T25).
  */
 @Module({
   imports: [PortfolioModule, AdminLogModule, RealtimeModule, DividendsModule],
@@ -72,6 +76,7 @@ import { AuctionCloser } from "./state/tunnel-state.js";
     RefreshWaker,
     { provide: MarketPort, useClass: MarketPortImpl },
     EndTradingService,
+    TradeAnnulService,
   ],
   exports: [
     OrderService,
@@ -87,6 +92,7 @@ import { AuctionCloser } from "./state/tunnel-state.js";
     RefreshWaker,
     MarketPort,
     EndTradingService,
+    TradeAnnulService,
   ],
 })
 export class MarketModule implements OnModuleInit {

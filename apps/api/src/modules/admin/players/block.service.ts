@@ -14,6 +14,19 @@ import { AdminLogService } from "../log/index.js";
 const notFound = () => new DomainError("player_not_found", 404, ADMIN_ERROR_MESSAGES.player_not_found);
 const self = () => new DomainError("cannot_target_self", 409, ADMIN_ERROR_MESSAGES.cannot_target_self);
 
+type UserRow = typeof users.$inferSelect;
+
+/**
+ * Para quem bloqueia por outro caminho (o banimento por trapaça, T27), dentro da mesma transação e das mesmas travas,
+ * como a exclusão da F5 faz com o admin.
+ */
+export interface BlockWithin {
+  /** Com a linha do usuário já travada e a conta ativa, antes de cancelar qualquer coisa. */
+  validate?: (tx: Tx, user: UserRow) => Promise<void>;
+  /** No lugar do registro `player.block`: grava o próprio registro (e o que mais couber) na mesma transação. */
+  record?: (tx: Tx, done: { user: UserRow; blockedReason: string; cancelledOrderIds: number[]; cancelledBidIds: number[] }) => Promise<void>;
+}
+
 /**
  * Bloquear e desbloquear (Admin, critérios 25 e 33; T3 da F14). O bloqueado não negocia nem oferta, sai dos rankings e
  * continua dono das ações, recebendo dividendos; entra e lê a própria carteira. Bloquear cancela as ordens abertas
@@ -32,7 +45,7 @@ export class BlockService {
     private readonly hooks: AccountClosureHooks,
   ) {}
 
-  async block(adminId: string, targetId: string, reason: string): Promise<BlockResponse> {
+  async block(adminId: string, targetId: string, reason: string, within: BlockWithin = {}): Promise<BlockResponse> {
     if (adminId === targetId) throw self();
     const now = this.clock.now();
     return withTransaction(this.db, async (tx) => {
@@ -41,6 +54,7 @@ export class BlockService {
       if (!user || user.status === "deleted") throw notFound();
       if (user.status === "blocked") throw new DomainError("already_blocked", 409, ADMIN_ERROR_MESSAGES.already_blocked);
       if (user.role === "admin" && othersActive === 0) throw accountError("last_admin");
+      await within.validate?.(tx, user);
 
       let cancelledOrders = 0;
       let cancelledBids = 0;
@@ -61,6 +75,10 @@ export class BlockService {
         cancelledBids = cancelledBidIds.length;
       }
       await tx.db.update(users).set({ status: "blocked", blockedReason: reason }).where(eq(users.id, targetId));
+      if (within.record) {
+        await within.record(tx, { user, blockedReason: reason, cancelledOrderIds, cancelledBidIds });
+        return { status: "blocked", cancelledOrders, cancelledBids };
+      }
       await this.log.record(tx, {
         actorId: adminId,
         action: "player.block",

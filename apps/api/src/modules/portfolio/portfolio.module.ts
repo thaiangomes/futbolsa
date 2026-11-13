@@ -1,6 +1,7 @@
 import { Injectable, Module } from "@nestjs/common";
 import type { Tx } from "../../infra/db/transaction.js";
 import { RealtimeModule } from "../../infra/realtime/index.js";
+import { rebuildCandles } from "./candles/rebuild.js";
 import { recordTrade } from "./candles/record-trade.js";
 import { CandlesController } from "./candles/candles.controller.js";
 import { CandlesService } from "./candles/candles.service.js";
@@ -38,6 +39,11 @@ export class PortfolioLedger {
   /** Atualiza os candles de 15 minutos e do dia com um negócio (o `market` chama a cada negócio). */
   recordTrade(tx: Tx, trade: Parameters<typeof recordTrade>[1]) {
     return recordTrade(tx, trade);
+  }
+
+  /** Refaz os candles do clube (travado) desde `since`, sem os negócios anulados (a anulação de trapaça da F14). */
+  rebuildCandles(tx: Tx, clubId: number, since: Date) {
+    return rebuildCandles(tx, clubId, since);
   }
 }
 

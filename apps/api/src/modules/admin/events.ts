@@ -20,6 +20,7 @@ import { MatchesEvents } from "./results/ports.js";
 export class AdminEvents {
   private lastPending: string | null = null;
   private payoutsCounter: (() => Promise<number>) | null = null;
+  private fraudCounter: (() => Promise<number>) | null = null;
 
   constructor(
     private readonly bus: EventBus,
@@ -46,13 +47,23 @@ export class AdminEvents {
     this.payoutsCounter = counter;
   }
 
+  /** A trapaça (F14) registra quem conta os casos abertos. */
+  registerFraudCounter(counter: () => Promise<number>): void {
+    this.fraudCounter = counter;
+  }
+
   /** Publica quantos jogos e pagamentos estão pendentes, se algum número mudou desde o último aviso. */
   async publishPending(): Promise<void> {
     const pendingMatches = (await this.pending.compute()).matches.length;
     const pendingPayouts = this.payoutsCounter ? await this.payoutsCounter() : undefined;
-    const key = `${pendingMatches}/${pendingPayouts ?? ""}`;
+    const openFraudCases = this.fraudCounter ? await this.fraudCounter() : undefined;
+    const key = `${pendingMatches}/${pendingPayouts ?? ""}/${openFraudCases ?? ""}`;
     if (key === this.lastPending) return;
     this.lastPending = key;
-    this.bus.publish("admin", "admin.pending", pendingPayouts === undefined ? { pendingMatches } : { pendingMatches, pendingPayouts });
+    this.bus.publish("admin", "admin.pending", {
+      pendingMatches,
+      ...(pendingPayouts === undefined ? {} : { pendingPayouts }),
+      ...(openFraudCases === undefined ? {} : { openFraudCases }),
+    });
   }
 }

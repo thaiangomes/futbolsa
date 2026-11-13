@@ -50,6 +50,7 @@ const detail = (over: Partial<PlayerDetail> = {}): PlayerDetail => ({
   entryMode: "ipo",
   openOrders: [],
   bids: [],
+  warnings: [],
   ...over,
 } as PlayerDetail);
 
@@ -112,6 +113,19 @@ describe("jogadores (tela)", () => {
     expect(block.disabled).toBe(false);
     await click(block);
     expect(blockPlayer).toHaveBeenCalledWith(ID, "suspeita de trapaça");
+  });
+
+  it("admin 45: o detalhe lista as advertências da temporada com o caso e a data", async () => {
+    const warnings = [{ caseId: 7, at: "2027-03-10T15:00:00.000Z" }, { caseId: 9, at: "2027-03-20T15:00:00.000Z" }];
+    await render(createElement(PlayerDetailScreen, { admin: fake({ player: async () => detail({ warnings }), playerEntries: async () => ({ items: [], nextCursor: null }) }), id: ID }));
+    expect(text()).toContain("Advertências por trapaça nesta temporada");
+    expect([...container.querySelectorAll("a[href^='/admin/trapaca?id=']")].map((a) => a.getAttribute("href"))).toEqual(["/admin/trapaca?id=7", "/admin/trapaca?id=9"]);
+  });
+
+  it("sem advertência, o detalhe não mostra a lista", async () => {
+    await render(createElement(PlayerDetailScreen, { admin: fake({ player: async () => detail(), playerEntries: async () => ({ items: [], nextCursor: null }) }), id: ID }));
+    expect(text()).toContain("Ana");
+    expect(text()).not.toContain("Advertências por trapaça");
   });
 
   it("admin 26: excluir só habilita com o apelido digitado e envia o apelido e o motivo", async () => {

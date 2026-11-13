@@ -177,6 +177,7 @@ export function EntryRow({ entry }: { entry: EntryItem }) {
       <td className="num">{shortDate(entry.at)}</td>
       <td>
         <span className="b">{ENTRY_KIND_LABELS[entry.kind] ?? entry.kind}</span>
+        {entry.annulled && <span className="chip chip-down" data-testid="marca-anulado" style={{ marginLeft: 6 }}>anulado</span>}
         {entry.inAuction && <span className="chip chip-live" data-testid="marca-leilao" style={{ marginLeft: 6 }}>no leilão</span>}
         {entryDetail(entry) && <div className="xs muted">{entryDetail(entry)}</div>}
       </td>

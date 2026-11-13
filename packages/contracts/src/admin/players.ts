@@ -56,7 +56,14 @@ export const playerBidSchema = z.strictObject({
   status: z.enum(["active", "cancelled", "settled"]),
 });
 
-/** `GET /admin/players/:id`: conta, carteira da temporada atual, ordens abertas e ofertas do IPO. */
+/** Uma advertência por trapaça (T27): o caso e a data, nunca a outra conta. */
+export const playerWarningSchema = z.strictObject({
+  caseId: z.number().int(),
+  at: z.string(),
+});
+export type PlayerWarning = z.infer<typeof playerWarningSchema>;
+
+/** `GET /admin/players/:id`: conta, carteira da temporada atual, ordens abertas, ofertas do IPO e advertências. */
 export const playerDetailSchema = z.strictObject({
   account: playerAccountSchema,
   /** Vazio sem carteira na temporada atual e na conta excluída. */
@@ -64,6 +71,8 @@ export const playerDetailSchema = z.strictObject({
   entryMode: z.enum(["ipo", "index", "cash"]).nullable(),
   openOrders: z.array(myOrderSchema),
   bids: z.array(playerBidSchema),
+  /** As advertências por trapaça da temporada atual, da mais antiga para a mais nova (acabam com a temporada). */
+  warnings: z.array(playerWarningSchema),
 });
 export type PlayerDetail = z.infer<typeof playerDetailSchema>;
 

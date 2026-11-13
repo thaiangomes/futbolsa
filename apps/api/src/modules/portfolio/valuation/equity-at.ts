@@ -31,6 +31,12 @@ export interface WalletEquity {
 export interface EquityAtOptions {
   /** Só estas carteiras (padrão: todas as de jogadores e bots da temporada, nunca a tesouraria). */
   wallets?: readonly number[];
+  /**
+   * Negócios ainda **não anulados** a tratar como se nunca tivessem existido: caixa, ações e preço saem sem eles (o "sem" do
+   * relatório de trapaça do admin, F14). Os já anulados não entram aqui: a linha `trade_annulled` deles já conta pelo
+   * horário do negócio original.
+   */
+  ignoreTrades?: ReadonlySet<number>;
 }
 
 /**
@@ -49,9 +55,10 @@ export const EquityAt = {
     const buybackClosed = season.tradingEndedAt !== null && season.tradingEndedAt.getTime() <= at.getTime();
 
     // em sequência: o `tx` é uma conexão só, então as consultas não correm juntas de verdade
-    const balances = await balancesAt(tx, seasonId, at, options.wallets);
-    const holdings = await holdingsAt(tx, seasonId, at, options.wallets);
-    const prices = await pricesAt(tx, seasonId, at);
+    const read = { ignoreTrades: options.ignoreTrades };
+    const balances = await balancesAt(tx, seasonId, at, options.wallets, read);
+    const holdings = await holdingsAt(tx, seasonId, at, options.wallets, read);
+    const prices = await pricesAt(tx, seasonId, at, read);
     const payables = await payablesAt(tx, seasonId, at, options.wallets);
 
     const out = new Map<number, WalletEquity>();

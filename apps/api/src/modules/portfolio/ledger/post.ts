@@ -22,9 +22,11 @@ export interface PostResult {
  * extrato com o caixa depois. A carteira precisa estar travada nesta transação.
  * Vários movimentos da mesma carteira de uma vez: `postMany` (`batch.ts`), com a mesma conta.
  *
- * O caixa só fica negativo por estorno (`reversal`), e então sem nada reservado,
- * porque as compras abertas são canceladas antes (critério 15 do Admin). Com o
- * caixa negativo, entradas (dividendo, venda) abatem o negativo.
+ * O caixa só fica negativo por estorno (`reversal`) ou anulação de negócio por trapaça
+ * (`trade_annulled`), e então sem nada reservado, porque as compras abertas são canceladas
+ * antes (critério 15 do Admin; T25 do Plano do admin de jogadores e bots). Com o caixa
+ * negativo, entradas (dividendo, venda) abatem o negativo. Na anulação, o custo e o
+ * resultado da posição chegam prontos no movimento (`annulled`, de `replayCost`).
  */
 export async function post(tx: Tx, m: Movement): Promise<PostResult> {
   validate(m);

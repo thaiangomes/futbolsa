@@ -17,6 +17,7 @@ const calm: Overview = {
   pendingPayouts: 0,
   settlingPayouts: 0,
   correctionToApply: false,
+  openFraudCases: 0,
 };
 const apiWith = (overview: Overview) => ({ overview: async () => overview }) as unknown as AdminApi;
 

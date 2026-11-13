@@ -6,6 +6,7 @@ import { HttpInfraModule } from "./infra/http/index.js";
 import { AuthAdapterModule } from "./infra/auth-adapter/index.js";
 import { RealtimeModule } from "./infra/realtime/index.js";
 import { JobsModule } from "./infra/jobs/index.js";
+import { MailModule } from "./infra/mail/index.js";
 import { AccountsModule } from "./modules/accounts/index.js";
 import { IpoModule } from "./modules/ipo/index.js";
 import { MarketModule } from "./modules/market/index.js";
@@ -23,6 +24,7 @@ import { AdminModule } from "./modules/admin/index.js";
     HttpInfraModule,
     AuthAdapterModule,
     RealtimeModule,
+    MailModule,
     JobsModule,
     // módulos de negócio, um por nota dona
     AccountsModule,

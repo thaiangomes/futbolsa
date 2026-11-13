@@ -7,6 +7,7 @@ import { DB, type Database, lockClubs, lockSeason, lockWallets, type Tx, withTra
 import {
   authIdentities,
   invites,
+  playerNotices,
   positions,
   seasonClubs,
   seasons,
@@ -77,6 +78,8 @@ export class AccountDeletionService {
         .set({ status: "deleted", email: null, nickname: null, deletedAt: now })
         .where(eq(users.id, userId));
       if (user.email) await tx.db.delete(invites).where(eq(invites.email, user.email));
+      // os avisos de trapaça são dado da conta: somem com ela (o relatório do admin guarda só ids)
+      await tx.db.delete(playerNotices).where(eq(playerNotices.userId, userId));
       if (options.record) await options.record(tx, { user, walletCloseout: result });
       tx.afterCommit(async () => {
         this.realtime.disconnectUser(userId);

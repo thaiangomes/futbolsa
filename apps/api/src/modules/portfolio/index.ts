@@ -1,5 +1,6 @@
 export * from "./portfolio.module.js";
 export * from "./candles/record-trade.js";
+export * from "./candles/rebuild.js";
 export * from "./wallet-events.js";
 export * from "./valuation/equity-at.js";
 export * from "./valuation/constants.js";

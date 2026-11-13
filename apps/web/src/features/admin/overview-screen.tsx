@@ -31,6 +31,10 @@ export function OverviewScreen({ admin }: { admin: AdminApi }) {
       href: "/admin/suspensao",
     },
   ];
+  // Casos de trapaça abertos (alerta ou relatório manual), a decidir (F14)
+  if (o.openFraudCases > 0) {
+    items.push({ ok: false, text: `${o.openFraudCases} caso(s) de trapaça entre contas a decidir`, href: "/admin/trapaca" });
+  }
   // O IPO que não abriu no horário (falta oferta, primeiro jogo, clubes ou tabela de copa) e a liquidação com erro só
   // aparecem quando há o que mostrar (proposta 6 do Plano do IPO e decisão do Thaian em 2026-11-09).
   if (o.ipoBlockers.length > 0) {

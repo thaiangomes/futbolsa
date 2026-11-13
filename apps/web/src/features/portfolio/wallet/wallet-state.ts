@@ -51,6 +51,7 @@ export const ENTRY_KIND_LABELS: Record<string, string> = {
   ipo_settle: "IPO: ações recebidas",
   ipo_reserve: "IPO: reserva",
   trade: "Negócio",
+  trade_annulled: "Negócio anulado pelo admin",
   dividend: "Dividendo",
   reversal: "Estorno",
   complement: "Complemento",

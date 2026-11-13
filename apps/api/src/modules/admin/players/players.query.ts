@@ -11,7 +11,7 @@ import {
 } from "@futbolsa/contracts";
 import { COMMON_ERROR_MESSAGES } from "@futbolsa/contracts";
 import { DB, type Database } from "../../../infra/db/index.js";
-import { clubs, ipoBids, orders, users, wallets } from "../../../infra/db/schema/index.js";
+import { clubs, fraudWarnings, ipoBids, orders, users, wallets } from "../../../infra/db/schema/index.js";
 import { DomainError } from "../../../infra/http/index.js";
 import { myOrderView } from "../../market/orders/views.js";
 import { toOrderRecord } from "../../market/matching/settle.js";
@@ -105,8 +105,9 @@ export class PlayersQueryService {
       createdAt: user.createdAt.toISOString(),
       deletedAt: user.deletedAt?.toISOString() ?? null,
     };
+    const warnings = deleted ? [] : await this.warningsOf(userId);
     const walletId = deleted ? undefined : await this.walletIdOf(userId);
-    if (walletId === undefined) return { account, wallet: null, entryMode: null, openOrders: [], bids: [] };
+    if (walletId === undefined) return { account, wallet: null, entryMode: null, openOrders: [], bids: [], warnings };
 
     const [head] = await this.db.select({ entryMode: wallets.entryMode }).from(wallets).where(eq(wallets.id, walletId));
     const orderRows = await this.db
@@ -133,6 +134,7 @@ export class PlayersQueryService {
         reserved: r.bid.reserved,
         status: r.bid.status as PlayerDetail["bids"][number]["status"],
       })),
+      warnings,
     };
   }
 
@@ -142,6 +144,21 @@ export class PlayersQueryService {
     const walletId = await this.walletIdOf(userId);
     if (walletId === undefined) throw new DomainError("no_wallet", 409, ADMIN_ERROR_MESSAGES.no_wallet);
     return this.entriesService.list(walletId, query);
+  }
+
+  /**
+   * As advertências por trapaça da temporada atual (T27): o caso e a data, sem a outra conta. Só se lê a da temporada,
+   * então a temporada nova começa sem nenhuma; bot não tem conta de usuário e nunca tem advertência.
+   */
+  private async warningsOf(userId: string): Promise<PlayerDetail["warnings"]> {
+    const season = await currentSeason(this.db);
+    if (!season) return [];
+    const rows = await this.db
+      .select({ caseId: fraudWarnings.caseId, at: fraudWarnings.at })
+      .from(fraudWarnings)
+      .where(and(eq(fraudWarnings.userId, userId), eq(fraudWarnings.seasonId, season.id)))
+      .orderBy(asc(fraudWarnings.at), asc(fraudWarnings.id));
+    return rows.map((r) => ({ caseId: Number(r.caseId), at: r.at.toISOString() }));
   }
 
   /** A carteira do usuário na temporada atual. */

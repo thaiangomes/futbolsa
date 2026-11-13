@@ -152,6 +152,18 @@ export function PlayerDetailScreen({ admin, id }: { admin: AdminApi; id: string 
         </Card>
       )}
 
+      {detail.warnings.length > 0 && (
+        <Card title="Advertências por trapaça nesta temporada">
+          <ul className="stack-s m0" style={{ listStyle: "none", padding: 0 }}>
+            {detail.warnings.map((w) => (
+              <li key={w.caseId}>
+                <a href={`/admin/trapaca?id=${w.caseId}`}>Caso #{w.caseId}</a> · {formatInstant(w.at)}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
       {(detail.openOrders.length > 0 || detail.bids.length > 0) && (
         <Card title="Ordens abertas e ofertas do IPO">
           <ul className="stack-s m0" style={{ listStyle: "none", padding: 0 }}>

@@ -8,6 +8,7 @@ import { authIdentities, invites, seasons, users, wallets } from "../../infra/db
 import { currentSeason as openSeason } from "../admin/current-season.js";
 import { readAvailability } from "../entry/availability.js";
 import { PortfolioLedger } from "../portfolio/index.js";
+import { NoticesService } from "./notices.service.js";
 import { AccountsConfig } from "./accounts.config.js";
 import { accountError, mapUniqueViolation } from "./errors.js";
 import { creditSeasonStart, SEASON_START_CASH } from "./season-start.js";
@@ -23,6 +24,7 @@ export class AccountsService {
     private readonly clock: Clock,
     private readonly ledger: PortfolioLedger,
     private readonly config: AccountsConfig,
+    private readonly notices: NoticesService,
   ) {}
 
   /**
@@ -61,6 +63,7 @@ export class AccountsService {
       role: row!.role as ResolvedUser["role"],
       status: row!.status as ResolvedUser["status"],
       termsAcceptedAt: row!.termsAcceptedAt!.toISOString(),
+      pendingNotices: await this.notices.pending(row!.id),
       season: seasonView,
     };
   }
