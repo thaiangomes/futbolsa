@@ -271,10 +271,13 @@ describe("encerramento da temporada (F15, T6)", () => {
     expect((await snapshotsOf(s, "month")).map((x) => x.periodKey)).toContain("2027-11");
     expect((await snapshotsOf(s, "month")).map((x) => x.periodKey)).not.toContain("2027-12");
 
-    // a tarefa pede o recálculo de cada mês que fecha: enquanto o pedido está aberto, o encerramento espera
+    // a tarefa pede o recálculo de cada mês que fecha: enquanto o pedido está aberto, o encerramento espera, e a
+    // mensagem diz ao admin para esperar um minuto (a tarefa do recálculo atende em até um minuto)
     const blocked = await closeRoute(s);
     expect(blocked.statusCode).toBe(409);
-    expect(blocked.json().blockers).toEqual([expect.objectContaining({ code: "recalc_pending", count: 1, link: null })]);
+    expect(blocked.json().blockers).toEqual([
+      expect.objectContaining({ code: "recalc_pending", count: 1, link: null, text: expect.stringContaining("Espere um minuto") }),
+    ]);
     await app.get(RecalcService, { strict: false }).processRecalcRequests(C);
 
     expect((await closeRoute(s)).statusCode).toBe(200);

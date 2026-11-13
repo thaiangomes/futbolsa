@@ -121,3 +121,61 @@ export async function postMany(tx: Tx, movements: readonly Movement[]): Promise<
   );
   return { results, entries, wallet: updated!, positions: finalPositions };
 }
+
+/** Carteiras por comando no `postCashEach` (4 parâmetros no `UPDATE` e 14 no `INSERT` por carteira). */
+const WALLETS_PER_COMMAND = 2000;
+
+/**
+ * Um movimento só de caixa (sem clube nem ações) em cada uma de várias carteiras travadas, com o resultado de um laço de
+ * `post`: a mesma conta (`validate` e `applyToWallet`, com as mesmas recusas, conferidas antes de qualquer escrita) e a
+ * mesma linha do extrato (`entryValues`, com o caixa depois dela). Em vez de três comandos por carteira, três por lote de
+ * até 2.000: lê as carteiras, grava o estado novo (um `UPDATE … FROM (VALUES …)`) e o extrato (um `INSERT`). Feito para
+ * o encerramento da temporada (F15, T10), que zera milhares de carteiras numa transação. Carteira repetida, movimento
+ * com clube ou ações e carteira não travada são recusados. Devolve as linhas do extrato na ordem dos movimentos.
+ */
+export async function postCashEach(tx: Tx, movements: readonly Movement[]): Promise<WalletEntryRow[]> {
+  const seen = new Set<number>();
+  for (const m of movements) {
+    validate(m);
+    if (m.clubId !== undefined || (m.sharesDelta ?? 0) !== 0 || (m.reservedSharesDelta ?? 0) !== 0) {
+      throw new LedgerError("cash_only", `postCashEach com movimento de ações ou de clube (${m.kind}, carteira ${m.walletId})`);
+    }
+    if (seen.has(m.walletId)) throw new LedgerError("wallet_mismatch", `postCashEach com a carteira ${m.walletId} repetida`);
+    seen.add(m.walletId);
+    if (!tx.locks.isWalletLocked(m.walletId)) {
+      throw new LedgerError("wallet_not_locked", `carteira ${m.walletId} não está travada nesta transação`);
+    }
+  }
+
+  const entries: WalletEntryRow[] = [];
+  for (let start = 0; start < movements.length; start += WALLETS_PER_COMMAND) {
+    const part = movements.slice(start, start + WALLETS_PER_COMMAND);
+    const rows = await tx.db
+      .select()
+      .from(wallets)
+      .where(inArray(wallets.id, part.map((m) => m.walletId)));
+    const byId = new Map(rows.map((w) => [w.id, w]));
+    // a conta inteira na memória antes de escrever: uma recusa não deixa nada gravado
+    const steps = part.map((m) => {
+      const wallet = byId.get(m.walletId);
+      if (!wallet) throw new LedgerError("wallet_not_found", `carteira inexistente: ${m.walletId}`);
+      const next = applyToWallet(wallet, m);
+      return { m, next };
+    });
+    const values = sql.join(
+      steps.map(({ m, next }) => sql`(${m.walletId}::bigint, ${next.cash}::bigint, ${next.reservedCash}::bigint, ${next.openOrders}::int)`),
+      sql`, `,
+    );
+    await tx.db.execute(sql`
+      update ${wallets} set cash = v.cash, reserved_cash = v.reserved_cash, open_orders = v.open_orders
+      from (values ${values}) as v(id, cash, reserved_cash, open_orders)
+      where ${wallets.id} = v.id`);
+    const inserted = await tx.db
+      .insert(walletEntries)
+      .values(steps.map(({ m, next }) => entryValues(m, next.cash, null)))
+      .returning();
+    // os ids saem da sequência na ordem das linhas do VALUES
+    entries.push(...inserted.sort((a, b) => a.id - b.id));
+  }
+  return entries;
+}

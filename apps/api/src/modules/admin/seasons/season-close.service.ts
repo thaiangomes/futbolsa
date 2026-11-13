@@ -36,7 +36,8 @@ const BLOCKER_TEXT: Record<CloseBlockerCode, (n: number) => string> = {
   buyback_not_approved: (n) => (n === 1 ? "A recompra de 1 clube aguarda aprovação." : `A recompra de ${n} clubes aguarda aprovação.`),
   open_orders: (n) => (n === 1 ? "1 ordem aberta ou reserva." : `${n} ordens abertas ou reservas.`),
   shares_remaining: (n) => (n === 1 ? "1 carteira ainda tem ações." : `${n} carteiras ainda têm ações.`),
-  recalc_pending: () => "Há um recálculo de ranking em andamento.",
+  // o fechamento do mês e cada pagamento pedem um recálculo, que a tarefa atende em até um minuto (F13)
+  recalc_pending: () => "Há um recálculo de ranking em andamento. Espere um minuto e tente de novo.",
   fraud_open: (n) => (n === 1 ? "1 caso de trapaça aberto." : `${n} casos de trapaça abertos.`),
 };
 
@@ -146,15 +147,18 @@ export class SeasonCloseService {
       // 6. a foto mensal em C (as carteiras ainda com o caixa)
       const photos = await this.snapshots.takeSnapshots(tx, seasonId, C);
 
-      // 7. cada carteira a R$ 0,00 (ações e reservas já são zero, pela lista acima)
+      // 7. cada carteira a R$ 0,00 (ações e reservas já são zero, pela lista acima). Em lote (`postCashEach`, a mesma
+      // conta e a mesma linha do `post`, em poucos comandos): com 10 mil carteiras, um `post` por carteira levava ~36 s
+      // dos ~42 s da transação, com a temporada e todas as carteiras travadas (T10)
       const withCash = await tx.db
         .select({ id: wallets.id, cash: wallets.cash })
         .from(wallets)
         .where(and(eq(wallets.seasonId, seasonId), sql`${wallets.cash} <> 0`))
         .orderBy(asc(wallets.id));
-      for (const w of withCash) {
-        await this.ledger.post(tx, { walletId: w.id, at: C, kind: "season_close", cashDelta: -w.cash, ref: { type: "season", id: seasonId } });
-      }
+      await this.ledger.postCashEach(
+        tx,
+        withCash.map((w) => ({ walletId: w.id, at: C, kind: "season_close" as const, cashDelta: -w.cash, ref: { type: "season", id: seasonId } })),
+      );
 
       // 8. a temporada encerrada
       const [row] = await tx.db.update(seasons).set({ status: "closed", closedAt: C }).where(eq(seasons.id, seasonId)).returning();

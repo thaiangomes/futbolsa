@@ -15,7 +15,7 @@ import { SnapshotService } from "./snapshots/snapshot.service.js";
 import { WalletController } from "./wallet/wallet.controller.js";
 import { WalletService } from "./wallet/wallet.service.js";
 import { WalletEvents } from "./wallet-events.js";
-import { openWallet, post, postMany, type Movement, type OpenWallet } from "./ledger/index.js";
+import { openWallet, post, postCashEach, postMany, type Movement, type OpenWallet } from "./ledger/index.js";
 
 /**
  * O único caminho de escrita das carteiras, para os outros módulos: eles decidem
@@ -30,6 +30,11 @@ export class PortfolioLedger {
   /** Vários movimentos da mesma carteira (travada) de uma vez, com o resultado de um laço de `post` em ~5 comandos. */
   postMany(tx: Tx, movements: readonly Movement[]) {
     return postMany(tx, movements);
+  }
+
+  /** Um movimento só de caixa em cada uma de várias carteiras (travadas), com o resultado de um laço de `post` em poucos comandos. */
+  postCashEach(tx: Tx, movements: readonly Movement[]) {
+    return postCashEach(tx, movements);
   }
 
   openWallet(tx: Tx, options: OpenWallet) {
