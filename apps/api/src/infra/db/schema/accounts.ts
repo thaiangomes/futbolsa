@@ -1,8 +1,8 @@
 import { sql } from "drizzle-orm";
-import { check, integer, primaryKey, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { futbolsa, instant, money, oneOf } from "./base.js";
+import { check, index, integer, jsonb, primaryKey, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigId, futbolsa, instant, money, oneOf } from "./base.js";
 import { seasons } from "./admin.js";
-import { USER_ROLES, USER_STATUSES } from "./values.js";
+import { PLAYER_NOTICE_KINDS, USER_ROLES, USER_STATUSES } from "./values.js";
 
 /** Dono: módulo `accounts` (Conta e login). */
 
@@ -71,4 +71,26 @@ export const seasonResults = futbolsa.table(
     position: integer("position"),
   },
   (t) => [primaryKey({ columns: [t.userId, t.seasonId] })],
+);
+
+/** Avisos ao jogador (advertência e banimento por trapaça, F14). O e-mail é enviado por uma tarefa, da fila. */
+export const playerNotices = futbolsa.table(
+  "player_notices",
+  {
+    id: bigId("id").primaryKey().generatedAlwaysAsIdentity(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    kind: text("kind").notNull(),
+    body: jsonb("body").notNull(),
+    createdAt: instant("created_at").notNull(),
+    readAt: instant("read_at"),
+    emailSentAt: instant("email_sent_at"),
+    emailAttempts: integer("email_attempts").notNull().default(0),
+  },
+  (t) => [
+    index("player_notices_user_unread_idx").on(t.userId).where(sql`${t.readAt} is null`),
+    index("player_notices_mail_idx").on(t.id).where(sql`${t.emailSentAt} is null`),
+    check("player_notices_kind_check", oneOf(t.kind, PLAYER_NOTICE_KINDS)),
+  ],
 );

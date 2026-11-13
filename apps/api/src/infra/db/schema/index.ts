@@ -11,3 +11,4 @@ export * from "./ipo.js";
 export * from "./payouts.js";
 export * from "./rankings.js";
 export * from "./infra.js";
+export * from "./fraud.js";
