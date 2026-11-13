@@ -96,6 +96,52 @@ export function planAnnulment(trades: readonly AnnulTrade[], freeShares: Readonl
   return { steps, remaining };
 }
 
+/** O que acontece com um negócio desfeito em dinheiro, depois do fim da negociação. */
+export interface CashAnnulStep extends AnnulStep {
+  /** A recompra por ação do clube (o evento de recompra vigente). */
+  perShare: Cents;
+  /** `returned × perShare`: a recompra das ações que "voltam", que o comprador devolve e o vendedor recebe. */
+  buyback: Cents;
+  /**
+   * O que o comprador recebe, líquido: `cash − buyback` (`returned × (preço − recompra)`); o vendedor recebe o
+   * contrário. Negativo quando a recompra vale mais que o preço do negócio.
+   */
+  buyerCash: Cents;
+}
+
+export interface CashAnnulPlan {
+  steps: CashAnnulStep[];
+  remaining: Map<number, number>;
+}
+
+/**
+ * Desfaz em dinheiro os negócios de uma temporada com a negociação encerrada (`trading_ended`, proposta 20 do Plano
+ * do admin de jogadores e bots). As ações não se movem: a foto da recompra já foi tirada e todas as ordens foram
+ * canceladas. O resultado é o de refazer a foto, como se as ações tivessem ficado com quem vendeu e sido recompradas
+ * dele: quem comprou recebe `ações × preço` e devolve `ações × recompra`; quem vendeu, o contrário.
+ *
+ * Quantas ações "voltam" segue a mesma regra do `planAnnulment`, sobre as ações de cada carteira **na foto da
+ * recompra** (`photoShares`, por `holdingKey`), do mais novo para o mais antigo: o que o comprador já não tinha na
+ * foto é a falta, e o dinheiro dessas ações fica com quem vendeu. `perShare` traz a recompra por ação de cada clube
+ * (por `clubId`); clube sem recompra é erro de quem chama.
+ */
+export function planCashAnnulment(
+  trades: readonly AnnulTrade[],
+  photoShares: ReadonlyMap<string, number>,
+  perShare: ReadonlyMap<number, Cents>,
+): CashAnnulPlan {
+  const plan = planAnnulment(trades, photoShares);
+  const steps = plan.steps.map((s): CashAnnulStep => {
+    const value = perShare.get(s.clubId);
+    if (value === undefined) throw new Error(`Sem a recompra por ação do clube ${s.clubId}`);
+    assertCents(value, "recompra por ação");
+    if (value < 0) throw new Error(`Recompra por ação negativa no clube ${s.clubId}`);
+    const buyback = s.returned * value;
+    return { ...s, perShare: value, buyback, buyerCash: s.cash - buyback };
+  });
+  return { steps, remaining: plan.remaining };
+}
+
 /** Uma linha do histórico de uma posição, na ordem em que aconteceu. */
 export interface ReplayEntry {
   /** Ações que entram (positivo) ou saem (negativo) da posição. */

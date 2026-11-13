@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { holdingKey, planAnnulment, replayCost, type AnnulTrade, type ReplayEntry } from "../src/engine/annulment.js";
+import { holdingKey, planAnnulment, planCashAnnulment, replayCost, type AnnulTrade, type ReplayEntry } from "../src/engine/annulment.js";
 
 // Critério 42 de "Admin" e as propostas 17 e 18 do Plano do admin de jogadores e bots.
 
@@ -100,6 +100,52 @@ describe("planAnnulment", () => {
     expect(() => planAnnulment([{ ...t, quantity: 0 }], free([]))).toThrow();
     expect(() => planAnnulment([{ ...t, price: 0 }], free([]))).toThrow();
     expect(() => planAnnulment([{ ...t, sellerWallet: ANA }], free([]))).toThrow();
+  });
+});
+
+describe("planCashAnnulment (depois do fim da negociação)", () => {
+  const buyback = (perShare: number, clubId = 1) => new Map([[clubId, perShare]]);
+
+  it("admin 42: Ana comprou de Bruno 3 SPT3 a R$ 8,00 com recompra de R$ 5,00: recebe R$ 24,00 e devolve R$ 15,00", () => {
+    const t = trade({ buyerWallet: ANA, sellerWallet: BRUNO, price: 800, quantity: 3 });
+    const plan = planCashAnnulment([t], free([[ANA, 3]]), buyback(500));
+    expect(plan.steps).toEqual([
+      expect.objectContaining({ tradeId: t.id, returned: 3, short: 0, cash: 2400, perShare: 500, buyback: 1500, buyerCash: 900 }),
+    ]);
+    // Bruno, o vendedor, faz o contrário: −R$ 9,00, e as ações não se movem
+    expect(plan.remaining.get(t.id)).toBe(0);
+  });
+
+  it("a falta é pelas ações da foto: o que Ana já não tinha fica, e o dinheiro dessas ações fica com Bruno", () => {
+    const t = trade({ buyerWallet: ANA, sellerWallet: BRUNO, price: 800, quantity: 3 });
+    const plan = planCashAnnulment([t], free([[ANA, 1]]), buyback(500));
+    expect(plan.steps[0]).toMatchObject({ returned: 1, short: 2, cash: 800, buyback: 500, buyerCash: 300 });
+    expect(planCashAnnulment([t], free([]), buyback(500)).steps[0]).toMatchObject({ returned: 0, buyerCash: 0 });
+  });
+
+  it("recompra acima do preço: o comprador devolve mais do que recebe", () => {
+    const t = trade({ buyerWallet: ANA, sellerWallet: BRUNO, price: 400, quantity: 2 });
+    expect(planCashAnnulment([t], free([[ANA, 2]]), buyback(650)).steps[0]).toMatchObject({ cash: 800, buyback: 1300, buyerCash: -500 });
+  });
+
+  it("ida e volta na foto se desfaz como no planAnnulment, cada clube com a sua recompra", () => {
+    const ida = trade({ buyerWallet: ANA, sellerWallet: BRUNO, price: 800, quantity: 2 });
+    const volta = trade({ buyerWallet: BRUNO, sellerWallet: ANA, price: 900, quantity: 2 });
+    const outro = trade({ buyerWallet: ANA, sellerWallet: CARLA, price: 1000, clubId: 2 });
+    const photo = new Map([...free([[BRUNO, 2]]), ...free([[ANA, 1]], 2)]);
+    const plan = planCashAnnulment([ida, volta, outro], photo, new Map([[1, 500], [2, 100]]));
+    expect(plan.steps.map((s) => [s.tradeId, s.returned, s.buyerCash])).toEqual([
+      [outro.id, 1, 900],
+      [volta.id, 2, 800],
+      [ida.id, 2, 600],
+    ]);
+  });
+
+  it("clube sem a recompra, ou recompra inválida, é erro de quem chama", () => {
+    const t = trade({ buyerWallet: ANA, sellerWallet: BRUNO, price: 800 });
+    expect(() => planCashAnnulment([t], free([[ANA, 1]]), new Map())).toThrow();
+    expect(() => planCashAnnulment([t], free([[ANA, 1]]), buyback(-1))).toThrow();
+    expect(() => planCashAnnulment([t], free([[ANA, 1]]), buyback(1.5))).toThrow();
   });
 });
 
