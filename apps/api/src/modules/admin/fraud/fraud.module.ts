@@ -5,8 +5,10 @@ import { PortfolioModule } from "../../portfolio/index.js";
 import { RankingsModule } from "../../rankings/rankings.module.js";
 import { AdminLogModule } from "../log/index.js";
 import { PayoutsModule } from "../payouts/payouts.module.js";
+import { PlayersModule } from "../players/players.module.js";
 import { ResultsModule } from "../results/results.module.js";
 import { AlertScan } from "./alert-scan.js";
+import { FraudBanService } from "./ban.service.js";
 import { FraudCasesController } from "./cases.controller.js";
 import { FraudCasesService } from "./cases.service.js";
 import { FraudDecisionController } from "./decision.controller.js";
@@ -19,12 +21,13 @@ import { FraudReportService } from "./report.service.js";
  * tarefa a tarefa; os serviços e controladores entram aqui conforme ficam prontos. Do `ResultsModule` vêm o
  * `AdminEvents` (o `admin.pending`) e, pelo `MarketModule` que ele reexporta, o cancelamento das ordens, a anulação no
  * preço (`TradeAnnulService`) e o livro (`BookPublisher`); do `PayoutsModule`, o `cancelBuysToCover` da F12; do
- * `RankingsModule`, o pedido de recálculo; do `JobsModule`, a tarefa dos e-mails dos avisos.
+ * `RankingsModule`, o pedido de recálculo; do `JobsModule`, a tarefa dos e-mails dos avisos; do `PlayersModule`, o
+ * bloqueio da T3 que o banimento usa.
  */
 @Module({
-  imports: [AdminLogModule, ResultsModule, PayoutsModule, PortfolioModule, RankingsModule, RealtimeModule, JobsModule],
+  imports: [AdminLogModule, ResultsModule, PayoutsModule, PortfolioModule, RankingsModule, RealtimeModule, JobsModule, PlayersModule],
   controllers: [FraudCasesController, FraudDecisionController],
-  providers: [AlertScan, FraudCasesService, FraudReportService, FraudDecisionService, FraudJobs],
+  providers: [AlertScan, FraudCasesService, FraudReportService, FraudDecisionService, FraudBanService, FraudJobs],
   exports: [AlertScan, FraudCasesService, FraudReportService, FraudDecisionService, FraudJobs],
 })
 export class FraudModule {}
