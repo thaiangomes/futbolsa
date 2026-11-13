@@ -28,7 +28,11 @@ export interface EnterOptions {
   transaction?: TransactionOptions;
 }
 
-/** Tempo máximo esperando uma trava e tempo máximo da transação inteira (P2). */
+/**
+ * Tempo máximo esperando cada trava e tempo máximo de cada comando (P2). O `statement_timeout` do Postgres vale por
+ * comando, não pela transação inteira: o que segura a duração entre o relógio (passo 6) e o `COMMIT` é que, depois
+ * da trava dos clubes, só a trava da tesouraria (só caixa) ainda pode esperar, e no máximo o `lock_timeout`.
+ */
 const LOCK_TIMEOUT = "5s";
 const STATEMENT_TIMEOUT = "15s";
 
@@ -61,7 +65,7 @@ export class EntryService implements BotEntry {
       return await this.gate.run(() => this.transaction(owner, mode, options));
     } catch (error) {
       const code = pgErrorCode(error);
-      // a trava não saiu em 5 s, ou a transação passou de 15 s: desfeito, e a tela tenta de novo
+      // a trava não saiu em 5 s, ou um comando passou de 15 s: desfeito, e a tela tenta de novo
       if (code === "55P03" || code === "57014") throw entryError("entry_busy");
       // chave repetida: outra chamada da mesma pessoa gravou a carteira primeiro; vale a resposta do passo 8
       if (code === "23505") {
