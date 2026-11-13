@@ -3,7 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { EnterResult, EntryModeChoice } from "@futbolsa/contracts";
 import { ENTRY_TOTAL, entryQuote, entryWindow, referencePrice } from "@futbolsa/engine";
 import { Clock } from "../../infra/clock/index.js";
-import { DB, lockClubs, lockSeason, lockWallets, pgErrorCode, withTransaction, type Database, type DrizzleTx } from "../../infra/db/index.js";
+import { DB, lockClubs, lockSeason, lockWallets, pgErrorCode, withTransaction, type Database, type DrizzleTx, type TransactionOptions } from "../../infra/db/index.js";
 import { clubs, seasonClubs, users, walletEntries, wallets } from "../../infra/db/schema/index.js";
 import { currentSeason } from "../admin/current-season.js";
 import { PortfolioLedger } from "../portfolio/index.js";
@@ -20,6 +20,11 @@ export interface EnterOutcome {
   result: EnterResult;
   created: boolean;
   walletId: number;
+}
+
+/** Opções de `enter` (os testes contam as repetições por *deadlock* com `onRetry`). */
+export interface EnterOptions {
+  transaction?: TransactionOptions;
 }
 
 /** Tempo máximo esperando uma trava e tempo máximo da transação inteira (P2). */
@@ -45,14 +50,14 @@ export class EntryService {
    * `POST /entry`. Repetível sem chave (P6): quem já entrou com o mesmo modo recebe o mesmo resultado, com `repeated`;
    * com outro modo, `already_entered` e nada muda. O semáforo (P2) fica de fora da transação.
    */
-  async enter(owner: EntryOwner, mode: EntryModeChoice): Promise<EnterOutcome> {
+  async enter(owner: EntryOwner, mode: EntryModeChoice, options: EnterOptions = {}): Promise<EnterOutcome> {
     if (owner.type === "user" && owner.status !== "active") throw entryError("account_blocked");
     if (owner.type === "bot" && mode !== "index") throw new Error("bot só entra com a carteira índice");
     // Atalho sem trava: quem já entrou (duplo clique, nova tentativa) não espera nenhuma fila nem trava.
     const known = await this.answerIfEntered(this.db, owner, mode);
     if (known) return known;
     try {
-      return await this.gate.run(() => this.transaction(owner, mode));
+      return await this.gate.run(() => this.transaction(owner, mode, options));
     } catch (error) {
       const code = pgErrorCode(error);
       // a trava não saiu em 5 s, ou a transação passou de 15 s: desfeito, e a tela tenta de novo
@@ -66,7 +71,7 @@ export class EntryService {
     }
   }
 
-  private transaction(owner: EntryOwner, mode: EntryModeChoice): Promise<EnterOutcome> {
+  private transaction(owner: EntryOwner, mode: EntryModeChoice, options: EnterOptions): Promise<EnterOutcome> {
     return withTransaction(this.db, async (tx) => {
       // 1. as esperas têm limite: a entrada nunca fica pendurada atrás de uma transação travada
       await tx.db.execute(
@@ -176,7 +181,7 @@ export class EntryService {
             }
           : { mode, n: 0, sum: 0, cash: ENTRY_TOTAL, stockValue: 0, enteredAt: now.toISOString(), repeated: false, clubs: [] };
       return { result, created: true, walletId: wallet.id };
-    });
+    }, options.transaction);
   }
 
   /** Estados da temporada que recusam a entrada, na ordem do plano. `null` deixa passar. */
