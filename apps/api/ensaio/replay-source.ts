@@ -43,7 +43,11 @@ export class ReplaySource implements ResultSource {
   /** Faz a fonte falhar nas próximas chamadas (a fonte fora do ar). */
   failNext = 0;
 
-  constructor(private readonly now: () => Date) {}
+  constructor(
+    private readonly now: () => Date,
+    /** Temporada curta (ensaio rápido): só as primeiras rodadas do Brasileirão e nenhuma copa. */
+    private readonly curta?: { rodadas: number },
+  ) {}
 
   /** O arquivo da competição: todos os jogos, na ordem do arquivo. */
   matchesOf(competition: CompetitionCode): Match[] {
@@ -51,6 +55,7 @@ export class ReplaySource implements ResultSource {
     if (!list) {
       const file = FILES[competition];
       list = file ? (JSON.parse(readFileSync(join(DATA_DIR, file), "utf8")) as { matches: Match[] }).matches : [];
+      if (this.curta) list = competition === "brasileirao-a" ? list.filter((m) => (m.round ?? 0) <= this.curta!.rodadas) : [];
       this.cache.set(competition, list);
     }
     return list;
