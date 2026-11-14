@@ -126,6 +126,8 @@ export class MarketMaker {
     private readonly config: MarketMakerConfig = DEFAULT_MARKET_MAKER,
     /** Valor justo de cada clube, usado com a âncora "fair". */
     private readonly fairValue?: (clubId: string) => Cents,
+    /** Quantidade por lado de cada clube (`quoteSize`, regras do jogo); sem ela, vale a da configuração. */
+    private readonly sizeFor?: (clubId: string, inMatch: boolean) => number,
   ) {}
 
   /**
@@ -147,7 +149,7 @@ export class MarketMaker {
       this.ledger.availableCash(this.accountId),
       this.ledger.availableShares(this.accountId, clubId),
       this.config,
-      { displayedPrice: this.exchange.price(clubId) },
+      { displayedPrice: this.exchange.price(clubId), quantity: this.sizeFor?.(clubId, inMatch) },
     );
     if (quote.bid) {
       this.exchange.placeOrder({

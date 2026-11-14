@@ -129,3 +129,27 @@ describe("markOutOfWindow", () => {
     expect(out.map((x) => x.postponed ?? false)).toEqual([false, false, true]);
   });
 });
+
+describe("simulação com as regras do jogo (P5 do Plano do ensaio)", () => {
+  const config = { ...small, buyback: 1 };
+  const jogo = simulate(season, { ...config, gameRules: true });
+  const antiga = simulate(season, config);
+
+  it("desligada, nada muda e o resultado não traz recusas", () => {
+    expect(antiga.refused).toBeUndefined();
+    expect(simulate(season, config).trades).toEqual(antiga.trades);
+  });
+
+  it("ligada, o lote muda o mercado (a tesouraria passa a ter ações a mais) e as recusas vêm contadas", () => {
+    expect(jogo.refused).toEqual(expect.any(Object));
+    // o lote é de graça: o caixa da tesouraria depois do IPO é o mesmo, mas ela tem mais ações para vender
+    expect(jogo.treasury.startCash).toBe(antiga.treasury.startCash);
+    expect(jogo.treasury.finalSharesValue + jogo.treasury.finalCash).not.toBe(antiga.treasury.finalSharesValue + antiga.treasury.finalCash);
+  });
+
+  it("ligada, é reproduzível com a mesma semente", () => {
+    const outra = simulate(season, { ...config, gameRules: true });
+    expect(outra.trades).toEqual(jogo.trades);
+    expect(outra.refused).toEqual(jogo.refused);
+  });
+});

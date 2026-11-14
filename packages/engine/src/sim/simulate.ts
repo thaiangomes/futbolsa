@@ -13,7 +13,8 @@ import {
   type Payout,
 } from "../engine/dividends.js";
 import { Ledger } from "../engine/ledger.js";
-import { DEFAULT_MARKET_MAKER, MarketMaker, type MarketMakerConfig } from "../engine/marketMaker.js";
+import { mmLot } from "../engine/ipoPlan.js";
+import { DEFAULT_MARKET_MAKER, MarketMaker, quoteSize, type MarketMakerConfig } from "../engine/marketMaker.js";
 import type { Cents } from "../engine/money.js";
 import { Exchange, type Trade } from "../engine/orderbook.js";
 import { finishTime, kickoffTime, type Match } from "../engine/types.js";
@@ -57,7 +58,16 @@ export interface SimConfig {
    * vezes 1 + o múltiplo da recompra.
    */
   ipoCups: boolean;
+  /**
+   * Regras do jogo da API (P5 do Plano do ensaio): lote do formador (20% da oferta, dado à tesouraria no IPO),
+   * quantidade da casa proporcional às ações do clube com mínimos de 10 e 3, ordem contra si mesmo recusada e
+   * faixa de 20% para os bots. Desligada (padrão), a simulação é a da Fase 0.
+   */
+  gameRules?: boolean;
 }
+
+/** Valores do jogo (iguais aos padrões de `seasons`). */
+export const GAME_RULES = { lotBp: 2000, quantityBp: 25, matchQuantityBp: 6, minSideQty: 10, matchMinSideQty: 3 } as const;
 
 export const DEFAULT_SIM: SimConfig = {
   seed: 1, // Só um número para os sorteios dos bots; não tem relação com o ano dos dados.
@@ -128,6 +138,8 @@ export interface SimResult {
   totalDividends: Cents;
   /** Total pago na recompra de fim de temporada. */
   totalBuyback: Cents;
+  /** Ordens de bot recusadas por código (só com `gameRules`). */
+  refused?: Record<string, number>;
 }
 
 /** Ganchos para observar a simulação sem mudar o que ela faz (usados pelo teste de regressão). */
@@ -150,13 +162,28 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
   const exchange = new Exchange(ledger, {
     houseAccounts: [TREASURY],
     houseTradesSetPrice: config.marketMaker.anchor !== "peer",
+    ...(config.gameRules ? { selfTrade: "reject" as const } : {}),
   });
   if (hooks.onTrade) exchange.onTrade(hooks.onTrade);
   const view = new MarketView(exchange, ledger, clubIds, config.rules, matches);
   view.buybackMultiple = config.buyback;
   view.setCups(config.cups);
   view.cupHype = config.fanCupHype;
-  const maker = new MarketMaker(exchange, ledger, TREASURY, config.marketMaker, (id) => view.fairValue(id));
+  view.enforceBand = config.gameRules === true;
+  const clubShares = new Map<string, number>();
+  const maker = new MarketMaker(
+    exchange,
+    ledger,
+    TREASURY,
+    config.marketMaker,
+    (id) => view.fairValue(id),
+    config.gameRules
+      ? (id, inMatch) =>
+          inMatch
+            ? quoteSize(clubShares.get(id)!, GAME_RULES.matchQuantityBp, GAME_RULES.matchMinSideQty)
+            : quoteSize(clubShares.get(id)!, GAME_RULES.quantityBp, GAME_RULES.minSideQty)
+      : undefined,
+  );
 
   // Bots: torcedores distribuídos pelos clubes em ordem.
   const lastYear = new Map(season.clubs.map((c) => [c.id, c.ipoPosition]));
@@ -204,6 +231,10 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
       ledger.adjustCash(TREASURY, a.cost);
     }
     ledger.adjustShares(TREASURY, clubId, result.treasuryShares);
+    // Lote do formador: ações novas para a tesouraria, sem pagamento (regras do jogo).
+    const lot = config.gameRules ? mmLot(offer, GAME_RULES.lotBp) : 0;
+    if (lot > 0) ledger.adjustShares(TREASURY, clubId, lot);
+    clubShares.set(clubId, offer + lot);
     exchange.setReferencePrice(clubId, result.price);
   }
   const treasuryStartCash = ledger.get(TREASURY).cash;
@@ -367,5 +398,6 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
     dailyPrices: Object.fromEntries(view.history),
     totalDividends,
     totalBuyback,
+    ...(config.gameRules ? { refused: { ...view.refused } } : {}),
   };
 }

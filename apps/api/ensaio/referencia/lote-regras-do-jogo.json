@@ -1,0 +1,212 @@
+[
+  {
+    "semente": 1,
+    "finalSobreIpo": 1.0227021319388576,
+    "precoSobreDivIpo": 0.6445006157236373,
+    "precoSobreDivR36": 1.0782520089854335,
+    "correlacaoMedia": 0.7701243422649385,
+    "correlacaoMinima": 0.20150375939849624,
+    "ipoNoPiso": 8,
+    "negocios": 56340,
+    "retorno": {
+      "dividendos": 0.401175144,
+      "momentum": 0.4609569880000002,
+      "torcedor": 0.41340663599999994,
+      "aleatorio": 0.24572892400000002,
+      "trader": -0.424109638,
+      "captura": -0.44198458799999996,
+      "analista": 0.7680571679999999,
+      "concentrador": 1.3342914000000001,
+      "antecipador": 0.669058492
+    }
+  },
+  {
+    "semente": 2,
+    "finalSobreIpo": 1.0486114611158712,
+    "precoSobreDivIpo": 0.6429775098839847,
+    "precoSobreDivR36": 1.0535883837799032,
+    "correlacaoMedia": 0.7927671541757226,
+    "correlacaoMinima": 0.2857142857142857,
+    "ipoNoPiso": 8,
+    "negocios": 53450,
+    "retorno": {
+      "dividendos": 0.6002710800000002,
+      "momentum": 0.522698152,
+      "torcedor": 0.46909541999999993,
+      "aleatorio": 0.27622100800000005,
+      "trader": -0.45864028600000006,
+      "captura": -0.39202226399999995,
+      "analista": 0.8327623039999998,
+      "concentrador": 1.0939098280000001,
+      "antecipador": 0.532933152
+    }
+  },
+  {
+    "semente": 3,
+    "finalSobreIpo": 1.0465414820781314,
+    "precoSobreDivIpo": 0.6437228595501977,
+    "precoSobreDivR36": 1.1163243093027027,
+    "correlacaoMedia": 0.7949541250923141,
+    "correlacaoMinima": 0.3308270676691729,
+    "ipoNoPiso": 8,
+    "negocios": 54774,
+    "retorno": {
+      "dividendos": 0.44439572799999993,
+      "momentum": 0.41304719200000006,
+      "torcedor": 0.36553628800000015,
+      "aleatorio": 0.25581260399999994,
+      "trader": -0.44206442999999995,
+      "captura": -0.36088526,
+      "analista": 0.637691244,
+      "concentrador": 1.544906692,
+      "antecipador": 0.6495509159999999
+    }
+  },
+  {
+    "semente": 4,
+    "finalSobreIpo": 1.0135671574292748,
+    "precoSobreDivIpo": 0.6449219003175838,
+    "precoSobreDivR36": 1.0844816007040134,
+    "correlacaoMedia": 0.7838268491676541,
+    "correlacaoMinima": 0.3461250039278481,
+    "ipoNoPiso": 8,
+    "negocios": 57279,
+    "retorno": {
+      "dividendos": 0.5285677,
+      "momentum": 0.543582148,
+      "torcedor": 0.42511045999999997,
+      "aleatorio": 0.23093699600000006,
+      "trader": -0.440537772,
+      "captura": -0.4063717,
+      "analista": 0.677062668,
+      "concentrador": 1.2252954159999998,
+      "antecipador": 0.6303920999999999
+    }
+  },
+  {
+    "semente": 5,
+    "finalSobreIpo": 1.0176628727921408,
+    "precoSobreDivIpo": 0.6449056970639705,
+    "precoSobreDivR36": 1.0721150506009587,
+    "correlacaoMedia": 0.774229779931071,
+    "correlacaoMinima": 0.3473684210526316,
+    "ipoNoPiso": 8,
+    "negocios": 56092,
+    "retorno": {
+      "dividendos": 0.5666751560000001,
+      "momentum": 0.418920816,
+      "torcedor": 0.3834071320000001,
+      "aleatorio": 0.273608112,
+      "trader": -0.464740182,
+      "captura": -0.398042056,
+      "analista": 0.5760259919999999,
+      "concentrador": 1.269117316,
+      "antecipador": 0.753086516
+    }
+  },
+  {
+    "semente": 6,
+    "finalSobreIpo": 1.0381527620485718,
+    "precoSobreDivIpo": 0.643836282325491,
+    "precoSobreDivR36": 1.1009008591741738,
+    "correlacaoMedia": 0.7955044718794445,
+    "correlacaoMinima": 0.43909774436090226,
+    "ipoNoPiso": 8,
+    "negocios": 54111,
+    "retorno": {
+      "dividendos": 0.5080952160000001,
+      "momentum": 0.5256235759999999,
+      "torcedor": 0.43983357600000006,
+      "aleatorio": 0.245302036,
+      "trader": -0.47700367,
+      "captura": -0.34940127199999993,
+      "analista": 0.5475793439999999,
+      "concentrador": 1.3036691679999999,
+      "antecipador": 0.705838864
+    }
+  },
+  {
+    "semente": 7,
+    "finalSobreIpo": 1.0082031151707305,
+    "precoSobreDivIpo": 0.6439335018471709,
+    "precoSobreDivR36": 1.066557050554642,
+    "correlacaoMedia": 0.7722138125437038,
+    "correlacaoMinima": 0.17894736842105263,
+    "ipoNoPiso": 8,
+    "negocios": 55321,
+    "retorno": {
+      "dividendos": 0.5860066640000001,
+      "momentum": 0.4799244359999999,
+      "torcedor": 0.45728438800000015,
+      "aleatorio": 0.27655070800000003,
+      "trader": -0.45078231199999996,
+      "captura": -0.360121456,
+      "analista": 0.6809331440000002,
+      "concentrador": 1.122590524,
+      "antecipador": 0.6570564480000001
+    }
+  },
+  {
+    "semente": 8,
+    "finalSobreIpo": 1.0484397768956333,
+    "precoSobreDivIpo": 0.6449219003175838,
+    "precoSobreDivR36": 1.1301035177508627,
+    "correlacaoMedia": 0.785873261707798,
+    "correlacaoMinima": 0.4030075187969925,
+    "ipoNoPiso": 8,
+    "negocios": 59332,
+    "retorno": {
+      "dividendos": 0.3716329919999999,
+      "momentum": 0.450338836,
+      "torcedor": 0.4691904279999999,
+      "aleatorio": 0.3242969199999999,
+      "trader": -0.45905790999999996,
+      "captura": -0.34810640800000003,
+      "analista": 0.5441186119999999,
+      "concentrador": 1.352931044,
+      "antecipador": 0.673441956
+    }
+  },
+  {
+    "semente": 9,
+    "finalSobreIpo": 1.0647293934290238,
+    "precoSobreDivIpo": 0.6445816319917039,
+    "precoSobreDivR36": 1.0722308422685904,
+    "correlacaoMedia": 0.7987884558727594,
+    "correlacaoMinima": 0.44511278195488724,
+    "ipoNoPiso": 8,
+    "negocios": 57237,
+    "retorno": {
+      "dividendos": 0.6084339919999999,
+      "momentum": 0.5276424720000001,
+      "torcedor": 0.435971804,
+      "aleatorio": 0.35729857200000015,
+      "trader": -0.49977395599999996,
+      "captura": -0.352154188,
+      "analista": 0.5250668839999999,
+      "concentrador": 1.098456144,
+      "antecipador": 0.5651664679999999
+    }
+  },
+  {
+    "semente": 10,
+    "finalSobreIpo": 1.0380234843521645,
+    "precoSobreDivIpo": 0.643042322898438,
+    "precoSobreDivR36": 1.0713739839281164,
+    "correlacaoMedia": 0.7987856009097706,
+    "correlacaoMinima": 0.19548872180451127,
+    "ipoNoPiso": 8,
+    "negocios": 57411,
+    "retorno": {
+      "dividendos": 0.53546874,
+      "momentum": 0.508974708,
+      "torcedor": 0.47916792399999997,
+      "aleatorio": 0.27733318800000006,
+      "trader": -0.48129127400000005,
+      "captura": -0.339690536,
+      "analista": 0.68523248,
+      "concentrador": 1.1171854680000002,
+      "antecipador": 0.506613856
+    }
+  }
+]
