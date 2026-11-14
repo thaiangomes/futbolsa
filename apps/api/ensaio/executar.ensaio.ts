@@ -7,13 +7,15 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { it } from "vitest";
+import { readFileSync } from "node:fs";
+import { comparar, extrairMedidas, lerLimites, referenciaExata, relatorioMarkdown } from "./comparar.js";
 import { executarEnsaio } from "./ensaio.js";
 
 it("ensaio da temporada de 2025", async () => {
   const urlBase = process.env.TEST_DATABASE_URL;
   if (!urlBase) throw new Error("Defina TEST_DATABASE_URL (Postgres local).");
   const e = process.env;
-  const { resultado, fechar } = await executarEnsaio({
+  const { resultado, ctx, fechar } = await executarEnsaio({
     urlBase,
     escala: Number(e.ENSAIO_ESCALA ?? 0.2),
     semente: Number(e.ENSAIO_SEMENTE ?? 1),
@@ -29,6 +31,14 @@ it("ensaio da temporada de 2025", async () => {
     mkdirSync(pasta, { recursive: true });
     const arquivo = join(pasta, `ensaio-${new Date().toISOString().slice(0, 10)}.json`);
     writeFileSync(arquivo, JSON.stringify(resultado, null, 2));
+    // comparação com a simulação (T9): só vale com a temporada inteira
+    if (!e.ENSAIO_CURTA && !e.ENSAIO_ATE_DIAS) {
+      const lote = JSON.parse(readFileSync(new URL("./referencia/lote-regras-do-jogo.json", import.meta.url), "utf8"));
+      const linhas = comparar(await extrairMedidas(ctx.servidor, ctx.carga), referenciaExata(), lote, lerLimites());
+      writeFileSync(join(pasta, "comparacao.md"), relatorioMarkdown(linhas));
+      writeFileSync(join(pasta, "comparacao.json"), JSON.stringify(linhas, null, 2));
+      console.log(`comparação: ${linhas.filter((l) => !l.ok).length} diferenças em ${linhas.length} medidas`);
+    }
     console.log(JSON.stringify(resultado, null, 2));
     console.log(`(relatório em ${arquivo})`);
   } finally {
