@@ -527,7 +527,7 @@ describe("ordem nova no Postgres", () => {
     expect(await price("FLA3")).toBe(4000);
   }));
 
-  it("a recusa não grava nada: nem ordem, nem negócio, nem extrato, nem reserva", scene(async () => {
+  it("carteira 37: a recusa não grava nada: nem ordem, nem negócio, nem extrato, nem reserva", scene(async () => {
     const ana = await holder("FLA3", 5, 100_000);
     const bruno = await holder("FLA3", 50);
     await ready();

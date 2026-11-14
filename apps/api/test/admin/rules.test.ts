@@ -169,7 +169,7 @@ describe("regras e copas da temporada", () => {
     }
   });
 
-  it("dividendos 28: com o IPO aberto, mudar a tabela e os valores é recusado", async () => {
+  it("dividendos 26 e 28: com o IPO aberto, mudar a tabela e os valores é recusado", async () => {
     await withTransaction(database.db, (tx) => values.lockSeasonValues(tx, seasonId, clock.now()));
     const before = (await call("GET", `/admin/seasons/${seasonId}/rules`)).json().rules;
     const { lockedAt, ...editable } = before;

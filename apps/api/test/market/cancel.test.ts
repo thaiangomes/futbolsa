@@ -109,7 +109,7 @@ describe("cancelar ordens pelo serviço", () => {
     expect(await orderRow(db, sale.order.id)).toMatchObject({ status: "cancelled", cancelReason: "player" });
   }));
 
-  it("cancelar a compra que executou em parte devolve só o caixa do que faltava (60 × R$ 40,00)", scene(async () => {
+  it("carteira 36: cancelar a compra que executou em parte devolve só o caixa do que faltava (60 × R$ 40,00)", scene(async () => {
     const ana = await player();
     const bruno = await holder("FLA3", 40);
     await ready();
