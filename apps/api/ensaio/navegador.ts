@@ -120,7 +120,7 @@ export async function subirNavegador(o: OpcoesNavegador): Promise<Navegador> {
 
   const avancar = async (ate: Date) => {
     if (!condutor) throw new Error("chame /cenario/mundo antes");
-    await condutor.rodarAte(ate);
+    await condutor.ateExato(ate);
   };
 
   const cadastrar = async (apelido: string) => {
@@ -137,7 +137,7 @@ export async function subirNavegador(o: OpcoesNavegador): Promise<Navegador> {
   };
 
   /** Apaga tudo e recomeça: o relógio volta a 2025-03-01 e a temporada é recarregada pelas rotas do admin. */
-  const reiniciar = async (fase: Fase, offerSize: number) => {
+  const reiniciar = async (fase: Fase, offerSize: number, jogadores: string[] = []) => {
     const tabelas = await db.execute<{ tablename: string }>(sql`select tablename from pg_tables where schemaname = 'futbolsa'`);
     const lista = tabelas.rows.map((t) => `futbolsa."${t.tablename}"`).join(", ");
     // o histórico é só de acréscimo (gatilhos recusam TRUNCATE): o papel de réplica desliga os gatilhos só nesta transação
@@ -151,6 +151,8 @@ export async function subirNavegador(o: OpcoesNavegador): Promise<Navegador> {
     condutor = new Condutor(servidor, carga, { aprovar: true, chanceDeRepetir: 0 });
     servidor.clock.set(new Date(carga.ipo.opensAt.getTime() - 86_400_000));
     if (fase !== "preparando") await avancar(new Date(carga.ipo.opensAt.getTime() + 60 * 60_000));
+    // quem se cadastra com as ofertas abertas recebe os R$ 100.000,00 da abertura (Conta e login 13)
+    if (fase !== "preparando") for (const apelido of jogadores) await cadastrar(apelido);
     if (fase === "negociacao") {
       // um semeador oferta em todos os clubes (o IPO precisa de demanda para ter ações e preço) e o IPO fecha e liquida
       const semeador = await cadastrar("semeador");
@@ -168,8 +170,8 @@ export async function subirNavegador(o: OpcoesNavegador): Promise<Navegador> {
 
   const cenarios: Record<string, Cenario> = {
     mundo: async (corpo) => {
-      const { fase = "negociacao", offerSize = 150_000 } = corpo as { fase?: Fase; offerSize?: number };
-      return reiniciar(fase, offerSize);
+      const { fase = "negociacao", offerSize = 150_000, jogadores = [] } = corpo as { fase?: Fase; offerSize?: number; jogadores?: string[] };
+      return reiniciar(fase, offerSize, jogadores);
     },
     /** Convida o e-mail, cadastra o apelido e devolve o token de teste (válido por 30 dias do relógio simulado). */
     jogador: async (corpo) => cadastrar((corpo as { apelido: string }).apelido),

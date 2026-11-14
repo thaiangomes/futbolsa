@@ -166,6 +166,22 @@ export class Condutor {
     }
   }
 
+  /**
+   * Para o navegador (T19): avança parada a parada só enquanto a próxima ainda cai até `alvo` e termina exatamente em `alvo`
+   * (com as passadas rodadas nesse instante), em vez de pular por cima dele até a próxima parada.
+   */
+  async ateExato(alvo: Date): Promise<void> {
+    while (this.proxima(this.servidor.clock.now()).em <= alvo) await this.paradaUnica();
+    if (this.servidor.clock.now() < alvo) {
+      this.servidor.clock.set(alvo);
+      const dia = this.diaDe(alvo.getTime());
+      const parada: Parada = { em: alvo, motivo: "alvo do navegador", novoDia: dia !== this.ultimoDia };
+      this.ultimoDia = dia;
+      this.paradas++;
+      await this.passadas(parada);
+    }
+  }
+
   private async executar<T>(parada: Parada, passada: string, run: () => Promise<T> | T): Promise<T> {
     const inicio = performance.now();
     try {

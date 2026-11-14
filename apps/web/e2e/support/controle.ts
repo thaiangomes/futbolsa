@@ -19,8 +19,8 @@ export async function controle<T = Record<string, unknown>>(cenario: string, cor
 }
 
 /** Recomeça o mundo do servidor: temporada de 2025 carregada, no ponto pedido (padrão: negociação aberta). */
-export function prepararCenario(fase: "preparando" | "ipo-aberto" | "negociacao" = "negociacao"): Promise<Mundo> {
-  return controle<Mundo>("mundo", { fase });
+export function prepararCenario(fase: "preparando" | "ipo-aberto" | "negociacao" = "negociacao", jogadores: string[] = []): Promise<Mundo> {
+  return controle<Mundo>("mundo", { fase, jogadores });
 }
 
 /** Roda as tarefas até um instante (ISO) ou marco (`fechamento-ipo`, `abertura-negociacao`), como em produção. */
