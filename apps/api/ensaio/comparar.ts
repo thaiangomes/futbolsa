@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, eq, ne, sql } from "drizzle-orm";
-import { bots, clubs, payoutEvents, positions, seasonClubs, trades, wallets } from "../src/infra/db/schema/index.js";
+import { bots, clubs, payoutEvents, positions, seasonClubs, trades, walletEntries, wallets } from "../src/infra/db/schema/index.js";
 import type { Carregado } from "./carregar.js";
 import type { ServidorEnsaio } from "./servidor.js";
 import { loadSeason } from "../../../packages/engine/src/data/season.js";
@@ -81,10 +81,13 @@ export async function extrairMedidas(servidor: ServidorEnsaio, carga: Carregado,
 
   // retorno de cada bot: (caixa + ações × último preço) ÷ caixa inicial − 1, médio por perfil
   const carteiras = await db
-    .select({ id: wallets.id, cash: wallets.cash, perfil: bots.profile })
+    // o caixa vem do extrato sem a linha do encerramento (`season_close`): depois de encerrada, a carteira zera
+    .select({ id: wallets.id, cash: sql<number>`coalesce(sum(${walletEntries.cashDelta}) filter (where ${walletEntries.kind} <> 'season_close'), 0)::float`, perfil: bots.profile })
     .from(wallets)
     .innerJoin(bots, eq(bots.id, wallets.botId))
-    .where(eq(wallets.seasonId, carga.seasonId));
+    .leftJoin(walletEntries, eq(walletEntries.walletId, wallets.id))
+    .where(eq(wallets.seasonId, carga.seasonId))
+    .groupBy(wallets.id, bots.profile);
   const acoes = await db
     .select({ walletId: positions.walletId, valor: sql<number>`sum(${positions.shares} * ${seasonClubs.lastPrice})::float` })
     .from(positions)

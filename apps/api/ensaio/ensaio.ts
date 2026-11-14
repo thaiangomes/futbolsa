@@ -117,7 +117,8 @@ export async function executarEnsaio(o: OpcoesEnsaio): Promise<{ resultado: Resu
         pico = Math.max(pico, process.memoryUsage().rss);
         if (o.verificar !== false && (p.novoDia || fimDoMesDe(p.em))) {
           await verificarDia(servidor, carga.seasonId, p, estado);
-          if (cadastrados && p.novoDia) await jogadores.conferirLivrosDoOuvinte();
+          // depois do encerramento a rota do livro deixa de existir para a temporada: não há o que conferir
+          if (cadastrados && p.novoDia && (await status()) !== "closed") await jogadores.conferirLivrosDoOuvinte();
         }
         await o.ganchos?.depois?.(p);
       },
