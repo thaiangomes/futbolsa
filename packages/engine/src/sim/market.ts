@@ -2,6 +2,7 @@ import type { LeagueRules } from "../engine/dividends.js";
 import type { Ledger } from "../engine/ledger.js";
 import { MIN_PRICE, type Cents } from "../engine/money.js";
 import type { Exchange, Side } from "../engine/orderbook.js";
+import { tradingBand } from "../engine/orderRules.js";
 import type { Match } from "../engine/types.js";
 import type { BotView } from "./botView.js";
 import { LeagueView } from "./leagueView.js";
@@ -14,6 +15,9 @@ import { LeagueView } from "./leagueView.js";
  */
 export class MarketView extends LeagueView implements BotView {
   readonly history = new Map<string, Cents[]>();
+  /** Regras do jogo: ordem limitada fora da faixa de 20% em volta do preço exibido é recusada (e contada). */
+  enforceBand = false;
+  readonly refused: Record<string, number> = {};
 
   constructor(
     readonly exchange: Exchange,
@@ -68,6 +72,13 @@ export class MarketView extends LeagueView implements BotView {
   /** Coloca ordem limitada ajustando preço mínimo e quantidade ao saldo livre. */
   limit(accountId: string, clubId: string, side: Side, quantity: number, price: number): void {
     const limitPrice = Math.max(MIN_PRICE, Math.round(price));
+    if (this.enforceBand) {
+      const band = tradingBand(this.price(clubId));
+      if (limitPrice < band.min || limitPrice > band.max) {
+        this.refused.price_out_of_band = (this.refused.price_out_of_band ?? 0) + 1;
+        return;
+      }
+    }
     const max =
       side === "buy"
         ? Math.floor(this.ledger.availableCash(accountId) / limitPrice)

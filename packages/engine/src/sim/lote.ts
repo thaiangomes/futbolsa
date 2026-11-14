@@ -40,6 +40,7 @@ const { values } = parseArgs({
     "ipo-copas": { type: "boolean", default: true },
     acerto: { type: "string", default: "0.3,0.5,0.7" },
     faixa: { type: "string", default: "0.4" },
+    "regras-do-jogo": { type: "boolean", default: false },
   },
 });
 
@@ -128,6 +129,7 @@ for (let seed = 1; seed <= n; seed++) {
     fanCupHype: values["torcida-copa"],
     ipoCups: values["ipo-copas"],
     bandWidth: Number(values.faixa),
+    gameRules: values["regras-do-jogo"],
   });
   linhas.push(resumir(result));
 }
@@ -156,7 +158,7 @@ out.push(`Retorno médio por perfil: ${PROFILES.filter((p) => !Number.isNaN(medi
 const report = out.join("\n");
 
 mkdirSync(values.out!, { recursive: true });
-const tag = `${season.season}-sementes1a${n}-ponto${perPoint}-${anchor}-recompra${buyback}${traders ? `-traders${traders}` : ""}${acerto.length ? `-acerto${acerto.join("_")}` : ""}${values.captura !== "0" ? `-captura${values.captura}` : ""}${values.extras ? `-${values.extras.replace(/[=,]/g, "")}` : ""}${cups.length ? `-copas${values.copas!.replace(/,/g, "_")}` : ""}${values["torcida-copa"] ? "-torcidacopa" : ""}${values["ipo-copas"] ? "-ipocopas" : ""}${values.faixa !== "0.4" ? `-faixa${values.faixa}` : ""}`;
+const tag = `${season.season}-sementes1a${n}-ponto${perPoint}-${anchor}-recompra${buyback}${traders ? `-traders${traders}` : ""}${acerto.length ? `-acerto${acerto.join("_")}` : ""}${values.captura !== "0" ? `-captura${values.captura}` : ""}${values.extras ? `-${values.extras.replace(/[=,]/g, "")}` : ""}${cups.length ? `-copas${values.copas!.replace(/,/g, "_")}` : ""}${values["torcida-copa"] ? "-torcidacopa" : ""}${values["ipo-copas"] ? "-ipocopas" : ""}${values["regras-do-jogo"] ? "-regras" : ""}${values.faixa !== "0.4" ? `-faixa${values.faixa}` : ""}`;
 writeFileSync(join(values.out!, `lote-${tag}.json`), JSON.stringify(linhas, null, 2));
 console.log(report);
 console.log(`\n(${((Date.now() - started) / 1000).toFixed(1)} s; linhas por semente em ${values.out}/lote-${tag}.json)`);
