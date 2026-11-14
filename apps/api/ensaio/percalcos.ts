@@ -51,7 +51,7 @@ export function criarPercalcos(ctx: () => ContextoEnsaio) {
       await servidor.subir();
       const ok = (await fetch(`${servidor.url}/health`)).status === 200;
       registrar("API cai e volta no meio do IPO", "IPO 27", p.em, ok, ok ? undefined : "health fora do ar");
-      if (jogadores.lista.length > 0) await jogadores.lista[0]!.conectarWs(carga.tickers);
+      if (jogadores.observador) await jogadores.observador.conectarWs(carga.tickers);
     });
 
     // suspensão de um clube por um dia
