@@ -30,6 +30,13 @@ let client: AuthClient | undefined;
  */
 export function getAuthClient(): AuthClient {
   if (!client) {
+    // Build de teste do navegador: o Next troca a condição por um valor fixo na hora do build, e o
+    // `require` abaixo (com o login falso dentro) some do build normal. A guarda do build confere.
+    if (process.env.NEXT_PUBLIC_AUTH_CLIENT === "fake") {
+      const { FakeAuthClient } = require("./fake-auth-client") as typeof import("./fake-auth-client");
+      client = new FakeAuthClient();
+      return client;
+    }
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
     client = url && key ? new SupabaseAuthClient(url, key) : new UnconfiguredAuthClient();

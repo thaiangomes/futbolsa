@@ -2,6 +2,10 @@
 const nextConfig = {
   // Site estático: o Next gera arquivos prontos em out/ e recusa recurso de servidor.
   output: "export",
+  // O build de teste do navegador (`npm run e2e:build`) sai em outra pasta, para não pisar no build normal.
+  // Valor fixo no build: sem ele o Next deixa a variável para a hora de rodar e o login falso não sai do pacote.
+  env: { NEXT_PUBLIC_AUTH_CLIENT: process.env.NEXT_PUBLIC_AUTH_CLIENT === "fake" ? "fake" : "real" },
+  ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
 };
 
 export default nextConfig;
