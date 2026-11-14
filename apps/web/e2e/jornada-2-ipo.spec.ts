@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import { api, avancarRelogio, criarJogador, entrarComo, prepararCenario } from "./support/controle";
-import { campo, limpo, reais } from "./support/dinheiro";
+import { api, avancarRelogio, criarJogador, entrarComo, prepararCenario, sincronizar } from "./support/controle";
+import { campo, reais } from "./support/dinheiro";
 
 /**
  * Jornada 2 (T20): o IPO pela tela, da oferta ao resultado. Prefixo `e2e ipo N` (T24).
@@ -97,25 +97,23 @@ test.describe.serial("jornada 2: IPO", () => {
     const r = await api("ana", "PUT", "/ipo/bids/FLA3", { quantity: 200, maxPrice: faixa.ceiling, expect: "new" });
     expect(r.status).toBe(200);
     await avancarRelogio("fechamento-ipo", 60_000);
+    await sincronizar(page);
     await entrarComo(page, "ana");
     await page.goto("/ipo");
-    // 14: nada de ofertar, e a mensagem diz que fechou
-    await expect(cartao(page, "FLA3").getByRole("button", { name: /Ofertar|Editar|Cancelar/ })).toHaveCount(0);
-    await expect(page.getByRole("status").filter({ hasText: /fechad/i }).first()).toBeVisible();
-    // a recusa também vale na API
+    // 14: nada de ofertar, registrar, editar ou cancelar: a tela é só o resultado, e a API também recusa
+    await expect(page.getByRole("heading", { name: "Resultado do IPO" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Ofertar|Editar|Cancelar|Registrar/ })).toHaveCount(0);
     const recusa = await api("ana", "PUT", "/ipo/bids/FLA3", { quantity: 1, maxPrice: faixa.ceiling, expect: "existing" });
     expect(recusa.status).toBeGreaterThanOrEqual(400);
-    // 24: o resultado por clube
+    // 24: o resultado por clube, com corte, demanda, rateio e o que a casa recebeu; e o que a pessoa recebeu
     await avancarRelogio("abertura-negociacao", 3_600_000);
+    await sincronizar(page);
     await page.goto("/ipo");
-    const fla = cartao(page, "FLA3");
-    await expect(page.getByText("RESULTADO DO IPO")).toBeVisible();
-    const bloco = page.locator("li", { hasText: "FLA3" }).first();
-    await expect(bloco).toContainText("PREÇO DE CORTE");
-    await expect(bloco).toContainText("DEMANDA NO PREÇO");
-    await expect(bloco).toContainText("FRAÇÃO DO RATEIO");
-    await expect(bloco).toContainText("TESOURARIA");
-    expect(limpo(await bloco.innerText())).toMatch(/200 ações/);
-    void fla;
+    const bloco = page.getByRole("list", { name: "Resultado por clube" }).locator("li", { hasText: "FLA3" });
+    await expect(bloco).toContainText("Preço de corte");
+    await expect(bloco).toContainText("Demanda no preço");
+    await expect(bloco).toContainText("Fração do rateio");
+    await expect(bloco).toContainText("Tesouraria");
+    await expect(page.getByTestId("resumo-acoes")).toContainText("200");
   });
 });
