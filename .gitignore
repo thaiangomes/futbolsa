@@ -10,3 +10,4 @@ out/
 .claude/settings.local.json
 next-env.d.ts
 ensaio-saida/
+carga-saida/

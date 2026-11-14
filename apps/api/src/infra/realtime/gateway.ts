@@ -8,6 +8,7 @@ import {
 import { CLOSE_CODES, type RealtimeRole } from "@futbolsa/contracts";
 import type { WebSocket } from "ws";
 import { Clock } from "../clock/index.js";
+import { metrics } from "../db/metrics.js";
 import { RealtimeAuthenticator } from "./authenticator.js";
 import { EventBus } from "./bus.js";
 import { RealtimeLifecycle } from "./lifecycle.js";
@@ -87,7 +88,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
         onSlowClient: () => {
           this.slowClientsDropped += 1;
         },
-        onDelivered: (delayMs) => this.delays.record(delayMs),
+        onDelivered: (delayMs) => {
+          this.delays.record(delayMs);
+          metrics().eventDelay(Math.max(0, delayMs));
+        },
       },
     });
     this.sessions.set(socket, session);

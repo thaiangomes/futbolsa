@@ -1,4 +1,5 @@
 import type { Database } from "./client.js";
+import { metrics, type LockKind } from "./metrics.js";
 
 /** A transação do Drizzle que `db.transaction` entrega. */
 export type DrizzleTx = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -154,12 +155,24 @@ export class LockState {
 export class Tx {
   readonly locks = new LockState();
   private readonly callbacks: Array<() => void | Promise<void>> = [];
+  private readonly acquired: Array<{ kind: LockKind; key: string | undefined; at: number }> = [];
 
   constructor(readonly db: DrizzleTx) {}
 
   /** Roda depois do `COMMIT` (os eventos do WebSocket). Some se a transação desfaz. */
   afterCommit(fn: () => void | Promise<void>): void {
     this.callbacks.push(fn);
+  }
+
+  /** @internal Guarda o instante em que uma trava foi tomada, para medir quanto tempo ela ficou segura (só com medidores ligados). */
+  noteLock(kind: LockKind, key: string | undefined, at: number): void {
+    this.acquired.push({ kind, key, at });
+  }
+
+  /** @internal Passa ao medidor quanto cada trava ficou segura, até o fim do `COMMIT`. */
+  reportHeld(end: number): void {
+    const m = metrics();
+    for (const lock of this.acquired.splice(0)) m.lockHeld(lock.kind, lock.key, end - lock.at);
   }
 
   /** @internal */
@@ -222,13 +235,16 @@ export async function withTransaction<T>(
       );
     } catch (error) {
       const code = pgErrorCode(error);
+      if (code && RETRYABLE.has(code) && attempt >= MAX_RETRIES) metrics().retryExhausted(code);
       if (code && RETRYABLE.has(code) && attempt < MAX_RETRIES) {
+        metrics().retry(code);
         options.onRetry?.(attempt + 1, code);
         await pause(5 + Math.random() * 20 * (attempt + 1));
         continue;
       }
       throw error;
     }
+    if (metrics().enabled) tx!.reportHeld(performance.now());
     for (const callback of tx!.takeCallbacks()) {
       try {
         await callback();
