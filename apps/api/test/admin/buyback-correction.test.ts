@@ -229,4 +229,19 @@ describe("correção com a recompra fechada (F15, T5)", () => {
     // e a temporada continua com a negociação encerrada no mesmo instante
     expect(await scene.seasonOf(s)).toMatchObject({ status: "trading_ended", tradingEndedAt: REGISTERED });
   });
+
+it("admin 37: com a recompra fechada, mover o fim de um jogo disputado para depois de D é recusado e corrigir para antes de D passa", async () => {
+    const s = await scene.newSeason();
+    const m = await scene.seasonEnd(s);
+    await scene.close(s.seasonId, REGISTERED);
+    const matchesService = scene.service(MatchesService);
+    const actor = scene.admin.id;
+    const after = new Date(REGISTERED.getTime() + 60_000).toISOString();
+    expect(await scene.domainError(matchesService.patch(actor, m.a, { finishedAt: after, reason: REASON }))).toMatchObject({ code: "season_trading_ended", status: 409 });
+    const [row] = await t.db.select().from(matches).where(eq(matches.id, m.a));
+    expect(row!.finishedAt).toEqual(A_END);
+    const before = new Date(A_END.getTime() - 60_000).toISOString();
+    expect(await matchesService.patch(actor, m.a, { finishedAt: before, reason: REASON })).toMatchObject({ status: "finished" });
+    expect(await scene.seasonOf(s)).toMatchObject({ status: "trading_ended", tradingEndedAt: REGISTERED });
+  });
 });

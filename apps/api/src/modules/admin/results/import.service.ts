@@ -126,7 +126,8 @@ export class ImportService {
 
         const known = byKey.get(`${src.source}:${src.sourceId}`);
         if (known) {
-          if (known.manualOverride || (ended && data.status !== known.status && data.status !== "finished")) {
+          const pastEnd = ended && season.tradingEndedAt !== null && data.kickoff.getTime() !== known.kickoff.getTime() && data.kickoff.getTime() > season.tradingEndedAt.getTime();
+          if (known.manualOverride || pastEnd || (ended && data.status !== known.status && data.status !== "finished")) {
             // O que o admin escreveu vale mais: só o snapshot muda, e a tela mostra a divergência.
             await tx.db.update(matches).set({ sourceSnapshot: snapshot }).where(eq(matches.id, known.id));
             report.unchanged++;

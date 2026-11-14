@@ -217,6 +217,12 @@ export class MatchesService {
         // Marcar ou desmarcar adiado à mão zera o "fora da janela": a importação não o marca de novo.
         outOfWindow: body.status !== undefined ? false : row.outOfWindow,
       };
+      // com a recompra fechada, mover o fim do jogo para depois de D (`trading_ended_at`) tiraria o dividendo dele da
+      // recompra e da foto de quem já recebeu (decisão de 2026-11-13, F15): recusado. Corrigir para antes de D passa
+      if (season.status === "trading_ended" && season.tradingEndedAt) {
+        const endOf = (m: { finishedAt: Date | null; kickoff: Date }) => (m.finishedAt ?? m.kickoff).getTime();
+        if (endOf(next) !== endOf(row) && endOf(next) > season.tradingEndedAt.getTime()) throw tradingEnded();
+      }
       const [updated] = await tx.db
         .update(matches)
         .set({ ...next, manualOverride: true, updatedAt: new Date() })
