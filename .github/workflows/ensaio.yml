@@ -1,0 +1,58 @@
+name: Ensaio da temporada
+
+# Ensaio completo da temporada de 2025 pela API, com o relógio acelerado e os 9 perfis de bot (Plano do ensaio, T13).
+# Não bloqueia PR: roda sob demanda e uma vez por semana. O ensaio rápido já roda no `npm test` de todo PR.
+on:
+  workflow_dispatch:
+    inputs:
+      escala:
+        description: "Multiplica os bots de cada perfil (1 = 250 bots)"
+        default: "1"
+      semente:
+        description: "Semente dos sorteios"
+        default: "1"
+      tick:
+        description: "Minutos entre rodadas de bots (180 = comparável com a simulação; 15 = ritmo de produção)"
+        default: "180"
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  ensaio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: futbolsa
+          POSTGRES_PASSWORD: futbolsa
+          POSTGRES_DB: futbolsa_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U futbolsa -d futbolsa_test"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://futbolsa:futbolsa@localhost:5433/futbolsa_test
+      ENSAIO_ESCALA: ${{ inputs.escala || '1' }}
+      ENSAIO_SEMENTE: ${{ inputs.semente || '1' }}
+      ENSAIO_TICK: ${{ inputs.tick || '180' }}
+      ENSAIO_SAIDA: ensaio-saida
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build:libs
+      - name: Ensaio
+        run: npm run ensaio -w @futbolsa/api
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ensaio-relatorio
+          path: apps/api/ensaio-saida/

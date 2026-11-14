@@ -35,6 +35,8 @@ export interface OpcoesServidor {
   databaseUrl: string;
   inicio: Date;
   poolSize?: number;
+  /** Temporada curta (ensaio rápido): só as primeiras rodadas do Brasileirão. */
+  curta?: { rodadas: number };
   /** Ritmo dos bots (P12): padrão do ensaio comparável, a cada 180 minutos com chance 0,25. */
   bots?: { tickMinutes: number; activityPer3h: number };
 }
@@ -51,7 +53,7 @@ export async function criarServidorEnsaio(opcoes: OpcoesServidor): Promise<Servi
   recusarBancoNaoLocal(opcoes.databaseUrl);
   const clock = new FixedClock(opcoes.inicio);
   const conexao = connect(opcoes.databaseUrl, opcoes.poolSize ?? 20);
-  const fonte = new ReplaySource(() => clock.now());
+  const fonte = new ReplaySource(() => clock.now(), opcoes.curta);
   const servidor = { clock, conexao, fonte } as ServidorEnsaio;
   const ritmo = opcoes.bots ?? { tickMinutes: 180, activityPer3h: 0.25 };
   let app: NestFastifyApplication | undefined;
