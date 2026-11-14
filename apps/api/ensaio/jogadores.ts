@@ -180,9 +180,16 @@ export class Jogadores {
     for (const ticker of this.carga.tickers) {
       const estado = ws.canais.get(`club:${ticker}`);
       if (!estado?.ultimoLivro) continue; // clube sem movimento ainda
-      const limite = Date.now() + 3000;
+      const limite = Date.now() + 15_000;
       for (;;) {
-        const rest = await ouvinte.livro(ticker);
+        const resposta = await ouvinte.http<BookView & { code?: string }>("GET", `/clubs/${ticker}/book`);
+        // limite de taxa (429) ou outro erro passageiro: espera e tenta de novo; se persistir, a mensagem mostra o que a rota disse
+        if (resposta.status !== 200 || !resposta.corpo?.bids) {
+          if (Date.now() > limite) throw new Error(`a rota do livro de ${ticker} respondeu ${resposta.status}: ${JSON.stringify(resposta.corpo).slice(0, 200)}`);
+          await new Promise((r) => setTimeout(r, 1100));
+          continue;
+        }
+        const rest = resposta.corpo;
         const ev = ws.canais.get(`club:${ticker}`)!.ultimoLivro!;
         const niveis = (l: Array<{ price: number; quantity: number }>) => JSON.stringify(l.map((n) => [n.price, n.quantity]));
         if (niveis(rest.bids) === niveis(ev.bids) && niveis(rest.asks) === niveis(ev.asks)) break;
