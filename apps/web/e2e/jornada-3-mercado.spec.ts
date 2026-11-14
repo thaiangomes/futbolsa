@@ -150,6 +150,7 @@ test.describe.serial("jornada 3: mercado", () => {
 
   test("e2e livro 27: com o clube em jogo a lista avisa \"Em jogo agora\" e a revisão da ordem também", async ({ page }) => {
     // 2025-03-29 18h30 de Brasília é o primeiro jogo da temporada
+    test.setTimeout(300_000); // avançar seis dias pelas tarefas de produção leva de 1 a 2 minutos
     const agora = await avancarRelogio("2025-03-29T21:45:00Z");
     expect(agora).toContain("2025-03-29");
     await sincronizar(page);
