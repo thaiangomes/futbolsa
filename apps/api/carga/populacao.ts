@@ -2,10 +2,11 @@ import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "../src/infra/db/client.js";
 import { lockWallets } from "../src/infra/db/locks.js";
-import { authIdentities, clubs, ipoAllocations, ipoBids, ipoResults, seasonClubs, seasons, users, wallets } from "../src/infra/db/schema/index.js";
+import { authIdentities, clubs, ipoAllocations, ipoBids, ipoResults, seasonClubs, seasonRules, seasons, users, wallets } from "../src/infra/db/schema/index.js";
 import { seed } from "../src/infra/db/seed.js";
 import { withTransaction } from "../src/infra/db/transaction.js";
 import { openWallet, postMany, type Movement } from "../src/modules/portfolio/ledger/index.js";
+import { initialRules } from "../src/modules/dividends/season-values/defaults.js";
 import { INICIO_DA_CARGA } from "./servidor.js";
 
 /**
@@ -66,6 +67,8 @@ export async function prepararMundo(db: Database, o: Pick<OpcoesPopulacao, "club
     .update(seasons)
     .set({ status: "trading", tradingOpensAt: new Date("2027-04-05T13:00:00Z") })
     .where(eq(seasons.id, seasonId));
+  // os valores da temporada (padrões do seed de produção): o valor justo e os bots leem daqui
+  await db.insert(seasonRules).values({ seasonId, ...initialRules() }).onConflictDoNothing();
   const treasury = await withTransaction(db, (tx) =>
     openWallet(tx, { seasonId, owner: { type: "treasury" }, at: INICIO_DA_CARGA, initialCash: 0 }),
   );

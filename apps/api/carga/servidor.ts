@@ -4,6 +4,9 @@ import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { FixedClock } from "../src/infra/clock/index.js";
 import { connect, type DbConnection } from "../src/infra/db/client.js";
 import { eq } from "drizzle-orm";
+import { withTransaction } from "../src/infra/db/transaction.js";
+import { EquityDailyService } from "../src/modules/portfolio/daily/equity-daily.service.js";
+import { SnapshotService } from "../src/modules/portfolio/snapshots/snapshot.service.js";
 import { clubs, seasonClubs } from "../src/infra/db/schema/index.js";
 import { setMetrics } from "../src/infra/db/metrics.js";
 import { BotRunner, BotRunnerSettings } from "../src/modules/admin/bots/runner.js";
@@ -71,6 +74,8 @@ export async function subirServidorDeCarga(opcoes: OpcoesServidorCarga): Promise
   const medidores = new MedidoresHistograma();
   setMetrics(medidores);
   let app: NestFastifyApplication | undefined;
+  // a porta fica a mesma quando a API cai e sobe (a reconexão em massa reabre no endereço de antes)
+  let porta = 0;
   let reposicao: NodeJS.Timeout | undefined;
   const valorJusto = opcoes.valorJusto ?? 4000;
   // sem calendário importado o valor justo real não existe: a carga fixa um valor para todos, e a casa cota ao redor dele
@@ -94,8 +99,6 @@ export async function subirServidorDeCarga(opcoes: OpcoesServidorCarga): Promise
       clock,
       override: (b) =>
         withTestAuth(clock)(b)
-          .overrideProvider(FairValueService)
-          .useValue(valorJustoFixo)
           .overrideProvider(BotRunnerSettings)
           .useValue({
             get config() {
@@ -103,8 +106,11 @@ export async function subirServidorDeCarga(opcoes: OpcoesServidorCarga): Promise
             },
           }),
     });
-    await app.listen(0, "127.0.0.1");
+    // só o cálculo do valor justo é trocado (a carga não tem calendário importado); a leitura dos dados (`load`, dos bots) é a de verdade
+    app.get(FairValueService, { strict: false }).compute = valorJustoFixo.compute as FairValueService["compute"];
+    await app.listen(porta, "127.0.0.1");
     servidor.apiUrl = (await app.getUrl()).replace("[::1]", "127.0.0.1");
+    porta = Number(new URL(servidor.apiUrl).port);
   };
   servidor.derrubar = async () => {
     await app?.close();
@@ -151,7 +157,7 @@ export async function subirServidorDeCarga(opcoes: OpcoesServidorCarga): Promise
     "ligar-bots": async (corpo) => {
       const { counts } = corpo as { counts: Record<string, number> };
       const admin = await createAccount(conexao.db, { role: "admin" });
-      const res = await app!.inject({ method: "PATCH", url: "/admin/bots", payload: { counts }, headers: { authorization: `Bearer ${admin.token}` } });
+      const res = await app!.inject({ method: "PATCH", url: "/admin/bots", payload: { counts }, headers: { authorization: `Bearer ${await admin.tokenWith({ at: clock.now(), expiresIn: 12 * 3600 })}` } });
       return { status: res.statusCode, corpo: res.statusCode >= 300 ? res.body.slice(0, 500) : undefined };
     },
     /** Uma rodada da tarefa dos bots, cronometrada. `chance` (0 a 1) liga todos os bots com essa chance (padrão a da produção). */
@@ -161,6 +167,19 @@ export async function subirServidorDeCarga(opcoes: OpcoesServidorCarga): Promise
       const t0 = performance.now();
       const relatorio = await app!.get(BotRunner, { strict: false }).runOnce(clock.now());
       return { ms: performance.now() - t0, relatorio };
+    },
+    /** O patrimônio diário de todas as carteiras (a tarefa das 24h de Brasília), cronometrado. */
+    "equity-diario": async () => {
+      const t0 = performance.now();
+      const relatorio = await app!.get(EquityDailyService, { strict: false }).runOnce(clock.now());
+      return { ms: performance.now() - t0, relatorio };
+    },
+    /** A foto mensal de todas as carteiras de jogador, cronometrada (a F15 chama no encerramento, com as carteiras travadas). */
+    "foto-mensal": async (corpo) => {
+      const { seasonId } = corpo as { seasonId: number };
+      const t0 = performance.now();
+      const gravadas = await withTransaction(conexao.db, (tx) => app!.get(SnapshotService, { strict: false }).takeSnapshots(tx, seasonId, clock.now()));
+      return { ms: performance.now() - t0, gravadas };
     },
     memoria: async () => ({ rssMb: Math.round(process.memoryUsage().rss / 1048576), heapMb: Math.round(process.memoryUsage().heapUsed / 1048576) }),
   };

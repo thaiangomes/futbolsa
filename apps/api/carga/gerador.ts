@@ -43,6 +43,8 @@ export interface Preparado {
   jogadores: Array<Jogador & { token: string }>;
   apiUrl: string;
   deslocamentoMs: number;
+  /** O histórico de `historico.sql` já foi carregado: os candles deixam de ser os dos negócios e o verificador não vale mais. */
+  historicoCarregado?: boolean;
   fechar(): Promise<void>;
 }
 
@@ -142,7 +144,7 @@ export async function medir(p: Preparado, o: OpcoesMedicao, log: (l: string) => 
     aviso: AVISO_DE_AMBIENTE,
   };
   pool?.fecharTodas();
-  if (o.verificar !== false) resultado.invariantes = await verificarInvariantes(p);
+  if (o.verificar !== false && !p.historicoCarregado) resultado.invariantes = await verificarInvariantes(p);
   resultado.metas = avaliarMetas(resultado, perfil.clubeQuente);
   return resultado;
 }
