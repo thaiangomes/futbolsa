@@ -1,7 +1,20 @@
 import { and, asc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { clubs, payoutEvents, seasonClubs, seasons, wallets } from "./schema/index.js";
+import { metrics, type LockKind } from "./metrics.js";
 import type { Tx } from "./transaction.js";
+
+/** Mede a espera de uma instrução de trava (só com medidores ligados) e deixa o instante da aquisição para o `COMMIT`. */
+async function timed<T>(tx: Tx, kind: LockKind, key: string | undefined, run: () => Promise<T>): Promise<T> {
+  const m = metrics();
+  if (!m.enabled) return run();
+  const start = performance.now();
+  const result = await run();
+  const end = performance.now();
+  m.lockWait(kind, key, end - start);
+  tx.noteLock(kind, key, end);
+  return result;
+}
 
 /**
  * As travas de linha, sempre na mesma ordem em todo o jogo: a temporada; os
@@ -29,11 +42,13 @@ export type PayoutEventRow = typeof payoutEvents.$inferSelect;
  */
 export async function lockSeason(tx: Tx, seasonId: number, mode: "share" | "update"): Promise<SeasonRow> {
   tx.locks.checkSeason(seasonId, mode);
-  const rows = await tx.db
-    .select()
-    .from(seasons)
-    .where(eq(seasons.id, seasonId))
-    .for(mode === "update" ? "no key update" : "share");
+  const rows = await timed(tx, "season", undefined, () =>
+    tx.db
+      .select()
+      .from(seasons)
+      .where(eq(seasons.id, seasonId))
+      .for(mode === "update" ? "no key update" : "share"),
+  );
   if (rows.length === 0) throw new Error(`temporada inexistente: ${seasonId}`);
   tx.locks.markSeason(seasonId, mode);
   return rows[0]!;
@@ -49,14 +64,16 @@ export async function lockClubs(tx: Tx, seasonId: number, tickers: readonly stri
   tx.locks.checkClubs(seasonId, sorted);
   // o `FOR UPDATE OF` só aceita o nome sem o esquema: daí o apelido
   const sc = alias(seasonClubs, "sc");
-  const rows = await tx.db
-    .select({ ...getTableColumns(sc), ticker: clubs.ticker })
-    .from(sc)
-    .innerJoin(clubs, eq(clubs.id, sc.clubId))
-    .where(and(eq(sc.seasonId, seasonId), inArray(clubs.ticker, sorted)))
-    // ordem binária, a mesma da comparação de strings do JavaScript
-    .orderBy(sql`${clubs.ticker} collate "C"`)
-    .for("update", { of: sc });
+  const rows = await timed(tx, "club", sorted.join(","), () =>
+    tx.db
+      .select({ ...getTableColumns(sc), ticker: clubs.ticker })
+      .from(sc)
+      .innerJoin(clubs, eq(clubs.id, sc.clubId))
+      .where(and(eq(sc.seasonId, seasonId), inArray(clubs.ticker, sorted)))
+      // ordem binária, a mesma da comparação de strings do JavaScript
+      .orderBy(sql`${clubs.ticker} collate "C"`)
+      .for("update", { of: sc }),
+  );
   if (rows.length !== sorted.length) {
     const found = new Set(rows.map((r) => r.ticker));
     const missing = sorted.filter((t) => !found.has(t));
@@ -76,12 +93,14 @@ export async function lockPayoutEvents(tx: Tx, ids: readonly number[], mode: "sh
   const sorted = [...new Set(ids)].sort((a, b) => a - b);
   if (sorted.length === 0) return [];
   tx.locks.checkPayoutEvents(sorted, mode);
-  const rows = await tx.db
-    .select()
-    .from(payoutEvents)
-    .where(inArray(payoutEvents.id, sorted))
-    .orderBy(asc(payoutEvents.id))
-    .for(mode);
+  const rows = await timed(tx, "payout_event", undefined, () =>
+    tx.db
+      .select()
+      .from(payoutEvents)
+      .where(inArray(payoutEvents.id, sorted))
+      .orderBy(asc(payoutEvents.id))
+      .for(mode),
+  );
   if (rows.length !== sorted.length) {
     const found = new Set(rows.map((r) => r.id));
     throw new Error(`evento de pagamento inexistente: ${sorted.filter((id) => !found.has(id)).join(", ")}`);
@@ -109,12 +128,15 @@ export async function lockWallets(tx: Tx, ids: readonly number[]): Promise<Walle
     .map((o) => [o.ownerType === "treasury" ? 1 : 0, o.id] as const)
     .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   tx.locks.checkWallets(keys);
-  const rows = await tx.db
-    .select()
-    .from(wallets)
-    .where(inArray(wallets.id, unique))
-    .orderBy(sql`${wallets.ownerType} = 'treasury'`, asc(wallets.id))
-    .for("update");
+  const withTreasury = keys.some(([treasury]) => treasury === 1);
+  const rows = await timed(tx, withTreasury ? "wallet_treasury" : "wallet", undefined, () =>
+    tx.db
+      .select()
+      .from(wallets)
+      .where(inArray(wallets.id, unique))
+      .orderBy(sql`${wallets.ownerType} = 'treasury'`, asc(wallets.id))
+      .for("update"),
+  );
   tx.locks.markWallets(keys);
   return rows;
 }
