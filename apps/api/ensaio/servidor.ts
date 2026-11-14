@@ -6,6 +6,9 @@ import { FixedClock } from "../src/infra/clock/index.js";
 import { connect, type DbConnection } from "../src/infra/db/client.js";
 import { createTestApp } from "../test/support/app.js";
 import { withTestAuth } from "../test/support/auth.js";
+import { BotRunnerSettings } from "../src/modules/admin/bots/runner.js";
+import { ResultSourceRegistry } from "../src/modules/admin/results/sources/registry.js";
+import { ReplaySource } from "./replay-source.js";
 import { recusarBancoNaoLocal, recusarProducao } from "./guardas.js";
 
 /**
@@ -16,6 +19,8 @@ import { recusarBancoNaoLocal, recusarProducao } from "./guardas.js";
 export interface ServidorEnsaio {
   app: NestFastifyApplication;
   clock: FixedClock;
+  /** A fonte de resultados de reprodução que a API usa no lugar da ESPN e da football-data.org. */
+  fonte: ReplaySource;
   conexao: DbConnection;
   /** Endereço HTTP da API (`http://127.0.0.1:porta`). */
   url: string;
@@ -30,6 +35,8 @@ export interface OpcoesServidor {
   databaseUrl: string;
   inicio: Date;
   poolSize?: number;
+  /** Ritmo dos bots (P12): padrão do ensaio comparável, a cada 180 minutos com chance 0,25. */
+  bots?: { tickMinutes: number; activityPer3h: number };
 }
 
 export async function criarServidorEnsaio(opcoes: OpcoesServidor): Promise<ServidorEnsaio> {
@@ -37,11 +44,22 @@ export async function criarServidorEnsaio(opcoes: OpcoesServidor): Promise<Servi
   recusarBancoNaoLocal(opcoes.databaseUrl);
   const clock = new FixedClock(opcoes.inicio);
   const conexao = connect(opcoes.databaseUrl, opcoes.poolSize ?? 20);
-  const servidor = { clock, conexao } as ServidorEnsaio;
+  const fonte = new ReplaySource(() => clock.now());
+  const servidor = { clock, conexao, fonte } as ServidorEnsaio;
+  const ritmo = opcoes.bots ?? { tickMinutes: 180, activityPer3h: 0.25 };
   let app: NestFastifyApplication | undefined;
 
   servidor.subir = async () => {
-    app = await createTestApp({ db: conexao.db, clock, override: withTestAuth(clock) });
+    app = await createTestApp({
+      db: conexao.db,
+      clock,
+      override: (b) =>
+        withTestAuth(clock)(b)
+          .overrideProvider(ResultSourceRegistry)
+          .useValue(new ResultSourceRegistry(() => fonte))
+          .overrideProvider(BotRunnerSettings)
+          .useValue({ config: ritmo }),
+    });
     await app.listen(0, "127.0.0.1");
     servidor.app = app;
     servidor.url = (await app.getUrl()).replace("[::1]", "127.0.0.1");
