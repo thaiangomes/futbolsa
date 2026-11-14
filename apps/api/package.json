@@ -18,7 +18,7 @@
     "db:seed": "node --env-file-if-exists=../../.env --import tsx src/infra/db/seed.ts",
     "auth:check": "node --env-file-if-exists=../../.env --import tsx scripts/supabase-check.ts",
     "mail:check": "node --env-file-if-exists=../../.env --import tsx scripts/mail-check.ts",
-    "ensaio": "vitest run --config vitest.ensaio.config.ts",
+    "ensaio": "vitest run --config vitest.ensaio.config.ts ensaio/executar.ensaio.ts",
     "demo:carteira": "node --env-file-if-exists=../../.env --import tsx scripts/demo-carteira.ts"
   },
   "devDependencies": {
