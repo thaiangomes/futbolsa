@@ -89,6 +89,7 @@ export function ClubView({ ticker, api, logged, chart = null }: { ticker: string
     <div className="stack" data-testid="clube">
       <PriceHeader state={view} name={NAMES.get(ticker)} />
       <MarketStatus state={view} />
+      {chart}
       <div className="g-livro">
         <div className="stack">
           <div className="g-2">
