@@ -104,6 +104,8 @@ export async function abrirControle(
       res.writeHead(status, { "content-type": "application/json" });
       res.end(JSON.stringify(corpo));
     };
+    // uma página aberta no navegador do desenvolvedor não pode mexer no relógio nem nos cenários: quem manda `Origin` é recusado
+    if (req.headers.origin) return responder(403, { erro: "a porta de controle não atende navegador" });
     try {
       const partes: Buffer[] = [];
       for await (const parte of req) partes.push(parte as Buffer);

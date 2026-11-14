@@ -13,6 +13,13 @@ function arquivos(dir: string): string[] {
 }
 
 describe("guardas do ensaio (P1)", () => {
+  it("a T25 achou: ?host= e ?hostaddr= na URL (que o pg prioriza) e host vazio não contornam a recusa do banco", () => {
+    expect(() => recusarBancoNaoLocal("postgres://u:p@localhost/postgres?host=db.xxx.supabase.co")).toThrow();
+    expect(() => recusarBancoNaoLocal("postgres://u:p@localhost/postgres?hostaddr=10.1.2.3")).toThrow();
+    expect(() => recusarBancoNaoLocal("postgres:///postgres")).toThrow();
+    expect(() => recusarBancoNaoLocal("postgres://u:p@localhost:5432/postgres")).not.toThrow();
+  });
+
   it("recusa banco do Supabase e de qualquer host fora da máquina", () => {
     expect(() => recusarBancoNaoLocal("postgres://u:s@db.abc.supabase.co:5432/postgres")).toThrow(/hospedado/);
     expect(() => recusarBancoNaoLocal("postgres://u:s@aws-0.pooler.supabase.com:6543/postgres")).toThrow(/hospedado/);

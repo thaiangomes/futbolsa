@@ -2,14 +2,14 @@ import "reflect-metadata";
 import { randomUUID } from "node:crypto";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer, type Server } from "node:http";
-import { extname, join, normalize, resolve } from "node:path";
+import { extname, join, normalize, resolve, sep } from "node:path";
 import pg from "pg";
 import { sql } from "drizzle-orm";
 import { runMigrations } from "../src/infra/db/migrate.js";
 import { tokenFor } from "../test/support/auth.js";
 import { carregarTemporada2025, type Carregado } from "./carregar.js";
 import { Condutor } from "./condutor.js";
-import { recusarBancoNaoLocal } from "./guardas.js";
+import { recusarBancoNaoLocal, recusarProducao } from "./guardas.js";
 import { abrirControle, type Cenario, criarServidorEnsaio, type ServidorEnsaio } from "./servidor.js";
 
 /**
@@ -34,6 +34,7 @@ const NOME_DO_BANCO = "futbolsa_e2e";
 
 /** O banco do navegador tem nome fixo: o servidor é morto à força pelo Playwright, sem chance de apagar nada ao sair. */
 async function recriarBanco(urlBase: string): Promise<string> {
+  recusarProducao();
   recusarBancoNaoLocal(urlBase);
   const admin = new pg.Client({ connectionString: urlBase });
   await admin.connect();
@@ -65,9 +66,16 @@ const TIPOS: Record<string, string> = {
 function servirSite(pasta: string, porta: number): Promise<Server> {
   const raiz = resolve(pasta);
   const http = createServer((req, res) => {
-    const caminho = decodeURIComponent((req.url ?? "/").split("?")[0]!);
+    let caminho: string;
+    try {
+      caminho = decodeURIComponent((req.url ?? "/").split("?")[0]!);
+    } catch {
+      res.writeHead(400);
+      res.end("endereço inválido");
+      return;
+    }
     const candidatos = [caminho, `${caminho}.html`, join(caminho, "index.html")].map((c) => normalize(join(raiz, c)));
-    const achado = candidatos.find((c) => c.startsWith(raiz) && existsSync(c) && statSync(c).isFile());
+    const achado = candidatos.find((c) => (c === raiz || c.startsWith(raiz + sep)) && existsSync(c) && statSync(c).isFile());
     if (!achado) {
       res.writeHead(404, { "content-type": "text/html; charset=utf-8" });
       createReadStream(join(raiz, "404.html")).on("error", () => res.end("não achei")).pipe(res);
