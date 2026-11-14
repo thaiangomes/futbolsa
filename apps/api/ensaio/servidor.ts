@@ -40,6 +40,13 @@ export interface OpcoesServidor {
 }
 
 export async function criarServidorEnsaio(opcoes: OpcoesServidor): Promise<ServidorEnsaio> {
+  // o WebSocket só aceita conexões do site configurado (o ensaio usa o mesmo endereço dos testes de tempo real)
+  process.env.WEB_ORIGIN ??= "http://localhost:3001";
+  // a vida de uma conexão conta no relógio simulado, que pula horas entre uma parada e outra: sem isto o servidor fecharia
+  // a conexão do ouvinte a cada parada (Plano do WebSocket: 55 minutos)
+  process.env.WS_MAX_AGE_MS ??= String(400 * 86_400_000);
+  // a janela de mensagens por segundo também usa o relógio da API, que no ensaio fica parado entre duas paradas
+  process.env.WS_MAX_MESSAGES_PER_SECOND ??= "100000";
   recusarProducao();
   recusarBancoNaoLocal(opcoes.databaseUrl);
   const clock = new FixedClock(opcoes.inicio);
