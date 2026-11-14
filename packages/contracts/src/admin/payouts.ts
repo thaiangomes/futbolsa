@@ -209,10 +209,13 @@ export type CorrectionStaleResponse = z.infer<typeof correctionStaleResponseSche
 
 // ---------- tempo real ----------
 
-/** `payout.credited`, no canal `me`: um crédito, complemento ou estorno de pagamento chegou à carteira. */
+/**
+ * `payout.credited`, no canal `me`: um crédito, complemento ou estorno de pagamento chegou à carteira; `buyback` é a
+ * recompra (ações × valor, e as ações do clube saem da carteira).
+ */
 export const payoutCreditedEventSchema = z.strictObject({
   eventId: z.number().int(),
-  kind: z.enum(["dividend", "reversal", "complement"]),
+  kind: z.enum(["dividend", "reversal", "complement", "buyback"]),
   ticker: z.string(),
   reason: z.string(),
   /** Positivo cai no caixa; negativo é o estorno. */

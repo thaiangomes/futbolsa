@@ -21,8 +21,10 @@ export type LedgerErrorCode =
   | "negative_reserved_shares"
   | "reserved_exceeds_shares"
   | "negative_open_orders"
-  /** `postMany` com movimentos de mais de uma carteira (erro de programação). */
-  | "wallet_mismatch";
+  /** `postMany` com movimentos de mais de uma carteira, ou `postCashEach` com uma carteira repetida (erro de programação). */
+  | "wallet_mismatch"
+  /** `postCashEach` com movimento de clube ou de ações (erro de programação). */
+  | "cash_only";
 
 /** Movimento recusado pelo `portfolio.post`. Regra, não falha do banco: não é repetido. */
 export class LedgerError extends Error {

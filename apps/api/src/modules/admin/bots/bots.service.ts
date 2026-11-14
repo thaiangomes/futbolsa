@@ -152,7 +152,9 @@ export class BotsService {
     const change: ProfileChange = { profile, before: active.length, after: target, turnedOn: [], turnedOff: [], created: [], needsEntry: [] };
 
     const season = await currentSeason(tx.db);
-    const locked = season ? await lockSeason(tx, season.id, "share") : undefined;
+    const held = season ? await lockSeason(tx, season.id, "share") : undefined;
+    // a temporada que encerrou enquanto a trava era esperada conta como nenhuma: ligar e desligar não mexe nela (F15, T7)
+    const locked = held && held.status !== "closed" ? held : undefined;
 
     if (target < active.length) {
       const off = active.slice(target);

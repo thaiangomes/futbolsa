@@ -5,7 +5,7 @@ import { Footer, SimpleHeader } from "../../features/accounts/ui/brand";
 import { AccountSettings } from "../../features/accounts/account-settings";
 import { RequireAccount, useSession } from "../../features/accounts/session-provider";
 import { useSiteUrl } from "../../features/accounts/navigation";
-import { ProfileSnapshot } from "../../features/portfolio";
+import { ProfileHistory, ProfileSnapshot } from "../../features/portfolio";
 
 function Conta() {
   const { state, auth, api, reload } = useSession();
@@ -15,7 +15,7 @@ function Conta() {
   return (
     <AccountSettings me={state.me} auth={auth} api={api} returnUrl={returnUrl} onChanged={reload}
       onSignedOut={() => router.replace("/entrar")}
-      profileExtra={<ProfileSnapshot nickname={state.me.nickname} api={api} />} />
+      profileExtra={<><ProfileSnapshot nickname={state.me.nickname} api={api} /><ProfileHistory api={api} /></>} />
   );
 }
 

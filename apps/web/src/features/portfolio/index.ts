@@ -4,3 +4,5 @@ export { EquityChart } from "./equity/equity-chart";
 export { SnapshotCard, ProfileSnapshot } from "./snapshot/snapshot-card";
 export { ClubBadge } from "./club-badge";
 export { portfolioApi, type PortfolioApi } from "./api";
+export { HistoryCard, ProfileHistory, seasonReturnBp } from "./history/history-card";
+export { SeasonNotice } from "./wallet/season-notice";

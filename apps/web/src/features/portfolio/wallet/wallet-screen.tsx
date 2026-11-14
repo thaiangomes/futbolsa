@@ -12,6 +12,7 @@ import { type PortfolioApi, portfolioApi } from "../api";
 import { EquityChart } from "../equity/equity-chart";
 import { Extract } from "./extract";
 import { OpenOrders } from "./open-orders";
+import { SeasonNotice } from "./season-notice";
 import { CompositionBar, PositionsTable, ResultsTable, SummaryCards } from "./sections";
 import { useAuctions } from "./use-auctions";
 import { type EntriesData, useEntries, useWallet } from "./use-wallet";
@@ -136,6 +137,7 @@ export function WalletBody(p: WalletBodyProps) {
   if (p.narrow) {
     return (
       <div className="stack" data-testid="carteira-celular">
+        <SeasonNotice view={p.view} />
         <div className="tabs" role="group" aria-label="Seções da carteira">
           {TABS.map((t) => (
             <button key={t.id} type="button" aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>{t.label}</button>
@@ -157,6 +159,7 @@ export function WalletBody(p: WalletBodyProps) {
   }
   return (
     <div className="stack" data-testid="carteira">
+      <SeasonNotice view={p.view} />
       <SummaryCards view={p.view} />
       <div className="g-main-aside">
         {equityChart ?? <div />}

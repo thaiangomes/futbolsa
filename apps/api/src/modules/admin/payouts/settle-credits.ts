@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { DB, type Database, lockPayoutEvents, lockSeason, lockWallets, type PayoutEventRow, type Tx, withTransaction } from "../../../infra/db/index.js";
 import { payoutEvents } from "../../../infra/db/schema/index.js";
 import { currentSeason } from "../current-season.js";
+import { BuybackSettleService } from "./buyback-settle.js";
 import { PayoutEvents } from "./events.js";
 import { SettleReversalService } from "./settle-reversal.js";
 import { dues, settlingEventIds } from "./settlement.js";
@@ -20,7 +21,8 @@ export interface Credit {
   walletId: number;
   amount: number;
   entryId: number;
-  kind: "dividend" | "complement" | "reversal";
+  /** `buyback`: a recompra (o caixa e as ações do clube saindo na mesma linha). */
+  kind: "dividend" | "complement" | "reversal" | "buyback";
 }
 
 /** O que um lote creditou, para o aviso depois do `COMMIT` (`payout.credited`, na T9). */
@@ -41,6 +43,8 @@ export interface SettleEventSummary {
   amount: number;
   /** Por que parou antes de acabar (o evento deixou de estar aprovado, a temporada encerrou); `null` se acabou. */
   stopped: "not_approved" | "season_closed" | null;
+  /** Na recompra: as contas de que as ações saíram sem pagamento no último passo (tesouraria e contas excluídas). */
+  swept: number;
 }
 
 /** O que a tarefa de liquidação fez numa execução. */
@@ -83,6 +87,7 @@ export class SettleCreditsService implements OnModuleDestroy {
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly reversal: SettleReversalService,
+    private readonly buyback: BuybackSettleService,
     @Optional() private readonly events?: PayoutEvents,
   ) {}
 
@@ -102,7 +107,7 @@ export class SettleCreditsService implements OnModuleDestroy {
    * rota): as travas garantem um crédito por carteira. Evento que não está aprovado não credita nada.
    */
   async settleEvent(eventId: number): Promise<SettleEventSummary> {
-    const summary: SettleEventSummary = { eventId, batches: 0, credited: 0, amount: 0, stopped: null };
+    const summary: SettleEventSummary = { eventId, batches: 0, credited: 0, amount: 0, stopped: null, swept: 0 };
     const [event] = await this.db.select().from(payoutEvents).where(eq(payoutEvents.id, eventId));
     if (!event || event.status !== "approved") return { ...summary, stopped: "not_approved" };
 
@@ -143,6 +148,13 @@ export class SettleCreditsService implements OnModuleDestroy {
     if (failures.length > 0) {
       const detail = failures.map((f) => `carteira ${f.walletId}: ${(f.error as Error).message}`).join("; ");
       throw new Error(`liquidação do evento ${eventId}: ${failures.length} carteira(s) sem estorno (${detail})`, { cause: failures[0]!.error });
+    }
+
+    // a recompra: com todas as carteiras da foto creditadas, as ações do clube saem das contas que sobraram (F15, T4)
+    if (event.kind === "buyback") {
+      const sweep = await this.buyback.sweep(eventId);
+      if (sweep.stopped === "season_closed" || sweep.stopped === "not_approved") return { ...summary, stopped: sweep.stopped };
+      summary.swept = sweep.swept.length;
     }
     return summary;
   }

@@ -13,7 +13,8 @@ import {
 } from "@futbolsa/engine";
 import { clubs, orders, payoutEvents, payoutHoldings, seasons, users, wallets } from "../../../infra/db/schema/index.js";
 import { DomainError } from "../../../infra/http/index.js";
-import { CLOSE_MARGIN_MS, DIVIDEND_EVENTS, groupOfKey, roundAndPhase } from "./close-events.service.js";
+import { BUYBACK_EVENTS } from "./buyback-events.js";
+import { CLOSE_MARGIN_MS, DIVIDEND_EVENTS, groupOfKey, type PayoutEventSource, roundAndPhase, storedCompetition } from "./close-events.service.js";
 import { EngineInputService } from "./engine-input.js";
 import { type Executor, executorOf, type Holding, holdingsAt } from "./holdings.js";
 import { settlingEventIds } from "./settlement.js";
@@ -104,7 +105,12 @@ export interface CorrectionPlan {
 
 type EventRow = typeof payoutEvents.$inferSelect;
 
-const DIVIDEND_KINDS: readonly string[] = DIVIDEND_EVENTS.kinds;
+/**
+ * Os provedores de eventos da correção: os dividendos e, com a negociação encerrada, a recompra (F15, T5). Depois de
+ * aprovada, a recompra entra no `diffEvents` e no `settle` como qualquer evento, pela foto de D (copiada: D não muda);
+ * o estorno e o complemento dela são só em dinheiro, porque as ações já saíram.
+ */
+const SOURCES: readonly PayoutEventSource[] = [DIVIDEND_EVENTS, BUYBACK_EVENTS];
 
 /** O evento gravado no formato do motor, para o `diffEvents` (o `stage` sai da chave `tipo|competição|stage|clube`). */
 function toPayoutEvent(row: EventRow, ticker: string): PayoutEvent {
@@ -168,18 +174,21 @@ export class CorrectionPlanService {
       throw new DomainError("payout_settling", 409, ADMIN_ERROR_MESSAGES.payout_settling);
     }
 
-    // o que os resultados atuais dão (só os dividendos: a recompra é da F15)
+    // o que os resultados atuais dão: os dividendos e, com a negociação encerrada, a recompra sobre os dividendos de agora
     const loaded = await this.engineInput.load(executor, seasonId);
+    const sources = SOURCES.filter((s) => s.active?.(loaded) ?? true);
+    const kinds = sources.flatMap((s) => s.kinds);
     const computed = new Map<string, PayoutEvent>();
-    for (const event of DIVIDEND_EVENTS.events(loaded)) {
-      if (DIVIDEND_KINDS.includes(event.kind)) computed.set(event.key, event);
+    for (const source of sources) {
+      const own: readonly string[] = source.kinds;
+      for (const event of source.events(loaded)) if (own.includes(event.kind)) computed.set(event.key, event);
     }
 
     const current = await db
       .select()
       .from(payoutEvents)
       .where(
-        and(eq(payoutEvents.seasonId, seasonId), ne(payoutEvents.status, "superseded"), inArray(payoutEvents.kind, [...DIVIDEND_KINDS])),
+        and(eq(payoutEvents.seasonId, seasonId), ne(payoutEvents.status, "superseded"), inArray(payoutEvents.kind, [...kinds])),
       );
     const currentKeys = new Set(current.map((r) => r.eventKey));
     const approved = new Map(current.filter((r) => r.status === "approved").map((r) => [r.eventKey, r]));
@@ -380,7 +389,7 @@ export class CorrectionPlanService {
           key: e.key,
           kind: e.change.kind as CorrectionChange["kind"],
           club: { id: club.id, ticker: club.ticker, name: club.name },
-          competition: (e.change.competition || null) as CorrectionChange["competition"],
+          competition: storedCompetition(e.change.competition) as CorrectionChange["competition"],
           ...roundAndPhase(e.next),
           reason: e.change.reason,
           before: e.change.before,

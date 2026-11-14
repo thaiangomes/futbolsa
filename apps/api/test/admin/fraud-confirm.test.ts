@@ -260,9 +260,10 @@ describe("decidir o caso de trapaça", () => {
     refused(await confirm(first, ids), 409, "club_in_auction");
     await setTunnelState(db(), s.seasonId, club("COR3"), { auctionOpenedAt: null, auctionUntil: null });
 
-    for (const status of ["closed", "ipo_open"]) {
+    // temporada encerrada: `season_closed` (F15, T7); fora da negociação: `annul_not_allowed`
+    for (const [status, code] of [["closed", "season_closed"], ["ipo_open", "annul_not_allowed"]] as const) {
       await database.db.update(seasons).set({ status }).where(eq(seasons.id, s.seasonId));
-      refused(await confirm(first, ids), 409, "annul_not_allowed");
+      refused(await confirm(first, ids), 409, code);
     }
     await database.db.update(seasons).set({ status: "trading" }).where(eq(seasons.id, s.seasonId));
     refused(await confirm(first, ids, { reason: "ver eva@exemplo.com" }), 400, "reason_has_email");

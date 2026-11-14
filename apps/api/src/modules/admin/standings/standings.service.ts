@@ -14,6 +14,7 @@ import { clubs, standings, users } from "../../../infra/db/schema/index.js";
 import { DomainError } from "../../../infra/http/index.js";
 import { currentSeason } from "../current-season.js";
 import { AdminLogService } from "../log/index.js";
+import { assertLatestNotClosed, assertSeasonOpen } from "../seasons/season-state.js";
 import { resolveClub } from "../results/club-resolver.js";
 import type { ImportReport } from "../results/import.service.js";
 import type { ResultSource, SourceStanding } from "../results/sources/types.js";
@@ -217,8 +218,13 @@ export class StandingsService {
 
   private async lockCurrent(tx: Tx): Promise<number> {
     const season = await currentSeason(tx.db);
-    if (!season) throw noSeason();
-    await lockSeason(tx, season.id, "share");
+    if (!season) {
+      // sem temporada atual, a mais nova encerrada recusa a correção da classificação (Admin, critério 18)
+      await assertLatestNotClosed(tx);
+      throw noSeason();
+    }
+    // o encerramento pode ter passado enquanto a trava era esperada
+    assertSeasonOpen(await lockSeason(tx, season.id, "share"));
     return season.id;
   }
 

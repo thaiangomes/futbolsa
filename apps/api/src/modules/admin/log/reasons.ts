@@ -24,6 +24,8 @@ export const ADMIN_ACTIONS = {
   "import.run": { reasonRequired: false },
   // Adiar o fechamento das ofertas do IPO (F8): como as outras ações de temporada, motivo aceito e não exigido.
   "season.ipo.postpone": { reasonRequired: false },
+  // Encerrar a temporada (F15): o admin confirma digitando o ano; o motivo não é pedido (decisão 5 do plano)
+  "season.close": { reasonRequired: false },
   // Suspensão do mercado (F7)
   "suspension.set": { reasonRequired: true },
   "suspension.clear": { reasonRequired: false },

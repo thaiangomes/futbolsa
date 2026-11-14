@@ -8,6 +8,8 @@ import { AccountsController } from "./accounts.controller.js";
 import { AccountsService } from "./accounts.service.js";
 import { AccountClosureHooks } from "./closure-hooks.js";
 import { AccountDeletionService } from "./deletion.service.js";
+import { HistoryController } from "./history.controller.js";
+import { HistoryService } from "./history.service.js";
 import { IdentityService } from "./identity.service.js";
 import { InvitesController } from "./invites.controller.js";
 import { InvitesService } from "./invites.service.js";
@@ -16,6 +18,7 @@ import { NoticesService } from "./notices.service.js";
 import { PlayersController } from "./players.controller.js";
 import { RolesController } from "./roles.controller.js";
 import { RolesService } from "./roles.service.js";
+import { SeasonResultsService } from "./season-results.service.js";
 
 /**
  * Conta e login. Global porque o guard de login (de todas as rotas) e o WebSocket perguntam a
@@ -26,7 +29,7 @@ import { RolesService } from "./roles.service.js";
 @Global()
 @Module({
   imports: [PortfolioModule, AdminLogModule, RealtimeModule],
-  controllers: [AccountsController, NoticesController, PlayersController, InvitesController, RolesController],
+  controllers: [AccountsController, HistoryController, NoticesController, PlayersController, InvitesController, RolesController],
   providers: [
     IdentityService,
     { provide: UserResolver, useExisting: IdentityService },
@@ -35,9 +38,11 @@ import { RolesService } from "./roles.service.js";
     AccountClosureHooks,
     AccountDeletionService,
     NoticesService,
+    HistoryService,
     InvitesService,
     RolesService,
+    SeasonResultsService,
   ],
-  exports: [UserResolver, IdentityService, AccountsService, AccountsConfig, AccountClosureHooks, AccountDeletionService, NoticesService],
+  exports: [UserResolver, IdentityService, AccountsService, AccountsConfig, AccountClosureHooks, AccountDeletionService, NoticesService, SeasonResultsService],
 })
 export class AccountsModule {}

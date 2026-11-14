@@ -3,6 +3,7 @@ import {
   type EntriesQuery,
   candlesResponseSchema,
   entriesResponseSchema,
+  historyResponseSchema,
   equityResponseSchema,
   markersResponseSchema,
   myTradesResponseSchema,
@@ -35,6 +36,8 @@ export function portfolioApi(api: ApiClient) {
     markers: (ticker: string, range: ChartRange) => api.request(markersResponseSchema, `/clubs/${encodeURIComponent(ticker)}/markers?range=${range}`),
     /** `GET /portfolio/clubs/:ticker/trades`: meus negócios e o meu preço médio (com login). */
     myTrades: (ticker: string, range: ChartRange) => api.request(myTradesResponseSchema, `/portfolio/clubs/${encodeURIComponent(ticker)}/trades?range=${range}`),
+    /** `GET /me/history`: as temporadas encerradas do jogador. */
+    history: () => api.request(historyResponseSchema, "/me/history"),
     /** `GET /players/:nickname`: o perfil público, com a foto mensal. */
     player: (nickname: string) => api.request(publicPlayerSchema, `/players/${encodeURIComponent(nickname)}`),
   };

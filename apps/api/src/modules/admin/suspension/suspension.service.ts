@@ -7,6 +7,7 @@ import { DomainError } from "../../../infra/http/index.js";
 import { currentSeason } from "../current-season.js";
 import { AdminEvents } from "../events.js";
 import { AdminLogService } from "../log/index.js";
+import { assertSeasonOpen } from "../seasons/season-state.js";
 import { MarketPort } from "../results/ports.js";
 
 const noSeason = () => new DomainError("no_season", 409, ADMIN_ERROR_MESSAGES.no_season);
@@ -58,6 +59,7 @@ export class SuspensionService {
         this.events.marketSuspended(tx, { scope: "club", ticker: body.ticker, reason: body.reason });
       } else {
         const locked = await lockSeason(tx, season.id, "update");
+        assertSeasonOpen(locked);
         if (locked.suspendedReason !== null) throw new DomainError("already_suspended", 409, ADMIN_ERROR_MESSAGES.already_suspended);
         const all = await this.listedTickers(tx, season.id);
         await lockClubs(tx, season.id, all);
@@ -99,6 +101,7 @@ export class SuspensionService {
         this.events.marketResumed(tx, { scope: "club", ticker });
       } else {
         const locked = await lockSeason(tx, season.id, "update");
+        assertSeasonOpen(locked);
         if (locked.suspendedReason === null) throw new DomainError("not_suspended", 409, ADMIN_ERROR_MESSAGES.not_suspended);
         const all = await this.listedTickers(tx, season.id);
         const lockedClubs = await lockClubs(tx, season.id, all);
@@ -127,7 +130,8 @@ export class SuspensionService {
   private async lockOneClub(tx: Tx, seasonId: number, ticker: string) {
     const listed = await this.listedTickers(tx, seasonId);
     if (!listed.includes(ticker)) throw new DomainError("club_not_listed", 404, ADMIN_ERROR_MESSAGES.club_not_listed);
-    await lockSeason(tx, seasonId, "share");
+    // o encerramento pode ter passado enquanto a trava era esperada (F15, T7)
+    assertSeasonOpen(await lockSeason(tx, seasonId, "share"));
     const [club] = await lockClubs(tx, seasonId, [ticker]);
     return club!;
   }

@@ -60,6 +60,9 @@ export const ADMIN_ERROR_MESSAGES = {
   bot_inactive: "Este bot está desligado.",
   idempotency_key_required: "Mande o cabeçalho Idempotency-Key: ele evita creditar duas vezes num clique duplo.",
   idempotency_conflict: "Esta chave de envio já foi usada com outro pedido.",
+  season_close_blocked: "A temporada ainda não pode ser encerrada: resolva as pendências da lista.",
+  confirm_year_mismatch: "O ano digitado não é o da temporada.",
+  season_trading_ended: "A negociação já acabou: esta edição reabriria a temporada e não é mais permitida.",
   last_admin: "Esta ação deixaria o jogo sem nenhum admin ativo.",
 } as const;
 export type AdminErrorCode = keyof typeof ADMIN_ERROR_MESSAGES;

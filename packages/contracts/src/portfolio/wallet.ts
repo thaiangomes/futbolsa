@@ -62,5 +62,7 @@ export const walletViewSchema = z.strictObject({
   buybackClosed: z.boolean(),
   positions: z.array(positionViewSchema),
   results: z.array(clubResultSchema),
+  /** Entre temporadas (a anterior encerrada): o ano encerrado e quando abre o IPO seguinte, se já marcado. */
+  between: z.strictObject({ closedYear: z.number().int(), nextIpoOpensAt: z.string().nullable() }).nullable().optional(),
 });
 export type WalletView = z.infer<typeof walletViewSchema>;

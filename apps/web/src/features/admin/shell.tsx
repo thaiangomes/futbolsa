@@ -17,6 +17,7 @@ export const ADMIN_MENU = [
   { href: "/admin/pagamentos", label: "Pagamentos" },
   { href: "/admin/pagamentos/correcao", label: "Correção de pagamentos" },
   { href: "/admin/temporada", label: "Preparar a temporada" },
+  { href: "/admin/temporada/encerrar", label: "Encerrar a temporada" },
   { href: "/admin/suspensao", label: "Suspensão" },
   { href: "/admin/formador", label: "Formador de mercado" },
   { href: "/admin/registro", label: "Registro do admin" },

@@ -61,6 +61,8 @@ import {
   standingsViewSchema,
   suspensionStateSchema,
   type StandingsCompetition,
+  seasonClosePreviewSchema,
+  seasonCloseResponseSchema,
   type ListMatchesQuery,
 } from "@futbolsa/contracts";
 import type { ApiClient } from "../../lib/api";
@@ -100,6 +102,9 @@ export function adminApi(api: ApiClient) {
     putRules: (id: number, body: PutSeasonRulesBody) => api.request(seasonRulesSchema, `/admin/seasons/${id}/rules`, { method: "PUT", body }),
     putCup: (id: number, competition: string, body: PutCupBody) => api.request(cupViewSchema, `/admin/seasons/${id}/cups/${competition}`, { method: "PUT", body }),
     confirmCup: (id: number, competition: string) => api.request(cupViewSchema, `/admin/seasons/${id}/cups/${competition}/confirm`, { method: "POST" }),
+
+    seasonClose: (id: number) => api.request(seasonClosePreviewSchema, `/admin/seasons/${id}/close`),
+    closeSeason: (id: number, confirmYear: number) => api.request(seasonCloseResponseSchema, `/admin/seasons/${id}/close`, { method: "POST", body: { confirmYear } }),
 
     suspensions: () => api.request(suspensionStateSchema, "/admin/suspensions"),
     suspend: (reason: string, ticker?: string) => api.request(suspensionStateSchema, "/admin/suspensions", { method: "POST", body: { reason, ...(ticker ? { ticker } : {}) } }),

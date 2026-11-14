@@ -159,7 +159,9 @@ describe("contratos dos pagamentos", () => {
     };
     expect(payoutCreditedEventSchema.parse(credited)).toEqual(credited);
     expect(payoutCreditedEventSchema.parse({ ...credited, kind: "reversal", amount: -40_000 }).amount).toBe(-40_000);
-    expect(payoutCreditedEventSchema.safeParse({ ...credited, kind: "buyback" }).success).toBe(false);
+    // a recompra (F15) também chega por aqui; outro tipo não
+    expect(payoutCreditedEventSchema.parse({ ...credited, kind: "buyback" }).kind).toBe("buyback");
+    expect(payoutCreditedEventSchema.safeParse({ ...credited, kind: "points" }).success).toBe(false);
     // o que já existia segue valendo, e os pagamentos aguardando entram como campo opcional
     expect(adminPendingEventSchema.parse({ pendingMatches: 2 })).toEqual({ pendingMatches: 2 });
     expect(adminPendingEventSchema.parse({ pendingMatches: 2, pendingPayouts: 4 })).toEqual({ pendingMatches: 2, pendingPayouts: 4 });

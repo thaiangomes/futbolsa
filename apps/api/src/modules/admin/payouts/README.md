@@ -2,7 +2,7 @@
 
 Dono: módulo `admin` (quem recebe, aprovação, correção, estorno e caixa negativo). O desenho está no vault, em
 `Técnica/Planos/Plano dos dividendos e pagamentos.md`. As regras de valor ficam no motor (`eventsFor`, `diffEvents`,
-`settle`); os valores da temporada vêm do `dividends` (`SeasonValuesService`). **Feito: T0 a T10** (falta só o que a F13, a F14 e a F15 ligam).
+`settle`); os valores da temporada vêm do `dividends` (`SeasonValuesService`). **Feito: T0 a T10**; a F15 ligou a recompra (fechamento, liquidação e correção).
 
 ## Arquivos
 | Arquivo | O que faz |
@@ -10,11 +10,13 @@ Dono: módulo `admin` (quem recebe, aprovação, correção, estorno e caixa neg
 | `engine-input.ts` | Monta o `EventsInput` do motor (jogos, classificação oficial importada na ordem, valores, clubes listados) e converte clube ↔ ticker (`EXT-<id>` para o clube sem ticker). |
 | `holdings.ts` | `holdingsAt`: as ações de cada carteira no instante do fechamento (posição atual menos o que mudou depois), sem a tesouraria; grava e copia a foto (`payout_holdings`). Conta cada linha pelo horário real (`at`). |
 | `close-events.service.ts` | A passada de fechamento: `eventsFor`, comparação com a versão vigente, evento novo `pending` com a foto, nova versão de um `pending` que mudou, `pending` que sumiu vira `superseded`. Só fecha o que passou da margem de 2 minutos. Ponto de extensão por tipo de evento (`registerSource`): a F15 registra a recompra. |
+| `buyback-events.ts`, `buyback-close.service.ts` | A recompra (F15, T3): `BUYBACK_EVENTS` (a fonte do tipo `buyback`, ativa só com `trading_ended_at`) e o fechamento no fim da passada (`registerAfterPass`): com todas as competições fechadas há 2 minutos, trava temporada, clubes, carteiras com ordens e tesouraria, chama o `endTrading` da F9 e grava um evento `pending` por clube listado (inclusive R$ 0,00) com a foto em D = `trading_ended_at`. A recompra sai do `eventsFor` de agora (os dividendos que os resultados dão), nunca das linhas gravadas: assim o fechamento, a prévia refeita e o plano da correção fazem a mesma conta. `competition` gravada é `null` (o esquema não tem `temporada`). |
 | `close-events.job.ts` | Dispara a passada a cada minuto, ao subir a API, a cada `MatchesChangedEvent` e a cada mudança da classificação. |
 | `preview.service.ts`, `payouts.controller.ts` | `GET /admin/payouts` (prévia) e `GET /admin/payouts/:id/holders`. |
 | `approve.service.ts` | `POST /admin/payouts/approve`: cada evento passa a `approved` numa transação curta, com o registro do admin e o aviso aos rankings. |
 | `settle-credits.ts`, `settle.job.ts` | O crédito em lotes de até 50 carteiras (`SETTLE_BATCH`, medido na T10), retomável (tarefa de cada minuto e ao subir a API). |
-| `settlement.ts` | Quais eventos aprovados ainda estão liquidando. |
+| `settlement.ts` | Quais eventos aprovados ainda estão liquidando (a recompra também enquanto o clube tem ação em alguma conta). |
+| `buyback-settle.ts` | A recompra aprovada (F15, T4): cada carteira da foto vende as ações à casa no lote da F12 (`postCredit` com linha `buyback`, custo `sale`, inclusive a R$ 0,00, e `payout_credits` mesmo com valor zero); depois de todas, `sweep` tira, sem pagar, as ações do clube que sobraram (tesouraria, conta excluída), com a tesouraria por último. Correção da recompra já paga: só dinheiro. |
 | `correction-plan.ts`, `corrections.controller.ts` | `GET /admin/payouts/corrections`: o plano e a prévia da correção, com o código do plano. Não aplica nada. |
 | `apply-correction.service.ts`, `settle-reversal.ts` | `POST /admin/payouts/corrections`: versões novas `approved` e antigas `superseded` numa transação (código do plano, `correction_stale`); o estorno por carteira cancela as compras de quem não cobre (`cancelBuysToCover`, usado também pela F14 com `annulment`) e o caixa pode ficar negativo. |
 | `events.ts`, `outstanding.ts` | `payout.credited` (canal `me`) e `admin.pending` depois do `COMMIT`; `outstanding(temporada)` para o encerramento e `perShareTotals(temporada, clube)` para o simulador. |
@@ -26,3 +28,4 @@ Dono: módulo `admin` (quem recebe, aprovação, correção, estorno e caixa neg
 - Ordem das travas: temporada → clubes (ticker) → eventos de pagamento (id) → carteiras (id) → tesouraria. Nenhuma operação deste submódulo trava a tesouraria.
 - O `RankingsPort.payoutsChanged` entra na mesma transação que cria, muda, aprova ou corrige o evento; os lotes de crédito não avisam.
 - Nenhuma migração: o esquema da F4 tem tudo.
+- **Recompra corrigida (F15, T5):** com a negociação encerrada, a recompra é provedora de eventos na passada e no plano da correção (`BUYBACK_EVENTS`, em `correction-plan.ts` junto com `DIVIDEND_EVENTS`). A recompra "depois" é `buybackEvents` sobre os dividendos que os resultados de agora dão, com `closedAt` = D; a "antes" é a versão gravada. Antes da aprovação, a passada grava a versão nova `pending` com a foto de D copiada; depois, a recompra entra no `diffEvents`/`settle` pela foto de D e o `apply-correction` a aplica (estorno ou complemento só em dinheiro). Com a temporada em `trading_ended` a casa não é chamada a repor cotação, e a edição de jogo que reabriria uma competição (cadastrar, voltar para agendado, adiar, cancelar) é recusada com `season_trading_ended` (`admin/results/matches.service.ts`); o ajuste de ações do admin já é recusado fora de `trading` (`adjust_not_allowed`).

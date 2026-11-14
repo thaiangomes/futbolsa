@@ -65,7 +65,9 @@ export function validate(m: Movement): void {
   if ((m.sharesDelta ?? 0) !== 0 && !m.costBasis && !annulment) {
     throw new LedgerError("cost_basis_required", `movimento ${m.kind} mexe em ações sem dizer a origem do custo`);
   }
-  if ((m.costBasis === "purchase" || m.costBasis === "sale") && !(m.price && m.price > 0)) {
+  // a recompra de clube que não pagou nada é a venda à casa por R$ 0,00 (Dividendos e recompra, critério 24)
+  const freeBuyback = m.kind === "buyback" && m.costBasis === "sale" && m.price === 0;
+  if ((m.costBasis === "purchase" || m.costBasis === "sale") && !(m.price && m.price > 0) && !freeBuyback) {
     throw new LedgerError("price_required", `movimento ${m.kind} (${m.costBasis}) sem preço`);
   }
   if (REASON_KINDS.has(m.kind) && !m.reason?.trim()) {
