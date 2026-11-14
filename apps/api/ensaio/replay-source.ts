@@ -17,11 +17,22 @@ const DATA_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../../package
 /** Arquivo de cada competição (o motor chama a Sul-Americana de `sul-americana`, a API de `sulamericana`). */
 const FILES: Record<CompetitionCode, string | null> = {
   "brasileirao-a": "brasileirao-2025.json",
+  // não há arquivo da Série B de 2025 no repositório: `serieBSintetica` põe dois times de fora e duas rodadas, só para a
+  // competição existir e fechar (sem ela a recompra espera para sempre, porque `closes["brasileirao-b"]` fica indefinido)
   "brasileirao-b": null,
   "copa-do-brasil": "copa-do-brasil-2025.json",
   libertadores: "libertadores-2025.json",
   sulamericana: "sul-americana-2025.json",
 };
+
+/** A Série B mínima do ensaio: dois times de fora do jogo, ida e volta em abril de 2025, já encerradas. */
+export function serieBSintetica(): Match[] {
+  const base = { competition: "brasileirao-b", status: "finished" as const };
+  return [
+    { ...base, id: "2025-brasileirao-b-1", round: 1, kickoff: "2025-04-05T16:00:00-03:00", home: "EXT-SERIE-B-ALFA", away: "EXT-SERIE-B-BETA", homeGoals: 1, awayGoals: 0 },
+    { ...base, id: "2025-brasileirao-b-2", round: 2, kickoff: "2025-04-12T16:00:00-03:00", home: "EXT-SERIE-B-BETA", away: "EXT-SERIE-B-ALFA", homeGoals: 0, awayGoals: 0 },
+  ];
+}
 
 export interface Substituicao {
   /** Troca o jogo no calendário e nos placares (percalços: placar corrigido pela fonte, jogo adiado). */
@@ -54,8 +65,8 @@ export class ReplaySource implements ResultSource {
     let list = this.cache.get(competition);
     if (!list) {
       const file = FILES[competition];
-      list = file ? (JSON.parse(readFileSync(join(DATA_DIR, file), "utf8")) as { matches: Match[] }).matches : [];
-      if (this.curta) list = competition === "brasileirao-a" ? list.filter((m) => (m.round ?? 0) <= this.curta!.rodadas) : [];
+      list = file ? (JSON.parse(readFileSync(join(DATA_DIR, file), "utf8")) as { matches: Match[] }).matches : competition === "brasileirao-b" ? serieBSintetica() : [];
+      if (this.curta) list = competition === "brasileirao-a" ? list.filter((m) => (m.round ?? 0) <= this.curta!.rodadas) : competition === "brasileirao-b" ? list : [];
       this.cache.set(competition, list);
     }
     return list;

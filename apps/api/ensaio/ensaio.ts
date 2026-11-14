@@ -8,6 +8,7 @@ import { carregarTemporada2025, type Carregado } from "./carregar.js";
 import { Condutor, DIA, type Ganchos, type Parada } from "./condutor.js";
 import { Jogadores, type ResumoDosJogadores } from "./jogadores.js";
 import { compararRankingOficialComRecalculado, fimDoMesDe, novoEstadoVerificador, verificarDia, type EstadoVerificador } from "./invariantes.js";
+import { extrairMedidas, type Medidas } from "./comparar.js";
 import { criarServidorEnsaio, type ServidorEnsaio } from "./servidor.js";
 
 /** Sorteio com semente (mulberry32), para o ensaio se repetir. */
@@ -69,6 +70,8 @@ export interface ResultadoEnsaio {
   jogadores: ResumoDosJogadores;
   diasVerificados: number;
   rankingsConferidos: string[];
+  /** As medidas lidas do banco depois da recompra liquidada e antes do encerramento (depois dele as carteiras zeram). */
+  medidas?: Medidas;
 }
 
 /** Roda o ensaio da abertura do IPO até a negociação encerrada e a recompra paga; devolve o que foi feito. */
@@ -128,11 +131,17 @@ export async function executarEnsaio(o: OpcoesEnsaio): Promise<{ resultado: Resu
   for (const c of COMPETITIONS) for (const m of servidor.fonte.matchesOf(c)) ultimoJogo = Math.max(ultimoJogo, finishTime(m));
   let fim = new Date(ultimoJogo + 40 * DIA);
   if (o.ateDiasDepoisDaAbertura !== undefined) fim = new Date(carga.ipo.tradingOpensAt.getTime() + o.ateDiasDepoisDaAbertura * DIA);
+  let medidas: Medidas | undefined;
   const status = async () => (await servidor.conexao.db.select().from(seasons).where(eq(seasons.id, carga.seasonId)))[0]!.status;
-  await condutor.rodarAte(fim, async () => {
-    const s = await status();
-    return s === "trading_ended" || s === "closed";
-  });
+  await condutor.rodarAte(fim, async () => (await status()) === "trading_ended");
+  if ((await status()) === "trading_ended") {
+    // a recompra fechou: três dias para o admin aprovar e liquidar, depois o encerramento da temporada pelo admin (Admin 21, 22)
+    await condutor.rodarAte(new Date(servidor.clock.now().getTime() + 3 * DIA));
+    medidas = await extrairMedidas(servidor, carga);
+    const res = await servidor.app.inject({ method: "POST", url: `/admin/seasons/${carga.seasonId}/close`, payload: { confirmYear: carga.year }, headers: await carga.admin.auth() });
+    log(`encerramento da temporada: ${res.statusCode} ${res.body.slice(0, 200)}`);
+    if (res.statusCode < 300) await condutor.rodarAte(new Date(servidor.clock.now().getTime() + 2 * DIA));
+  }
   log(`ensaio parou em ${servidor.clock.now().toISOString()} com a temporada em ${await status()}`);
   const rankings = o.verificar !== false ? (await compararRankingOficialComRecalculado(servidor, carga.seasonId, estado)).rankings : [];
   jogadores.fechar();
@@ -151,6 +160,7 @@ export async function executarEnsaio(o: OpcoesEnsaio): Promise<{ resultado: Resu
     jogadores: jogadores.resumo,
     diasVerificados: estado.dias,
     rankingsConferidos: rankings,
+    medidas,
   };
   return {
     resultado,

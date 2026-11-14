@@ -8,7 +8,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { it } from "vitest";
 import { readFileSync } from "node:fs";
-import { comparar, extrairMedidas, lerLimites, referenciaExata, relatorioMarkdown } from "./comparar.js";
+import { comparar, lerLimites, referenciaExata, relatorioMarkdown } from "./comparar.js";
 import { executarEnsaio } from "./ensaio.js";
 
 it("ensaio da temporada de 2025", async () => {
@@ -32,9 +32,9 @@ it("ensaio da temporada de 2025", async () => {
     const arquivo = join(pasta, `ensaio-${new Date().toISOString().slice(0, 10)}.json`);
     writeFileSync(arquivo, JSON.stringify(resultado, null, 2));
     // comparação com a simulação (T9): só vale com a temporada inteira
-    if (!e.ENSAIO_CURTA && !e.ENSAIO_ATE_DIAS) {
+    if (resultado.medidas) {
       const lote = JSON.parse(readFileSync(new URL("./referencia/lote-regras-do-jogo.json", import.meta.url), "utf8"));
-      const linhas = comparar(await extrairMedidas(ctx.servidor, ctx.carga), referenciaExata(), lote, lerLimites());
+      const linhas = comparar(resultado.medidas, referenciaExata(), lote, lerLimites());
       writeFileSync(join(pasta, "comparacao.md"), relatorioMarkdown(linhas));
       writeFileSync(join(pasta, "comparacao.json"), JSON.stringify(linhas, null, 2));
       console.log(`comparação: ${linhas.filter((l) => !l.ok).length} diferenças em ${linhas.length} medidas`);

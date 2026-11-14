@@ -69,7 +69,11 @@ export async function extrairMedidas(servidor: ServidorEnsaio, carga: Carregado,
     .groupBy(clubs.ticker, payoutEvents.kind);
   const dividendosPorAcao: Record<string, number> = {};
   const recompraPorAcao: Record<string, number> = {};
-  for (const e of eventos) (e.kind === "buyback" ? recompraPorAcao : dividendosPorAcao)[e.ticker!] = e.total;
+  // um clube tem um total por tipo de evento (pontos, colocação, fases e títulos de copa): soma todos
+  for (const e of eventos) {
+    const destino = e.kind === "buyback" ? recompraPorAcao : dividendosPorAcao;
+    destino[e.ticker!] = (destino[e.ticker!] ?? 0) + e.total;
+  }
 
   const [{ n, volume }] = (await db.select({ n: sql<number>`count(*)::int`, volume: sql<number>`coalesce(sum(${trades.price} * ${trades.quantity}), 0)::float` }).from(trades).where(eq(trades.seasonId, carga.seasonId))) as [{ n: number; volume: number }];
   void volume;
