@@ -194,7 +194,9 @@ describe("verificador de invariantes e detector de relógio (T8)", () => {
     expect(await procurarRelogioReal(db, 2025, servidor.clock.now())).toEqual([]);
     // os vazamentos conhecidos (registro sem regra) continuam visíveis no modo estrito
     const estritos = await procurarRelogioReal(db, 2025, servidor.clock.now(), { estrito: true });
-    expect(new Set(estritos.map((a) => `${a.tabela}.${a.coluna}`))).toEqual(new Set(Object.keys(RELOGIO_REAL_CONHECIDO)));
+    // `matches.updated_at` só vaza quando um admin edita um jogo, o que este mundo não faz (o ensaio com percalços faz)
+    const conhecidosAqui = Object.keys(RELOGIO_REAL_CONHECIDO).filter((k) => k !== "matches.updated_at");
+    expect(new Set(estritos.map((a) => `${a.tabela}.${a.coluna}`))).toEqual(new Set(conhecidosAqui));
     const antigo = await estragado(
       (tx) => tx.execute(sql`update futbolsa.orders set created_at = to_timestamp(0) where id = (select min(id) from futbolsa.orders where season_id = ${carga.seasonId})`),
       (tx) => detectarRelogioReal(tx, 2025, servidor.clock.now()),
