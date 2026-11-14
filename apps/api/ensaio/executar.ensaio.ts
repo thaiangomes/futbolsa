@@ -12,6 +12,7 @@ import { comparar, lerLimites, referenciaExata, relatorioMarkdown } from "./comp
 import { executarEnsaio } from "./ensaio.js";
 
 it("ensaio da temporada de 2025", async () => {
+  let exatasDiferentes: string[] = [];
   const urlBase = process.env.TEST_DATABASE_URL;
   if (!urlBase) throw new Error("Defina TEST_DATABASE_URL (Postgres local).");
   const e = process.env;
@@ -38,8 +39,11 @@ it("ensaio da temporada de 2025", async () => {
       writeFileSync(join(pasta, "comparacao.md"), relatorioMarkdown(linhas));
       writeFileSync(join(pasta, "comparacao.json"), JSON.stringify(linhas, null, 2));
       console.log(`comparação: ${linhas.filter((l) => !l.ok).length} diferenças em ${linhas.length} medidas`);
+      // as medidas exatas (faixas do IPO, dividendos e recompra por ação) não dependem do sorteio dos bots: qualquer diferença é defeito
+      exatasDiferentes = linhas.filter((l) => !l.ok && /^(faixa do IPO|dividendos por ação|recompra por ação)/.test(l.medida)).map((l) => l.medida);
     }
     console.log(JSON.stringify(resultado, null, 2));
+    if (exatasDiferentes.length > 0) throw new Error(`medidas exatas diferentes da simulação: ${exatasDiferentes.join(", ")}`);
     console.log(`(relatório em ${arquivo})`);
   } finally {
     await fechar();
