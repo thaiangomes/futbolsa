@@ -173,6 +173,15 @@ export async function subirNavegador(o: OpcoesNavegador): Promise<Navegador> {
     },
     /** Convida o e-mail, cadastra o apelido e devolve o token de teste (válido por 30 dias do relógio simulado). */
     jogador: async (corpo) => cadastrar((corpo as { apelido: string }).apelido),
+    /** Devolve o token de quem ainda não escolheu apelido (a tela de cadastro), sem criar a conta; convida o e-mail, salvo com `semConvite`. */
+    convidado: async (corpo) => {
+      const { email, semConvite = false } = corpo as { email: string; semConvite?: boolean };
+      if (!semConvite) {
+        const convite = await chamar("POST", "/admin/invites", { emails: [email] }, await carga!.admin.auth());
+        if (convite.status >= 300) throw new Error(`convite → ${convite.status}: ${JSON.stringify(convite.corpo)}`);
+      }
+      return { email, token: await tokenDe(randomUUID(), email) };
+    },
     /** Token novo de quem já existe (o relógio simulado andou, o token antigo pode ter vencido). */
     token: async (corpo) => {
       const { apelido } = corpo as { apelido: string };

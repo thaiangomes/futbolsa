@@ -44,10 +44,25 @@ export function tokenDe(apelido: string): Promise<Jogador> {
   return controle<Jogador>("token", { apelido }).then((r) => ({ ...r, apelido }));
 }
 
+/**
+ * O relógio do navegador acompanha o do jogo (2025-03 e adiante): o site decide pelo `Date.now()` do navegador se o IPO ainda
+ * aceita ofertas e se o mercado está aberto. Chame de novo depois de `avancarRelogio` (a página já aberta segue o novo horário).
+ */
+const instalados = new WeakSet<object>();
+export async function sincronizar(alvo: Page | BrowserContext): Promise<void> {
+  const { agora } = (await (await fetch(`${CONTROLE}/hora`)).json()) as { agora: string };
+  const hora = new Date(agora);
+  if (instalados.has(alvo)) await alvo.clock.setSystemTime(hora);
+  else {
+    await alvo.clock.install({ time: hora });
+    instalados.add(alvo);
+  }
+}
+
 /** Põe o token no navegador antes de a página carregar: o login falso do site de teste o lê do `localStorage`. */
 export async function entrarComo(alvo: Page | BrowserContext, apelido: string): Promise<void> {
   const { token } = await tokenDe(apelido);
-  await alvo.addInitScript((t) => window.localStorage.setItem("futbolsa:e2e:token", t), token);
+  await entrarComToken(alvo, token);
 }
 
 /** Um contexto do navegador novo (outra pessoa, outro aparelho). */
@@ -65,4 +80,20 @@ export async function api<T = unknown>(apelido: string, metodo: string, rota: st
   });
   const texto = await res.text();
   return { status: res.status, corpo: (texto ? JSON.parse(texto) : null) as T };
+}
+
+/** Token de alguém com login mas sem conta no jogo: convidado (vai ao cadastro) ou, com `semConvite`, sem o e-mail liberado. */
+export function convidado(email: string, semConvite = false): Promise<{ email: string; token: string }> {
+  return controle("convidado", { email, semConvite });
+}
+
+/** Põe um token qualquer no navegador antes de a página carregar. */
+export async function entrarComToken(alvo: Page | BrowserContext, token: string): Promise<void> {
+  await sincronizar(alvo);
+  await alvo.addInitScript((t) => window.localStorage.setItem("futbolsa:e2e:token", t), token);
+}
+
+/** As contas de e-mail e senha que o login falso aceita (para as telas de entrar). */
+export async function definirContas(alvo: Page | BrowserContext, contas: Record<string, { password: string; token: string }>): Promise<void> {
+  await alvo.addInitScript((c) => window.localStorage.setItem("futbolsa:e2e:contas", JSON.stringify(c)), contas);
 }

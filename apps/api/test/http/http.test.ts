@@ -127,6 +127,18 @@ describe("HTTP: erros, validação e limites", () => {
     expect(other.headers["access-control-allow-origin"]).not.toBe("*");
   });
 
+  it("CORS: o preflight do site libera PUT, PATCH e DELETE (achado pelo navegador na F16) e recusa método fora da lista", async () => {
+    for (const method of ["PUT", "PATCH", "DELETE", "POST"]) {
+      const res = await app.inject({
+        method: "OPTIONS",
+        url: "/health",
+        headers: { origin: "http://localhost:3001", "access-control-request-method": method, "access-control-request-headers": "authorization,content-type,idempotency-key" },
+      });
+      expect(res.headers["access-control-allow-methods"], method).toContain(method);
+      expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:3001");
+    }
+  });
+
   it("a 11ª chamada seguida a uma rota com limite de 10 por minuto responde 429; outra origem passa", async () => {
     for (let i = 0; i < 10; i++) {
       const ok = await app.inject({ method: "GET", url: "/probe-http/limited", remoteAddress: "10.0.0.1" });
