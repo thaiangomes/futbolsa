@@ -34,6 +34,11 @@ export function serieBSintetica(): Match[] {
   ];
 }
 
+/** A final sintética de uma copa na temporada curta: dois times de fora, uma partida, para a competição existir e fechar. */
+export function finalSintetica(competicao: string): Match[] {
+  return [{ id: `2025-${competicao}-final-sintetica`, competition: competicao, phase: "final", kickoff: "2025-04-09T16:00:00-03:00", home: `EXT-${competicao.toUpperCase()}-ALFA`, away: `EXT-${competicao.toUpperCase()}-BETA`, homeGoals: 2, awayGoals: 1, status: "finished", winner: `EXT-${competicao.toUpperCase()}-ALFA` }];
+}
+
 export interface Substituicao {
   /** Troca o jogo no calendário e nos placares (percalços: placar corrigido pela fonte, jogo adiado). */
   matchId: string;
@@ -66,7 +71,7 @@ export class ReplaySource implements ResultSource {
     if (!list) {
       const file = FILES[competition];
       list = file ? (JSON.parse(readFileSync(join(DATA_DIR, file), "utf8")) as { matches: Match[] }).matches : competition === "brasileirao-b" ? serieBSintetica() : [];
-      if (this.curta) list = competition === "brasileirao-a" ? list.filter((m) => (m.round ?? 0) <= this.curta!.rodadas) : competition === "brasileirao-b" ? list : [];
+      if (this.curta) list = competition === "brasileirao-a" ? list.filter((m) => (m.round ?? 0) <= this.curta!.rodadas) : competition === "brasileirao-b" ? list : finalSintetica(competition);
       this.cache.set(competition, list);
     }
     return list;

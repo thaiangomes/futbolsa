@@ -55,6 +55,9 @@ export const RELOGIO_REAL_CONHECIDO: Readonly<Record<string, string>> = {
   // (`season-start.ts`), e o ensaio cria as contas antes dela.
   "users.created_at": "createAccount do suporte de testes sem createdAt (a API passa o Clock)",
   "auth_identities.created_at": "createAccount do suporte de testes sem createdAt (a API passa o Clock)",
+  // `MatchesService.patch` (src/modules/admin/results/matches.service.ts) grava `updatedAt: new Date()` do relógio real ao editar um jogo.
+  // Achado pela edição do placar à mão no ensaio (Admin 6); nada lê a coluna.
+  "matches.updated_at": "MatchesService.patch grava new() Date do relógio real (registro, sem regra)",
 };
 
 export interface AchadoRelogio {

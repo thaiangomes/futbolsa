@@ -86,6 +86,8 @@ export interface OpcoesJogadores {
 
 export class Jogadores {
   readonly lista: Jogador[] = [];
+  /** Conta só para o WebSocket e a conferência dos livros: o limite de 300 chamadas por minuto é por pessoa e em tempo real. */
+  observador!: Jogador;
   readonly resumo: ResumoDosJogadores = { chamadas: 0, porStatus: {}, erros5xx: [], recusas: {}, ofertasNoIpo: 0, ordens: 0, cancelamentos: 0, conferenciasDeLivro: 0 };
   private readonly sorteio: () => number;
 
@@ -105,16 +107,17 @@ export class Jogadores {
   async cadastrar(tickersDoOuvinte: readonly string[]): Promise<void> {
     const quantos = this.opcoes.quantos ?? 6;
     for (let i = 0; i < quantos; i++) this.lista.push(new Jogador(`jogador_${i + 1}`, this.servidor, this.resumo));
+    this.observador = new Jogador("observador", this.servidor, this.resumo);
     // o jogo é só com convite (Conta e login): o admin libera os e-mails antes do cadastro
     const convite = await this.servidor.app.inject({
       method: "POST",
       url: "/admin/invites",
-      payload: { emails: this.lista.map((j) => j.email) },
+      payload: { emails: [...this.lista, this.observador].map((j) => j.email) },
       headers: await this.carga.admin.auth(),
     });
     if (convite.statusCode >= 300) throw new Error(`convites → ${convite.statusCode}: ${convite.body}`);
-    for (const jogador of this.lista) await jogador.cadastrar();
-    await this.lista[0]!.conectarWs(tickersDoOuvinte);
+    for (const jogador of [...this.lista, this.observador]) await jogador.cadastrar();
+    await this.observador.conectarWs(tickersDoOuvinte);
   }
 
   /** O que cada jogador faz numa parada: ofertas no IPO ou ordens no mercado, e de vez em quando cancela. */
@@ -175,14 +178,21 @@ export class Jogadores {
    * eventos (4 por segundo no máximo), então a conferência espera o último chegar, até 3 segundos de relógio de verdade.
    */
   async conferirLivrosDoOuvinte(): Promise<void> {
-    const ouvinte = this.lista[0]!;
+    const ouvinte = this.observador;
     const ws = ouvinte.ws!;
     for (const ticker of this.carga.tickers) {
       const estado = ws.canais.get(`club:${ticker}`);
       if (!estado?.ultimoLivro) continue; // clube sem movimento ainda
-      const limite = Date.now() + 3000;
+      const limite = Date.now() + 15_000;
       for (;;) {
-        const rest = await ouvinte.livro(ticker);
+        const resposta = await ouvinte.http<BookView & { code?: string }>("GET", `/clubs/${ticker}/book`);
+        // limite de taxa (429) ou outro erro passageiro: espera e tenta de novo; se persistir, a mensagem mostra o que a rota disse
+        if (resposta.status !== 200 || !resposta.corpo?.bids) {
+          if (Date.now() > limite) throw new Error(`a rota do livro de ${ticker} respondeu ${resposta.status}: ${JSON.stringify(resposta.corpo).slice(0, 200)}`);
+          await new Promise((r) => setTimeout(r, 1100));
+          continue;
+        }
+        const rest = resposta.corpo;
         const ev = ws.canais.get(`club:${ticker}`)!.ultimoLivro!;
         const niveis = (l: Array<{ price: number; quantity: number }>) => JSON.stringify(l.map((n) => [n.price, n.quantity]));
         if (niveis(rest.bids) === niveis(ev.bids) && niveis(rest.asks) === niveis(ev.asks)) break;
@@ -195,6 +205,6 @@ export class Jogadores {
   }
 
   fechar(): void {
-    for (const j of this.lista) j.ws?.fechar();
+    for (const j of [...this.lista, this.observador]) j?.ws?.fechar();
   }
 }

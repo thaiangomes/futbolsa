@@ -74,6 +74,8 @@ export class Condutor {
   paradas = 0;
   repeticoes = 0;
   readonly log: string[] = [];
+  /** Milissegundos gastos em cada passada e em cada gancho, somados (para achar onde o ensaio gasta o tempo). */
+  readonly tempos: Record<string, number> = {};
 
   constructor(
     private readonly servidor: ServidorEnsaio,
@@ -165,10 +167,14 @@ export class Condutor {
   }
 
   private async executar<T>(parada: Parada, passada: string, run: () => Promise<T> | T): Promise<T> {
+    const inicio = performance.now();
     try {
       return await run();
     } catch (error) {
       throw new ErroDeParada(parada, passada, error);
+    } finally {
+      const nome = passada.replace(" (repetida)", "");
+      this.tempos[nome] = (this.tempos[nome] ?? 0) + (performance.now() - inicio);
     }
   }
 

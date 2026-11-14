@@ -37,6 +37,8 @@ export interface OpcoesEnsaio {
   tickMinutes?: number;
   /** Mantém o banco no fim. */
   manterBanco?: boolean;
+  /** O ranking oficial de um mês fechado e o recalculado só são iguais se nada foi corrigido depois (Rankings 9, 10): com correção, desligue a conferência final. */
+  conferirRankingsNoFim?: boolean;
   /** Roda o verificador em todo dia novo (padrão: sim). */
   verificar?: boolean;
   /** Ganchos extras (percalços). */
@@ -70,6 +72,10 @@ export interface ResultadoEnsaio {
   jogadores: ResumoDosJogadores;
   diasVerificados: number;
   rankingsConferidos: string[];
+  /** Segundos gastos em cada passada e gancho (soma da execução inteira). */
+  temposPorPassada: Record<string, number>;
+  /** O que o ensaio conferiu depois do encerramento (status HTTP de cada passo). */
+  fimDaTemporada: Array<{ passo: string; criterio: string; status: number }>;
   /** As medidas lidas do banco depois da recompra liquidada e antes do encerramento (depois dele as carteiras zeram). */
   medidas?: Medidas;
 }
@@ -133,6 +139,7 @@ export async function executarEnsaio(o: OpcoesEnsaio): Promise<{ resultado: Resu
   let fim = new Date(ultimoJogo + 40 * DIA);
   if (o.ateDiasDepoisDaAbertura !== undefined) fim = new Date(carga.ipo.tradingOpensAt.getTime() + o.ateDiasDepoisDaAbertura * DIA);
   let medidas: Medidas | undefined;
+  const fimDaTemporada: Array<{ passo: string; criterio: string; status: number }> = [];
   const status = async () => (await servidor.conexao.db.select().from(seasons).where(eq(seasons.id, carga.seasonId)))[0]!.status;
   await condutor.rodarAte(fim, async () => (await status()) === "trading_ended");
   if ((await status()) === "trading_ended") {
@@ -141,10 +148,19 @@ export async function executarEnsaio(o: OpcoesEnsaio): Promise<{ resultado: Resu
     medidas = await extrairMedidas(servidor, carga);
     const res = await servidor.app.inject({ method: "POST", url: `/admin/seasons/${carga.seasonId}/close`, payload: { confirmYear: carga.year }, headers: await carga.admin.auth() });
     log(`encerramento da temporada: ${res.statusCode} ${res.body.slice(0, 200)}`);
-    if (res.statusCode < 300) await condutor.rodarAte(new Date(servidor.clock.now().getTime() + 2 * DIA));
+    if (res.statusCode < 300) {
+      await condutor.rodarAte(new Date(servidor.clock.now().getTime() + 2 * DIA));
+      // depois do encerramento: ranking anual (Rankings 19 a 21), histórico da conta (Conta 15 a 18) e a temporada seguinte (Admin 21, 22)
+      const leitor = jogadores.lista[0];
+      const anual = await fetch(`${servidor.url}/rankings/season/${carga.year}`);
+      fimDaTemporada.push({ passo: "ranking anual oficial", criterio: "Rankings 19", status: anual.status });
+      if (leitor) fimDaTemporada.push({ passo: "histórico da conta", criterio: "Conta 15", status: (await leitor.http("GET", "/me/history")).status });
+      const proxima = await servidor.app.inject({ method: "POST", url: "/admin/seasons", payload: { year: carga.year + 1 }, headers: await carga.admin.auth() });
+      fimDaTemporada.push({ passo: "temporada seguinte criada em preparação", criterio: "Admin 22", status: proxima.statusCode });
+    }
   }
   log(`ensaio parou em ${servidor.clock.now().toISOString()} com a temporada em ${await status()}`);
-  const rankings = o.verificar !== false ? (await compararRankingOficialComRecalculado(servidor, carga.seasonId, estado)).rankings : [];
+  const rankings = o.verificar !== false && o.conferirRankingsNoFim !== false ? (await compararRankingOficialComRecalculado(servidor, carga.seasonId, estado)).rankings : [];
   jogadores.fechar();
   const resultado: ResultadoEnsaio = {
     opcoes: { escala: o.escala, semente: o.semente, curta: o.curta, jogadores: nJogadores, tickMinutes: tick },
@@ -161,6 +177,8 @@ export async function executarEnsaio(o: OpcoesEnsaio): Promise<{ resultado: Resu
     jogadores: jogadores.resumo,
     diasVerificados: estado.dias,
     rankingsConferidos: rankings,
+    temposPorPassada: Object.fromEntries(Object.entries(condutor.tempos).map(([k, v]) => [k, Math.round(v / 100) / 10])),
+    fimDaTemporada,
     medidas,
   };
   return {
