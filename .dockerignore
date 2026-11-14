@@ -8,3 +8,7 @@
 .env
 .env.*
 **/*.tsbuildinfo
+apps/api/ensaio
+apps/api/carga
+apps/api/test
+apps/web/e2e
