@@ -31,6 +31,11 @@ export const CLUBS: ClubInfo[] = [
   { id: "VIT3", name: "Vitória", aliases: ["ec vitoria", "vitoria"] },
   { id: "MIR3", name: "Mirassol", aliases: ["mirassol fc", "mirassol"] },
   { id: "RBB3", name: "Bragantino", aliases: ["rb bragantino", "red bull bragantino", "bragantino"] },
+  // promovidos para 2026 (tickers aprovados em 2026-11-01)
+  { id: "CAP3", name: "Athletico-PR", aliases: ["athletico paranaense", "athletico-pr", "athletico pr", "club athletico paranaense"] },
+  { id: "CHA3", name: "Chapecoense", aliases: ["associacao chapecoense de futebol", "chapecoense"] },
+  { id: "CFC3", name: "Coritiba", aliases: ["coritiba fbc", "coritiba fc", "coritiba"] },
+  { id: "REM3", name: "Remo", aliases: ["clube do remo", "remo"] },
 ];
 
 /** Clube dos Treze: listados todo ano, mesmo na Série B (decisão do Thaian). */
@@ -64,4 +69,13 @@ export function clubName(id: string): string {
 export const IPO_POSITIONS_2025: Record<string, number> = {
   BOT3: 1, PAL3: 2, FLA3: 3, FOR3: 4, INT3: 5, SAO3: 6, COR3: 7, BAH3: 8, CRU3: 9, VAS3: 10,
   VIT3: 11, CAM3: 12, FLU3: 13, GRE3: 14, JUV3: 15, RBB3: 16, SAN3: 17, MIR3: 18, SPT3: 19, CEA3: 20,
+};
+
+/**
+ * Colocação usada para o preço do IPO de 2026: a tabela final do Brasileirão 2025 (conferida nos dados da ESPN);
+ * os quatro promovidos (Coritiba, Athletico-PR, Chapecoense e Remo, na ordem da Série B 2025) usam o 17º ao 20º.
+ */
+export const IPO_POSITIONS_2026: Record<string, number> = {
+  FLA3: 1, PAL3: 2, CRU3: 3, MIR3: 4, FLU3: 5, BOT3: 6, BAH3: 7, SAO3: 8, GRE3: 9, RBB3: 10,
+  CAM3: 11, SAN3: 12, COR3: 13, VAS3: 14, VIT3: 15, INT3: 16, CFC3: 17, CAP3: 18, CHA3: 19, REM3: 20,
 };

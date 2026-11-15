@@ -1,138 +1,69 @@
 /**
- * Baixa uma copa da API pública da ESPN (sem chave, sem documentação nem
- * termos publicados: serve para calibrar a simulação, não para o jogo) e
- * converte para o formato de partidas do FutBolsa.
+ * Baixa uma competição da API pública da ESPN (sem chave, sem documentação nem termos publicados: serve para o teste da
+ * partida e para calibrar, não para o jogo público) e converte para o formato de partidas do FutBolsa.
  *
  * Uso:
- *   npm run data:fetch-espn-copa -- <copa-do-brasil|sul-americana> [ano] [saída]
+ *   npm run data:fetch-espn-copa -- <competição|todas> [ano] [--bruto <pasta>] [--de <pasta>] [--saida <pasta>]
  *
- * A API só aceita um dia por chamada, então são 365 chamadas (5 em paralelo).
- * Os horários vêm em UTC e são gravados no horário de Brasília. Clubes de fora
- * da Série A ganham um id próprio (ex.: "EXT-LANUS"): não têm ações, mas os
- * jogos deles decidem quando cada fase termina.
+ * Competições: brasileirao-a (bra.1), brasileirao-b (bra.2), copa-do-brasil, libertadores e sul-americana.
+ * - Sem `--de`, baixa `scoreboard?dates=<ano>&limit=1000` (uma chamada por competição) e guarda cada resposta crua em
+ *   `--bruto` (padrão: `data/bruto-espn-<ano>-<data>/`). Os dados baixados não são confiáveis: a pasta tem que ser nova e vazia.
+ * - Com `--de <pasta>`, não usa a rede: converte as respostas já baixadas (`<liga>.json`).
+ * - Grava `<saida>/<arquivo>-<ano>.json` (padrão: `data/`).
+ *
+ * Os horários vêm em UTC e são gravados no horário de Brasília. Clubes de fora da Série A ganham um id próprio
+ * ("EXT-LANUS"). Jogos por jogar ficam `scheduled`; adiados já remarcados valem pelo jogo remarcado (marcado `postponed`).
  */
-import { writeFileSync } from "node:fs";
-import { clubIdFromName } from "../src/data/clubs.js";
-import type { Match } from "../src/engine/types.js";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { COMPETICOES_ESPN, converterEspn, urlDoPlacar, type EspnEvent } from "../src/data/espn.js";
 
-const CUPS: Record<string, { league: string; phases: Record<string, string> }> = {
-  "copa-do-brasil": {
-    league: "bra.copa_do_brazil",
-    phases: {
-      "first-round": "1a-fase",
-      "second-round": "2a-fase",
-      "third-round": "3a-fase",
-      "round-of-16": "oitavas",
-      quarterfinals: "quartas",
-      semifinals: "semifinal",
-      finals: "final",
-    },
-  },
-  "sul-americana": {
-    league: "conmebol.sudamericana",
-    phases: {
-      "first-stage": "pre-1",
-      "group-stage": "grupos",
-      "knockout-round-playoffs": "playoffs",
-      "round-of-16": "oitavas",
-      quarterfinals: "quartas",
-      semifinals: "semifinal",
-      final: "final",
-    },
-  },
+const args = process.argv.slice(2);
+const opcao = (nome: string): string | undefined => {
+  const i = args.indexOf(`--${nome}`);
+  if (i < 0) return undefined;
+  const valor = args[i + 1];
+  args.splice(i, 2);
+  return valor;
 };
-
-interface EspnCompetitor {
-  homeAway: "home" | "away";
-  score: string;
-  winner?: boolean;
-  team: { displayName: string };
-}
-interface EspnEvent {
-  id: string;
-  date: string;
-  season: { slug: string };
-  competitions: Array<{ status: { type: { name: string } }; competitors: EspnCompetitor[] }>;
-}
-
-const [competition, yearArg = "2025", outArg] = process.argv.slice(2);
-const cup = competition ? CUPS[competition] : undefined;
-if (!competition || !cup) {
-  console.error(`Uso: npm run data:fetch-espn-copa -- <${Object.keys(CUPS).join("|")}> [ano] [saída]`);
+const bruto = opcao("bruto");
+const de = opcao("de");
+const saida = opcao("saida") ?? "data";
+const [competicao, anoArg = "2026"] = args;
+const chaves = competicao === "todas" ? Object.keys(COMPETICOES_ESPN) : competicao && COMPETICOES_ESPN[competicao] ? [competicao] : [];
+if (chaves.length === 0) {
+  console.error(`Uso: npm run data:fetch-espn-copa -- <${Object.keys(COMPETICOES_ESPN).join("|")}|todas> [ano] [--bruto <pasta>] [--de <pasta>] [--saida <pasta>]`);
   process.exit(1);
 }
-const year = Number(yearArg);
-const output = outArg ?? `data/${competition}-${year}.json`;
+const ano = Number(anoArg);
+const hoje = new Date().toISOString().slice(0, 10);
 
-const slug = (s: string) =>
-  s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "");
-
-function clubId(name: string): string {
-  try {
-    return clubIdFromName(name);
-  } catch {
-    return `EXT-${slug(name)}`;
+let pastaBruta = de;
+if (!de) {
+  pastaBruta = bruto ?? `data/bruto-espn-${ano}-${hoje}`;
+  if (existsSync(pastaBruta) && readdirSync(pastaBruta).length > 0) {
+    console.error(`A pasta ${pastaBruta} já tem arquivos: cada download vai para uma pasta nova e vazia.`);
+    process.exit(1);
+  }
+  mkdirSync(pastaBruta, { recursive: true });
+  for (const chave of chaves) {
+    const cfg = COMPETICOES_ESPN[chave]!;
+    const res = await fetch(urlDoPlacar(cfg.league, ano));
+    if (!res.ok) throw new Error(`ESPN ${res.status} em ${cfg.league}`);
+    writeFileSync(join(pastaBruta, `${cfg.league}.json`), await res.text());
   }
 }
 
-/** UTC da ESPN ("2025-12-21T21:00Z") para o horário de Brasília. */
-function brasilia(utc: string): string {
-  const t = new Date(Date.parse(utc) - 3 * 3600e3).toISOString().slice(0, 19);
-  return `${t}-03:00`;
-}
-
-const days: string[] = [];
-for (let t = Date.UTC(year, 0, 1); t <= Date.UTC(year, 11, 31); t += 86400e3) {
-  days.push(new Date(t).toISOString().slice(0, 10).replaceAll("-", ""));
-}
-const events = new Map<string, EspnEvent>();
-for (let i = 0; i < days.length; i += 5) {
-  await Promise.all(
-    days.slice(i, i + 5).map(async (d) => {
-      const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/${cup.league}/scoreboard?dates=${d}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`ESPN ${res.status} em ${d}`);
-      const j = (await res.json()) as { events?: EspnEvent[] };
-      for (const e of j.events ?? []) events.set(e.id, e);
-    }),
+mkdirSync(saida, { recursive: true });
+for (const chave of chaves) {
+  const cfg = COMPETICOES_ESPN[chave]!;
+  const texto = readFileSync(join(pastaBruta!, `${cfg.league}.json`), "utf8");
+  const corpo = JSON.parse(texto) as { events?: EspnEvent[] };
+  const { arquivo, resumo } = converterEspn(chave, corpo.events ?? [], ano, hoje);
+  const destino = join(saida, `${cfg.arquivo}-${ano}.json`);
+  writeFileSync(destino, JSON.stringify(arquivo, null, 2) + "\n");
+  console.log(
+    `${chave}: ${resumo.eventos} eventos → ${arquivo.matches.length} jogos (${resumo.jogados} jogados, ${resumo.porJogar} por jogar, ` +
+      `${resumo.adiados} adiados, ${resumo.adiadosRemarcados} já remarcados, ${resumo.cancelados} cancelados; último jogado em ${resumo.ultimoJogado}) → ${destino}`,
   );
 }
-
-const matches: Match[] = [...events.values()]
-  .sort((a, b) => a.date.localeCompare(b.date))
-  .map((e) => {
-    const phase = cup.phases[e.season.slug];
-    if (!phase) throw new Error(`Fase desconhecida: "${e.season.slug}"`);
-    const c = e.competitions[0]!;
-    const status = c.status.type.name;
-    const homeC = c.competitors.find((x) => x.homeAway === "home")!;
-    const awayC = c.competitors.find((x) => x.homeAway === "away")!;
-    const home = clubId(homeC.team.displayName);
-    const away = clubId(awayC.team.displayName);
-    const finished = /^STATUS_(FULL_TIME|FINAL)/.test(status);
-    const match: Match = {
-      id: `${year}-${competition}-${phase}-${e.date.slice(0, 10)}-${home}-${away}`,
-      competition,
-      phase,
-      kickoff: brasilia(e.date),
-      home,
-      away,
-      homeGoals: finished ? Number(homeC.score) : null,
-      awayGoals: finished ? Number(awayC.score) : null,
-      status: finished ? "finished" : status === "STATUS_CANCELED" ? "cancelled" : "scheduled",
-    };
-    // Pênaltis e final: vale quem a ESPN marca como vencedor.
-    const winner = homeC.winner ? home : awayC.winner ? away : undefined;
-    if (winner && (status === "STATUS_FINAL_PEN" || phase === "final")) match.winner = winner;
-    return match;
-  });
-
-const out = {
-  season: year,
-  competition,
-  source: `API pública da ESPN (${cup.league}), https://site.api.espn.com, baixado em ${new Date().toISOString().slice(0, 10)}`,
-  matches,
-};
-writeFileSync(output, JSON.stringify(out, null, 2) + "\n");
-const br = new Set(matches.flatMap((m) => [m.home, m.away]).filter((id) => !id.startsWith("EXT-")));
-console.log(`${matches.length} jogos, ${br.size} clubes da Série A (${[...br].join(", ")}) → ${output}`);
