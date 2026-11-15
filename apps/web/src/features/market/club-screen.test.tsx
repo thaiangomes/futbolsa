@@ -118,4 +118,17 @@ describe("tela do clube", () => {
     await dom.realtime.emit("club:FLA3", "book", { bids: [], asks: [], auction: { until: "2027-04-05T18:40:00.000Z" } }, 2);
     expect(dom.$("[data-testid=chip-leilao]").textContent).toContain("Em leilão até 15h40");
   });
+  it("livro 38: a tela do clube no computador traz o cartão Quanto vale para você, com a recompra e o preço do livro", async () => {
+    const dividends = vi.fn(async () => ({
+      ticker: "FLA3", league: "brasileirao-a" as const, leagueRules: { perPoint: 10, placement: [500, 450, 400] }, leagueOpen: true,
+      points: 20, position: 5, paid: 270, toReceive: 30, buybackMultipleBp: 15_000, cups: [],
+    }));
+    await dom.render(createElement(ClubView, { ticker: "FLA3", api: { ...api(view({ me: null })), dividends } as unknown as MarketApi, logged: false }));
+    await dom.settle();
+    await dom.settle();
+    expect(dividends).toHaveBeenCalledWith("FLA3");
+    expect(dom.$("[data-testid=valor-cartao]").textContent).toContain("Quanto vale o FLA3 para você?");
+    expect(dom.$("[data-testid=valor-recompra-hoje]").textContent).toContain("R$ 4,50");
+    expect(dom.$("[data-testid=sim-comparacao]").textContent).toContain("R$ 43,00");
+  });
 });

@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Footer, SimpleHeader } from "../../features/accounts/ui/brand";
+import { Footer } from "../../features/accounts/ui/brand";
+import { PlayerHeader } from "../../features/accounts/ui/player-nav";
 import { AccountSettings } from "../../features/accounts/account-settings";
 import { RequireAccount, useSession } from "../../features/accounts/session-provider";
 import { useSiteUrl } from "../../features/accounts/navigation";
@@ -21,23 +22,9 @@ function Conta() {
 
 /** Perfil e conta (prancha 6c). */
 export default function ContaPage() {
-  const { state } = useSession();
-  const nickname = state.status === "ready" ? state.me.nickname : "";
   return (
     <div className="fb" style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      <SimpleHeader
-        right={
-          <div className="row" style={{ gap: 12 }}>
-            <span className="chip chip-live hide-sm">Jogo · dinheiro fictício</span>
-            {nickname && (
-              <span className="row-s">
-                <span className="av" aria-hidden="true">{nickname[0]?.toUpperCase()}</span>
-                <span className="b small hide-sm">{nickname}</span>
-              </span>
-            )}
-          </div>
-        }
-      />
+      <PlayerHeader active="perfil" />
       <main className="wrap stack" style={{ flex: 1, width: "100%" }}>
         <RequireAccount>
           <Conta />

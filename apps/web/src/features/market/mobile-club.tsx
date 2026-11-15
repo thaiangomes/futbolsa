@@ -3,6 +3,7 @@
 import type { MyOrder, PlaceOrderResponse } from "@futbolsa/contracts";
 import { useEffect, useState } from "react";
 import { formatCents } from "../../lib/format";
+import { ClubValueCard } from "../club-value";
 import type { MarketApi } from "./api";
 import { BookPanel } from "./book-panel";
 import type { ClubState } from "./club-state";
@@ -30,7 +31,7 @@ export function useIsNarrow(query = MOBILE_QUERY): boolean {
   return narrow;
 }
 
-type Tab = "livro" | "neg" | "minhas";
+type Tab = "livro" | "neg" | "minhas" | "sobre";
 
 /**
  * A tela do clube no celular (prancha "FLA3 no celular" e "Boleta no celular"): preço grande no alto, abas Livro,
@@ -59,7 +60,7 @@ export function MobileClub({
   const [tab, setTab] = useState<Tab>("livro");
   const [sheet, setSheet] = useState<"buy" | "sell" | null>(null);
   const mine = orders.filter((o) => o.ticker === state.ticker && o.limitPrice !== null).map((o) => ({ side: o.side, limitPrice: o.limitPrice! }));
-  const tabs: [Tab, string][] = [["livro", "Livro"], ["neg", "Negócios"], ...(logged ? ([["minhas", "Minhas ordens"]] as [Tab, string][]) : [])];
+  const tabs: [Tab, string][] = [["livro", "Livro"], ["neg", "Negócios"], ...(logged ? ([["minhas", "Minhas ordens"]] as [Tab, string][]) : []), ["sobre", "Sobre"]];
 
   return (
     <div className="stack" data-testid="clube-celular" style={{ gap: 14 }}>
@@ -72,9 +73,10 @@ export function MobileClub({
       </div>
       {tab === "livro" && <BookPanel bids={state.bids} asks={state.asks} mine={mine} />}
       {tab === "neg" && <TradesPanel trades={state.trades} />}
+      {tab === "sobre" && <ClubValueCard ticker={state.ticker} price={state.price.displayed} api={api} />}
       {tab === "minhas" && logged && <MyOrders orders={orders} ticker={state.ticker} onCancel={onCancel} busyId={busyId} error={cancelError} />}
 
-      <div className="row" style={{ padding: "12px 0", gap: 10, flexWrap: "nowrap", position: "sticky", bottom: 0, background: "var(--bg)" }}>
+      <div className="row" style={{ padding: "12px 0", gap: 10, flexWrap: "nowrap", position: "sticky", bottom: "var(--altura-abas, 0px)", background: "var(--bg)" }}>
         <button type="button" className="btn btn-buy btn-lg grow" onClick={() => setSheet("buy")}>Comprar</button>
         <button type="button" className="btn btn-sell btn-lg grow" onClick={() => setSheet("sell")}>Vender</button>
       </div>

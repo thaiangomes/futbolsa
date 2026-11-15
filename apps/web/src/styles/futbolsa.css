@@ -233,3 +233,14 @@ body{margin:0}
 .balance-bar .kpi{align-items:center}
 .balance-bar .kpi-v{font-size:22px}
 @media (max-width:480px){.balance-bar{padding-left:8px;padding-right:8px}.balance-bar .kpi-v{font-size:19px}}
+
+/* abas do celular: presas na base, só em telas estreitas. --altura-abas é o espaço que elas tomam: o fim da página e as barras presas na base (saldo do IPO, Comprar e Vender) sobem esse tanto */
+:root,.fb{--altura-abas:0px}
+.balance-bar{bottom:var(--altura-abas)}
+.tabbar-fixed{display:none;position:fixed;left:0;right:0;bottom:0;z-index:30;height:auto;min-height:64px;padding-bottom:env(safe-area-inset-bottom)}
+@media (max-width:760px){
+  .tabbar-fixed{display:flex}
+  body:has(.tabbar-fixed){--altura-abas:calc(64px + env(safe-area-inset-bottom));padding-bottom:var(--altura-abas)}
+  body:has([role="dialog"]) .tabbar-fixed{display:none}
+  .balance-bar{padding-bottom:8px}
+}
