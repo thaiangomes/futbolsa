@@ -80,6 +80,9 @@ test.describe.serial("jornada 2: IPO", () => {
     await form.getByRole("button", { name: "Registrar oferta" }).click();
     await expect(cartao(page, "FLA3")).toContainText("Sua quantidade");
     await expect(page.getByTestId("caixa-reservado")).toContainText(reais(150 * faixa.ceiling));
+    // a barra de saldo presa na base acompanha a oferta sem precisar subir a página
+    await expect(page.getByTestId("saldo-barra-reservado")).toContainText(reais(150 * faixa.ceiling));
+    await expect(page.getByTestId("saldo-barra-ofertas")).toHaveText("1");
     // 12: a oferta é uma só por clube: o botão agora é "Editar"
     await expect(cartao(page, "FLA3").getByRole("button", { name: "Ofertar" })).toHaveCount(0);
     form = await abrirOferta(page, "FLA3");
@@ -89,6 +92,7 @@ test.describe.serial("jornada 2: IPO", () => {
     // 13: cancelar devolve a reserva
     await cartao(page, "FLA3").getByRole("button", { name: "Cancelar oferta" }).click();
     await expect(page.getByTestId("caixa-reservado")).toContainText("R$ 0,00");
+    await expect(page.getByTestId("saldo-barra-ofertas")).toHaveText("0");
     await expect(cartao(page, "FLA3")).toContainText("Sem oferta neste clube");
   });
 
