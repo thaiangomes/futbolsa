@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
 import { createReadStream, existsSync, statSync } from "node:fs";
-import { createServer, type Server } from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import pg from "pg";
 import { sql } from "drizzle-orm";
@@ -64,8 +64,14 @@ const TIPOS: Record<string, string> = {
 
 /** Arquivos estáticos do export do Next: `/mercado` serve `mercado.html`, como a hospedagem do site faz. */
 function servirSite(pasta: string, porta: number): Promise<Server> {
+  const http = createServer(manipuladorDoSite(pasta));
+  return new Promise((ok) => http.listen(porta, "127.0.0.1", () => ok(http)));
+}
+
+/** O atendimento dos arquivos do site (a partida usa o mesmo, com rotas a mais). */
+export function manipuladorDoSite(pasta: string): (req: IncomingMessage, res: ServerResponse) => void {
   const raiz = resolve(pasta);
-  const http = createServer((req, res) => {
+  return (req, res) => {
     let caminho: string;
     try {
       caminho = decodeURIComponent((req.url ?? "/").split("?")[0]!);
@@ -83,8 +89,7 @@ function servirSite(pasta: string, porta: number): Promise<Server> {
     }
     res.writeHead(200, { "content-type": TIPOS[extname(achado)] ?? "application/octet-stream" });
     createReadStream(achado).pipe(res);
-  });
-  return new Promise((ok) => http.listen(porta, "127.0.0.1", () => ok(http)));
+  };
 }
 
 export type Fase = "preparando" | "ipo-aberto" | "negociacao";
