@@ -19,6 +19,7 @@ import { ANO_DA_PARTIDA, arquivoDaSerieA, atualizarFotos, fotosMaisNovas, paraMe
 import { AgenteDaPartida } from "./bots.js";
 import { recusarAmbienteDaPartida } from "./guardas.js";
 import { PORTAS_DA_PARTIDA } from "./portas.js";
+import { conferirLoginReal, loginReal, type LoginReal } from "./login-real.js";
 import { ModuloDaPartida, PorRelogio } from "./modulo.js";
 import { type Pedido, RelogioDaPartida, RelogioFlutuante } from "./relogio.js";
 
@@ -54,6 +55,11 @@ export interface OpcoesDaPartida {
   /** Sem site nem porta de controle (os testes). */
   semPortas?: boolean;
   host?: string;
+  /**
+   * A partida aberta a convidados (etapa 2): o login é o do Supabase de produção, o CORS e o WebSocket só aceitam o site da
+   * Vercel, e o site não é servido por aqui nem há conta de jogador de teste (cada convidado entra com o e-mail convidado).
+   */
+  publica?: LoginReal;
   /** Outro nome de banco (os testes; sempre `futbolsa_partida_<sufixo>`). */
   nomeDoBanco?: string;
 }
@@ -65,7 +71,8 @@ export interface Partida {
   carga: Carregado;
   condutor: Condutor;
   bots: AgenteDaPartida;
-  jogador: ContaEnsaio;
+  /** A conta de jogador do login falso (etapa 1); nula na partida pública. */
+  jogador: ContaEnsaio | null;
   siteUrl: string;
   controleUrl: string;
   /** Primeira subida desta partida (o banco acabou de ser criado). */
@@ -90,13 +97,22 @@ async function contaPorApelido(db: ServidorEnsaio["conexao"]["db"], apelido: str
 export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
   const host = o.host ?? "127.0.0.1";
   recusarAmbienteDaPartida({ urlBanco: o.urlBanco, host });
-  const portaApi = o.portaApi ?? PORTAS_DA_PARTIDA.api;
+  const publica = o.publica;
+  if (publica) {
+    conferirLoginReal(publica);
+    // o primeiro admin entra pelo e-mail dele, sem convite (ADMIN_BOOTSTRAP_EMAIL, como em produção)
+    // a API está na internet: limites de tempo real bem abaixo dos da simulação (o relógio do jogo fica parado e a janela por segundo não anda)
+    process.env.WS_MAX_CONNECTIONS ??= "200";
+    process.env.WS_MAX_MESSAGES_PER_SECOND ??= "500";
+    if (!process.env.ADMIN_BOOTSTRAP_EMAIL?.trim()) throw new Error("Falta ADMIN_BOOTSTRAP_EMAIL no ambiente: o e-mail do admin da partida (conta separada da de jogador).");
+  }
+  const portaApi = o.portaApi ?? (publica ? PORTAS_DA_PARTIDA.apiPublica : PORTAS_DA_PARTIDA.api);
   const portaSite = o.portaSite ?? PORTAS_DA_PARTIDA.site;
   const portaControle = o.portaControle ?? PORTAS_DA_PARTIDA.controle;
   const apelido = o.apelido ?? "jogador";
   const adminApelido = o.adminApelido ?? "admin_partida";
   // o WebSocket e o CORS só aceitam o site da partida
-  process.env.WEB_ORIGIN = `http://127.0.0.1:${portaSite}`;
+  process.env.WEB_ORIGIN = publica ? publica.siteOrigem : `http://127.0.0.1:${portaSite}`;
 
   const banco = await prepararBanco(o.urlBanco, o.nomeDoBanco);
   const prep = connect(banco.url, 2);
@@ -125,6 +141,9 @@ export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
     porta: portaApi,
     poolSize: 20,
     bots: ritmo,
+    autenticacao: publica ? loginReal(publica, clock) : undefined,
+    // atrás do túnel (ngrok) todo pedido chega de 127.0.0.1: o limite de taxa precisa do IP de quem chama
+    trustProxy: publica ? "127.0.0.1" : undefined,
   });
   const db = servidor.conexao.db;
   const escala = o.escala ?? 0.2;
@@ -158,11 +177,11 @@ export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
   if (nova) {
     // a partida começa na abertura do IPO (D5), com as ofertas abertas
     await condutor.ateExato(carga.ipo.opensAt);
-    jogador = await cadastrarJogador(servidor, carga, clock, apelido);
+    jogador = publica ? null : await cadastrarJogador(servidor, carga, clock, apelido);
     await salvar(clock.now());
   } else {
-    jogador = await contaPorApelido(db, apelido, clock);
-    if (!jogador) throw new Error(`a conta de jogador "${apelido}" não existe no banco da partida (a partida foi criada com outro apelido)`);
+    jogador = publica ? null : await contaPorApelido(db, apelido, clock);
+    if (!publica && !jogador) throw new Error(`a conta de jogador "${apelido}" não existe no banco da partida (a partida foi criada com outro apelido)`);
   }
 
   const [maisNova] = (await db.execute<{ d: Date }>(sql`select max(baixado_em) as d from public.partida_dados`)).rows;
@@ -186,7 +205,8 @@ export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
   let controle: Server | undefined;
   let controleUrl = "";
   if (!o.semPortas) {
-    site = await servirSiteDaPartida(o.pastaDoSite, portaSite, { servidor, carga, jogador, clock, host });
+    // na partida pública o site está na Vercel: só a porta de controle do terminal sobe aqui
+    if (!publica) site = await servirSiteDaPartida(o.pastaDoSite, portaSite, { servidor, carga, jogador: jogador!, clock, host });
     controle = await abrirControleDaPartida(relogio, portaControle, host);
     controleUrl = `http://${host}:${(controle.address() as AddressInfo).port}`;
   }
@@ -199,7 +219,7 @@ export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
     condutor,
     bots,
     jogador,
-    siteUrl: `http://${host}:${portaSite}`,
+    siteUrl: publica ? publica.siteOrigem : `http://${host}:${portaSite}`,
     controleUrl,
     nova,
     fechar: async () => {
@@ -257,6 +277,10 @@ async function servirSiteDaPartida(
 ): Promise<Server> {
   const estatico = comRelogioNoSite(manipuladorDoSite(pasta), ctx.clock);
   const http = createServer(async (req, res) => {
+    if (!hostLocal(req)) {
+      res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
+      return void res.end("só atende 127.0.0.1 ou localhost");
+    }
     const caminho = (req.url ?? "/").split("?")[0]!;
     if (caminho === "/__hora") {
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
@@ -301,6 +325,11 @@ function scriptDoRelogio(clock: RelogioFlutuante): string {
   );
 }
 
+/** O cabeçalho `Host` tem que ser local: um túnel apontado para estas portas por engano, ou um DNS rebinding, não chega ao token do admin. */
+export function hostLocal(req: IncomingMessage): boolean {
+  return /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i.test(req.headers.host ?? "");
+}
+
 type Atendente = (req: IncomingMessage, res: ServerResponse) => void;
 
 /** Põe o script do relógio no começo das páginas HTML do site. */
@@ -337,6 +366,7 @@ async function abrirControleDaPartida(relogio: RelogioDaPartida, porta: number, 
       res.end(JSON.stringify(corpo));
     };
     if (req.headers.origin) return responder(403, { erro: "a porta de controle não atende navegador" });
+    if (!hostLocal(req)) return responder(403, { erro: "só atende 127.0.0.1 ou localhost" });
     try {
       if (req.method === "GET" && req.url === "/estado") return responder(200, relogio.estado());
       if (req.method === "POST" && req.url === "/relogio") {

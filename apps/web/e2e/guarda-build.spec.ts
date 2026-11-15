@@ -30,5 +30,8 @@ test.describe("guarda do build (T19)", () => {
       execFileSync(process.execPath, ["../../node_modules/next/dist/bin/next", "build"], { cwd: SITE, stdio: "ignore", env: { ...process.env, NEXT_PUBLIC_AUTH_CLIENT: "" } });
     }
     expect(contem(normal), "o login falso apareceu no build normal").toEqual([]);
+    // o site da partida aberta a convidados (npm run partida:site:publico) vai à Vercel: também nunca leva o login falso
+    const publico = join(SITE, "out-partida-publica");
+    if (existsSync(publico)) expect(contem(publico), "o login falso apareceu no site público da partida").toEqual([]);
   });
 });

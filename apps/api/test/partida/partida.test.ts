@@ -51,12 +51,12 @@ describe("a partida de teste", () => {
     expect(clubes.find((c) => c.clubId === p.carga.clubIds.get("FLA3"))?.prevPlacement).toBe(1); // a tabela final de 2025
     expect(clubes.find((c) => c.clubId === p.carga.clubIds.get("REM3"))?.prevPlacement).toBe(20);
     const carteiras = await db.select().from(wallets);
-    const doJogador = carteiras.filter((w) => w.userId === p.jogador.conta.id);
+    const doJogador = carteiras.filter((w) => w.userId === p.jogador!.conta.id);
     expect(doJogador).toHaveLength(1);
     expect(Number(doJogador[0]!.cash)).toBe(10_000_000);
     expect(carteiras.some((w) => w.userId === p.carga.admin.conta.id)).toBe(false);
     expect((await db.select().from(users).where(eq(users.id, p.carga.admin.conta.id)))[0]!.role).toBe("admin");
-    expect((await db.select().from(users).where(eq(users.id, p.jogador.conta.id)))[0]!.role).toBe("player");
+    expect((await db.select().from(users).where(eq(users.id, p.jogador!.conta.id)))[0]!.role).toBe("player");
     // o jogador aparece nos rankings; o admin não
     const ranking = await p.servidor.app.inject({ method: "GET", url: "/rankings/live" });
     expect(ranking.statusCode).toBe(200);
@@ -65,20 +65,20 @@ describe("a partida de teste", () => {
   });
 
   it("3: com o relógio parado, o jogador manda oferta e lê o IPO e o relógio não se mexe", async () => {
-    const auth = await p.jogador.auth();
+    const auth = await p.jogador!.auth();
     const painel = await p.servidor.app.inject({ method: "GET", url: "/ipo", headers: auth });
     expect(painel.statusCode).toBe(200);
     const clube = (painel.json() as { clubs: Array<{ ticker: string; band?: { ceiling: number } | null }> }).clubs[0]!;
-    const oferta = await p.servidor.app.inject({ method: "PUT", url: `/ipo/bids/${clube.ticker}`, payload: { quantity: 10, maxPrice: clube.band?.ceiling ?? 500, expect: "new" }, headers: await p.jogador.auth() });
+    const oferta = await p.servidor.app.inject({ method: "PUT", url: `/ipo/bids/${clube.ticker}`, payload: { quantity: 10, maxPrice: clube.band?.ceiling ?? 500, expect: "new" }, headers: await p.jogador!.auth() });
     expect(oferta.statusCode).toBeLessThan(300);
     expect(p.clock.now().getTime()).toBe(instanteInicial.getTime());
     expect(p.relogio.estado().modo).toBe("pausado");
   });
 
   it("12: jogador comum e visitante não mexem no relógio (403 e 401); o admin lê o estado", async () => {
-    expect((await post(p, { acao: "dia" }, p.jogador.auth())).statusCode).toBe(403);
+    expect((await post(p, { acao: "dia" }, p.jogador!.auth())).statusCode).toBe(403);
     expect((await post(p, { acao: "dia" }, undefined)).statusCode).toBe(401);
-    expect((await p.servidor.app.inject({ method: "GET", url: "/admin/partida", headers: await p.jogador.auth() })).statusCode).toBe(403);
+    expect((await p.servidor.app.inject({ method: "GET", url: "/admin/partida", headers: await p.jogador!.auth() })).statusCode).toBe(403);
     const estado = await p.servidor.app.inject({ method: "GET", url: "/admin/partida", headers: await p.carga.admin.auth() });
     expect(estado.statusCode).toBe(200);
     expect(estado.json()).toMatchObject({ partida: true, relogio: { modo: "pausado" } });
@@ -152,7 +152,7 @@ describe("a partida de teste", () => {
     expect({ contas: await contas(q), carteiras: await carteiras(q), bots: await botsAtivos(q) }).toEqual(antes);
     expect(q.carga.seasonId).toBe(p.carga.seasonId);
     // o jogador de antes entra de novo (o token é novo, a conta é a mesma)
-    const eu = await q.servidor.app.inject({ method: "GET", url: "/me", headers: await q.jogador.auth() });
+    const eu = await q.servidor.app.inject({ method: "GET", url: "/me", headers: await q.jogador!.auth() });
     expect(eu.statusCode).toBe(200);
     expect(eu.json()).toMatchObject({ nickname: "jogador" });
     p = q;
@@ -182,6 +182,7 @@ describe("a API do jogo público", () => {
       const headers = bearer(await admin.tokenWith({ at: clock.now() }));
       expect((await app.inject({ method: "POST", url: "/admin/partida/relogio", payload: { acao: "dia" }, headers })).statusCode).toBe(404);
       expect((await app.inject({ method: "GET", url: "/admin/partida", headers })).statusCode).toBe(404);
+      expect((await app.inject({ method: "GET", url: "/partida/hora" })).statusCode).toBe(404);
     } finally {
       delete process.env.PARTIDA;
       delete process.env.MODO_PARTIDA;

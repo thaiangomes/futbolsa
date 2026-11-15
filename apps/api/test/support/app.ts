@@ -18,6 +18,8 @@ export interface TestAppOptions {
   override?: (builder: TestingModuleBuilder) => TestingModuleBuilder;
   /** Recebe cada rota registrada (método e caminho), antes de a aplicação subir. */
   onRoute?: (method: string, url: string) => void;
+  /** A partida atrás de um túnel confia no endereço do túnel (ex.: "127.0.0.1") para ler o IP de quem chama. */
+  trustProxy?: string;
 }
 
 /**
@@ -37,7 +39,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<NestF
   if (options.db) builder = builder.overrideProvider(DB).useValue(options.db);
   if (options.override) builder = options.override(builder);
   const moduleRef = await builder.compile();
-  const app = moduleRef.createNestApplication<NestFastifyApplication>(createAdapter(), { logger: false });
+  const app = moduleRef.createNestApplication<NestFastifyApplication>(createAdapter({ trustProxy: options.trustProxy }), { logger: false });
   if (options.onRoute) {
     const onRoute = options.onRoute;
     app.getHttpAdapter().getInstance().addHook("onRoute", (route) => {

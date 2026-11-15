@@ -8,14 +8,28 @@ const arg = (nome) => {
   const i = process.argv.indexOf(`--${nome}`);
   return i >= 0 ? process.argv[i + 1] : undefined;
 };
+// `--publica`: o site da partida aberta a convidados (login real, relógio do jogo vindo da API); o endereço da API vem de `--api`.
+const publica = process.argv.includes("--publica");
+if (publica) {
+  let ok = false;
+  try {
+    const u = new URL(arg("api") ?? "");
+    ok = u.protocol === "https:" && u.origin === arg("api");
+  } catch {}
+  if (!ok) {
+    console.error("Falta --api <endereço público da API>: https://<nome>.ngrok-free.app, sem barra no fim.");
+    process.exit(1);
+  }
+}
 const r = spawnSync(process.execPath, ["../../node_modules/next/dist/bin/next", "build"], {
   cwd: raiz,
   stdio: "inherit",
   env: {
     ...process.env,
-    NEXT_PUBLIC_AUTH_CLIENT: "fake",
+    NEXT_PUBLIC_AUTH_CLIENT: publica ? "real" : "fake",
+    ...(publica ? { NEXT_PUBLIC_PARTIDA: "1" } : {}),
     NEXT_PUBLIC_API_URL: arg("api") ?? process.env.E2E_API_URL ?? "http://127.0.0.1:3100",
-    NEXT_DIST_DIR: arg("saida") ?? "out-e2e",
+    NEXT_DIST_DIR: arg("saida") ?? (publica ? "out-partida-publica" : "out-e2e"),
   },
 });
 process.exit(r.status ?? 1);
