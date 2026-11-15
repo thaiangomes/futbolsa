@@ -228,3 +228,8 @@ body{margin:0}
 .slice-row{display:grid;grid-template-columns:minmax(0,1fr) 64px;gap:10px;align-items:center}
 .slice-track{height:8px;border-radius:4px;background:var(--panel2);overflow:hidden}
 .slice-fill{height:100%;background:var(--amber)}
+
+.balance-bar{position:sticky;bottom:0;z-index:20;display:flex;justify-content:space-around;gap:12px;padding:8px 16px calc(8px + env(safe-area-inset-bottom));background:var(--panel);border:1px solid var(--line2);border-radius:12px 12px 0 0;box-shadow:var(--shadow)}
+.balance-bar .kpi{align-items:center}
+.balance-bar .kpi-v{font-size:22px}
+@media (max-width:480px){.balance-bar{padding-left:8px;padding-right:8px}.balance-bar .kpi-v{font-size:19px}}

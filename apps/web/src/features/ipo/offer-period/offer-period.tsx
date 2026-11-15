@@ -57,6 +57,20 @@ function CashSummary({ cash }: { cash: NonNullable<IpoOverview["cash"]> }) {
 }
 
 /**
+ * Barra de saldo presa na base da tela: o jogador lança ofertas descendo a página e vê quanto ainda tem livre
+ * sem voltar ao topo. Usa o mesmo `cash` do resumo, então muda na hora a cada oferta lançada, editada ou cancelada.
+ */
+function BalanceBar({ cash, bids }: { cash: NonNullable<IpoOverview["cash"]>; bids: number }) {
+  return (
+    <div className="balance-bar" data-testid="saldo-barra" role="status" aria-label="Saldo disponível para ofertas">
+      <div className="kpi"><span className="kpi-l">Livre</span><span className="kpi-v" data-testid="saldo-barra-livre">{formatCents(cash.free)}</span></div>
+      <div className="kpi"><span className="kpi-l">Reservado</span><span className="kpi-v" data-testid="saldo-barra-reservado">{formatCents(cash.reserved)}</span></div>
+      <div className="kpi"><span className="kpi-l">Ofertas</span><span className="kpi-v" data-testid="saldo-barra-ofertas">{formatInt(bids)}</span></div>
+    </div>
+  );
+}
+
+/**
  * O período de ofertas (prancha 3). Antes da abertura, só a data em que abre e nenhuma faixa. Aberto, as
  * faixas, as ofertas do jogador e o caixa; depois do horário de fechamento (mesmo com a tarefa atrasada),
  * só leitura. O estado vive na página: aqui só se mostra e se manda para a API.
@@ -114,6 +128,9 @@ export function OfferPeriod({ overview, api, now, onOverview, onStale }: {
           />
         ))}
       </ul>
+      {overview.cash && open && (
+        <BalanceBar cash={overview.cash} bids={overview.clubs.filter((c) => c.myBid).length} />
+      )}
     </div>
   );
 }

@@ -48,6 +48,8 @@ describe("período de ofertas (tela)", () => {
     expect(dom.$("[data-testid=caixa-total]").textContent).toContain("R$ 100.000,00");
     expect(dom.$("[data-testid=caixa-reservado]").textContent).toContain("R$ 0,00");
     expect(dom.$("[data-testid=caixa-livre]").textContent).toContain("R$ 100.000,00");
+    expect(dom.$("[data-testid=saldo-barra-livre]").textContent).toContain("R$ 100.000,00");
+    expect(dom.$("[data-testid=saldo-barra-ofertas]").textContent).toBe("0");
   });
 
   it("ipo 15: o texto da tela não tem demanda, número de ofertas nem preço provável (só o aviso fixo de sigilo)", async () => {
@@ -106,6 +108,9 @@ describe("período de ofertas (tela)", () => {
     expect(view.overview().clubs[0]!.myBid).toEqual(bid);
     expect(dom.$("[data-testid=caixa-reservado]").textContent).toContain("R$ 60.000,00");
     expect(dom.$("[data-testid=caixa-livre]").textContent).toContain("R$ 40.000,00");
+    expect(dom.$("[data-testid=saldo-barra-livre]").textContent).toContain("R$ 40.000,00");
+    expect(dom.$("[data-testid=saldo-barra-reservado]").textContent).toContain("R$ 60.000,00");
+    expect(dom.$("[data-testid=saldo-barra-ofertas]").textContent).toBe("1");
     expect(card("FLA3").textContent).toContain("1.500");
     expect(dom.$("#qtd-FLA3")).toBeNull();
   });
@@ -125,9 +130,11 @@ describe("período de ofertas (tela)", () => {
     await dom.click(dom.button("Salvar alteração", card("FLA3")));
     expect(putBid).toHaveBeenCalledWith("FLA3", { quantity: 1000, maxPrice: 3800, expect: "existing" });
     expect(dom.$("[data-testid=caixa-reservado]").textContent).toContain("R$ 38.000,00");
+    expect(dom.$("[data-testid=saldo-barra-livre]").textContent).toContain("R$ 62.000,00");
     await dom.click(dom.button("Cancelar oferta", card("FLA3")));
     expect(deleteBid).toHaveBeenCalledWith("FLA3");
     expect(view.overview().clubs[0]!.myBid).toBeNull();
+    expect(dom.$("[data-testid=saldo-barra-ofertas]").textContent).toBe("0");
     expect(dom.$("[data-testid=caixa-reservado]").textContent).toContain("R$ 0,00");
     expect(dom.$("[data-testid=caixa-livre]").textContent).toContain("R$ 100.000,00");
   });
