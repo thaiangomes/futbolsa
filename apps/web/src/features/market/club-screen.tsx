@@ -5,6 +5,7 @@ import { tradingBand } from "@futbolsa/engine/engine/orderRules";
 import { CLUBS } from "@futbolsa/engine/data/clubs";
 import { ApiError } from "../../lib/api";
 import { useSession } from "../accounts/session-provider";
+import { ClubValueCard } from "../club-value";
 import { ClubChart } from "../portfolio/chart/club-chart";
 import { portfolioApi } from "../portfolio/api";
 import { type MarketApi, marketApi } from "./api";
@@ -102,6 +103,7 @@ export function ClubView({ ticker, api, logged, chart = null }: { ticker: string
           {logged && <MyOrders orders={orders} ticker={ticker} onCancel={(id) => void cancel(id)} busyId={busy} error={cancelError} />}
         </div>
       </div>
+      <ClubValueCard ticker={ticker} name={NAMES.get(ticker)} price={view.price.displayed} api={api} />
     </div>
   );
 }

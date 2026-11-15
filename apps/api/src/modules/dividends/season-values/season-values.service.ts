@@ -70,8 +70,13 @@ export class SeasonValuesService {
 
   /** Os valores da temporada no formato do motor (`SeasonValues`). */
   async loadSeasonValues(tx: Tx, seasonId: number): Promise<SeasonValues> {
-    const rules = await this.rulesOf(tx.db, seasonId);
-    const rows = await tx.db.select().from(cupPhases).where(eq(cupPhases.seasonId, seasonId));
+    return this.readSeasonValues(tx.db, seasonId);
+  }
+
+  /** O mesmo, para leituras sem transação (a rota pública do simulador, T12). */
+  async readSeasonValues(db: Database | DrizzleTx, seasonId: number): Promise<SeasonValues> {
+    const rules = await this.rulesOf(db, seasonId);
+    const rows = await db.select().from(cupPhases).where(eq(cupPhases.seasonId, seasonId));
     const cups = Object.fromEntries(
       CUP_COMPETITIONS.map((competition) => [competition, cupFromRows(rows.filter((r) => r.competition === competition))]),
     );

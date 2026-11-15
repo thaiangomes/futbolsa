@@ -52,4 +52,13 @@ test.describe.serial("jornada 9: celular", () => {
     await expect(page.locator("main")).toContainText("FLA3");
     await semRolagemHorizontal(page, "/carteira");
   });
+  test("e2e livro 38: no celular a aba Sobre da tela do clube traz o cartão \"Quanto vale para você\" dentro da tela", async ({ page }) => {
+    await entrarComo(page, "ana");
+    await page.goto("/clube?t=FLA3");
+    await page.getByRole("button", { name: "Sobre" }).click();
+    const cartao = page.getByTestId("valor-cartao");
+    await expect(cartao.getByRole("heading", { name: "Quanto vale o FLA3 para você?" })).toBeVisible();
+    await expect(cartao.getByTestId("sim-valor")).toBeVisible();
+    await semRolagemHorizontal(page, "/clube, aba Sobre");
+  });
 });

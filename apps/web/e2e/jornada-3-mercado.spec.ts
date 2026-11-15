@@ -164,4 +164,22 @@ test.describe.serial("jornada 3: mercado", () => {
     await page.getByRole("button", { name: "Revisar compra" }).click();
     await expect(page.getByTestId("revisao-jogo")).toContainText("Em jogo agora");
   });
+  test("e2e livro 38: a tela do clube traz o cartão Quanto vale o FLA3 para você e o simulador refaz a conta ao mudar a aposta", async ({ page }) => {
+    await entrarComo(page, "ana");
+    await page.goto(`/clube?t=${TICKER}`);
+    const cartao = page.getByTestId("valor-cartao");
+    await expect(cartao.getByRole("heading", { name: "Quanto vale o FLA3 para você?" })).toBeVisible();
+    await expect(cartao.getByTestId("valor-pago")).toBeVisible();
+    await expect(cartao.getByTestId("valor-recompra-hoje")).toContainText("R$");
+    // a conta aparece pronta e muda quando o jogador aposta mais pontos
+    const antes = await cartao.getByTestId("sim-faltam").innerText();
+    const pontos = cartao.getByLabel(/Pontos do .* no fim do/);
+    await pontos.fill("90");
+    await expect(cartao.getByTestId("sim-erro")).toHaveCount(0);
+    await expect(cartao.getByTestId("sim-faltam")).not.toHaveText(antes);
+    await expect(cartao.getByTestId("sim-valor")).toContainText("R$");
+    // aposta que não faz sentido é recusada com o motivo
+    await pontos.fill("abc");
+    await expect(cartao.getByTestId("sim-erro")).toContainText("número inteiro");
+  });
 });

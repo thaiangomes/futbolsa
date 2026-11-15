@@ -86,4 +86,21 @@ describe("tela do clube no celular", () => {
     expect(dom.button("Minhas ordens")).toBeUndefined();
     expect(dom.button("Livro")).toBeDefined();
   });
+  it("livro 38: a aba Sobre leva ao cartão Quanto vale para você, com o preço do clube, para logado e visitante", async () => {
+    phone();
+    const dividends = vi.fn(async () => ({
+      ticker: "FLA3", league: "brasileirao-a" as const, leagueRules: { perPoint: 10, placement: [500, 450, 400] }, leagueOpen: true,
+      points: 20, position: 5, paid: 270, toReceive: 30, buybackMultipleBp: 15_000, cups: [],
+    }));
+    await dom.render(createElement(ClubView, { ticker: "FLA3", api: { ...api(view()), dividends } as unknown as MarketApi, logged: false }));
+    await dom.settle();
+    await dom.settle();
+    await dom.click(dom.button("Sobre"));
+    await dom.settle();
+    await dom.settle();
+    expect(dividends).toHaveBeenCalledWith("FLA3");
+    expect(dom.$("[data-testid=valor-recompra-hoje]").textContent).toContain("R$ 4,50");
+    expect(dom.$("[data-testid=sim-comparacao]").textContent).toContain("R$ 44,30");
+    expect(dom.$("[data-testid=nivel-compra]")).toBeNull();
+  });
 });

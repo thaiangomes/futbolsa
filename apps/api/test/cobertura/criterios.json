@@ -1,5 +1,5 @@
 {
-  "contagem": "refeita em 2026-11-14 a partir das listas numeradas das especificações do vault (Funcionalidades/): 264 critérios",
+  "contagem": "refeita em 2026-11-14 a partir das listas numeradas das especificações do vault (Funcionalidades/): 265 critérios (o 28 de Conta, o menu do jogador, está proposto: aguarda o OK do Thaian)",
   "total": {
     "ipo": 29,
     "livro": 45,
@@ -8,7 +8,7 @@
     "entrada": 16,
     "rankings": 28,
     "admin": 45,
-    "conta": 27
+    "conta": 28
   },
   "excecoes": {
     "conta": {
@@ -17,9 +17,7 @@
     "ipo": {
       "25": "Sem teste com o número no nome. A regra (clube de fora da lista que chega às quartas da Copa do Brasil não ganha IPO) depende da lista de clubes fixa da temporada; revisar com o Thaian se um teste próprio vale a pena (item de Problemas conhecidos da F16)."
     },
-    "livro": {
-      "38": "O painel do clube com pagos, a receber e recompra \"se a temporada acabasse agora\" (R$ 2,70, R$ 0,30, R$ 4,50) não tem teste com o número: a tela do clube mostra o preço, o livro e o gráfico, mas o painel de dividendos por clube não foi achado no navegador (item de Problemas conhecidos da F16)."
-    },
+    "livro": {},
     "carteira": {
       "7": "Sem teste com o número: o dividendo sobre as ações totais, inclusive as que estão numa ordem de venda aberta (R$ 360,00). A foto do pagamento lê as ações totais, mas falta o teste com a ordem aberta (item de Problemas conhecidos da F16).",
       "35": "Compra que executa inteira contra uma venda mais barata (paga R$ 3.900,00, reservado a zero): coberta em parte pelo teste do livro 3 (devolve a diferença do preço melhor), sem o caso exato do critério.",

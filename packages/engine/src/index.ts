@@ -20,6 +20,7 @@ export * from "./engine/candles.js";
 export * from "./engine/seasonValues.js";
 export * from "./engine/payoutEvents.js";
 export * from "./engine/buyback.js";
+export * from "./engine/clubValue.js";
 export * from "./engine/cupTable.js";
 export * from "./engine/payoutDiff.js";
 export * from "./engine/matching.js";

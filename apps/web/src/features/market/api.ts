@@ -2,6 +2,7 @@ import {
   bookViewSchema,
   cancelOrderResponseSchema,
   clubListSchema,
+  clubValueViewSchema,
   listOrdersResponseSchema,
   type PlaceOrderBody,
   placeOrderBodySchema,
@@ -16,6 +17,8 @@ export function marketApi(api: ApiClient) {
     clubs: () => api.request(clubListSchema, "/clubs"),
     /** O livro, os negócios, o preço e o estado do clube; público (logado, vem também a faixa e o saldo livre). */
     book: (ticker: string) => api.request(bookViewSchema, `/clubs/${encodeURIComponent(ticker)}/book`),
+    /** O que o cartão "Quanto vale para você" precisa (pago, a receber, pontos, fases das copas e valores da temporada); público. */
+    dividends: (ticker: string) => api.request(clubValueViewSchema, `/clubs/${encodeURIComponent(ticker)}/dividends`),
     /** Envia a ordem. A `Idempotency-Key` é uma por envio: repetir a chamada não duplica a ordem. */
     placeOrder: (body: PlaceOrderBody, idempotencyKey: string) =>
       api.request(placeOrderResponseSchema, "/orders", {
