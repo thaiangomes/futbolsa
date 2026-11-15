@@ -1,3 +1,4 @@
+import { CLUBS } from "@futbolsa/engine";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -126,7 +127,7 @@ describe("encerramento da temporada (F15, T6)", () => {
     const codes = body.blockers.map((b: { code: string }) => b.code);
     expect(codes).toEqual(["payouts_pending", "buyback_not_approved", "shares_remaining"]);
     expect(body.blockers[0]).toMatchObject({ link: "/admin/pagamentos", text: expect.stringContaining("aguardando aprovação") });
-    expect(body.blockers[1]).toMatchObject({ code: "buyback_not_approved", count: 18, link: "/admin/pagamentos" });
+    expect(body.blockers[1]).toMatchObject({ code: "buyback_not_approved", count: CLUBS.length - 2, link: "/admin/pagamentos" });
     expect(body.blockers[2]).toMatchObject({ link: null });
     // nada mudou
     expect(await scene.seasonOf(s)).toMatchObject({ status: "trading_ended", closedAt: null });

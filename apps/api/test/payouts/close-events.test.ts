@@ -644,7 +644,8 @@ describe("fechamento dos eventos de pagamento (closeEvents)", () => {
     it("div 7: BOT3 em 1º recebe R$ 5,00, CEA3 em 16º R$ 0,20 e SPT3 em 17º nada", async () => {
       const s = await newSeason();
       await insertMatches([game(s.seasonId, 38, "BOT3", "CEA3", [1, 0], at("2027-12-05T16:00:00-03:00"))]);
-      const others = CLUBS.map((c) => c.id).filter((tk) => !["BOT3", "CEA3", "SPT3"].includes(tk));
+      // a tabela tem 20 clubes: com os promovidos de 2026 a lista de clubes conhecidos passou de 20, então só os 17 primeiros entram
+      const others = CLUBS.map((c) => c.id).filter((tk) => !["BOT3", "CEA3", "SPT3"].includes(tk)).slice(0, 17);
       const order = ["BOT3", ...others.slice(0, 14), "CEA3", "SPT3", ...others.slice(14)];
       expect(order).toHaveLength(20);
       await importTable(s.seasonId, "brasileirao-a", order.map(club));
