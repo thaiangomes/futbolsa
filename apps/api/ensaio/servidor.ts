@@ -45,6 +45,8 @@ export interface OpcoesServidor {
   /** Módulos só de teste, montados junto com a API (a rota do relógio da partida). */
   imports?: ModuleMetadata["imports"];
   /** O login do app: padrão, o de chaves de teste. A partida aberta a convidados troca por um que também aceita o Supabase de verdade. */
+  /** Endereço do túnel em que o limite de taxa confia para ler o IP real (partida pública). */
+  trustProxy?: string;
   autenticacao?: (builder: TestingModuleBuilder) => TestingModuleBuilder;
   poolSize?: number;
   /** Temporada curta (ensaio rápido): só as primeiras rodadas do Brasileirão. */
@@ -75,6 +77,7 @@ export async function criarServidorEnsaio(opcoes: OpcoesServidor): Promise<Servi
       db: conexao.db,
       clock,
       imports: opcoes.imports,
+      trustProxy: opcoes.trustProxy,
       override: (b) =>
         (opcoes.autenticacao ?? withTestAuth(clock))(b)
           .overrideProvider(ResultSourceRegistry)

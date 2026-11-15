@@ -3,7 +3,7 @@
  * variáveis). Roda pelo vitest só para ter o SWC (metadados de decorador do Nest). Fica de pé até o processo ser encerrado.
  * Variáveis: TEST_DATABASE_URL (Postgres local; a senha nunca vai para arquivo commitado), PARTIDA_SITE (pasta do site),
  * PARTIDA_ESCALA, PARTIDA_APELIDO, PARTIDA_APROVAR_SOZINHO, PARTIDA_PORTA_API, PARTIDA_PORTA_SITE, PARTIDA_PORTA_CONTROLE.
- * Partida aberta a convidados (PARTIDA_PUBLICA=1, `npm run partida -- --publica`): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+ * Partida aberta a convidados (PARTIDA_PUBLICA=1, `npm run partida -- --publica`): SUPABASE_URL,
  * ADMIN_BOOTSTRAP_EMAIL e WEB_ORIGIN (o endereço do site na Vercel), todas só do ambiente.
  */
 import { writeSync } from "node:fs";
@@ -18,7 +18,7 @@ it("servidor da partida", async () => {
   const publica = process.env.PARTIDA_PUBLICA === "1";
   const partida = await subirPartida({
     publica: publica
-      ? { supabaseUrl: process.env.SUPABASE_URL ?? "", chaveDeServico: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "", siteOrigem: process.env.WEB_ORIGIN ?? "" }
+      ? { supabaseUrl: process.env.SUPABASE_URL ?? "", siteOrigem: process.env.WEB_ORIGIN ?? "" }
       : undefined,
     urlBanco,
     pastaDoSite: resolve(process.env.PARTIDA_SITE ?? "../web/out-partida"),

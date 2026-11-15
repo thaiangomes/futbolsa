@@ -6,7 +6,8 @@
  * atualizada a cada 20 segundos (o plano grátis do túnel limita as requisições por mês: README da partida). Se a API não responder, o `Date` fica como está.
  */
 export function scriptDoRelogioPublico(apiUrl: string): string {
-  const url = JSON.stringify(`${apiUrl.replace(/\/+$/, "")}/partida/hora`);
+  // o endereço entra numa tag <script>: `<` escapado, para um valor estranho nunca fechar a tag
+  const url = JSON.stringify(`${apiUrl.replace(/\/+$/, "")}/partida/hora`).replace(/</g, "\\u003c");
   return (
     "(function(){var R=Date,N=R.now.bind(R),U=" +
     url +

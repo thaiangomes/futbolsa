@@ -10,9 +10,16 @@ const arg = (nome) => {
 };
 // `--publica`: o site da partida aberta a convidados (login real, relógio do jogo vindo da API); o endereço da API vem de `--api`.
 const publica = process.argv.includes("--publica");
-if (publica && !arg("api")) {
-  console.error("Falta --api <endereço público da API> (o endereço do túnel, https://...).");
-  process.exit(1);
+if (publica) {
+  let ok = false;
+  try {
+    const u = new URL(arg("api") ?? "");
+    ok = u.protocol === "https:" && u.origin === arg("api");
+  } catch {}
+  if (!ok) {
+    console.error("Falta --api <endereço público da API>: https://<nome>.ngrok-free.app, sem barra no fim.");
+    process.exit(1);
+  }
 }
 const r = spawnSync(process.execPath, ["../../node_modules/next/dist/bin/next", "build"], {
   cwd: raiz,

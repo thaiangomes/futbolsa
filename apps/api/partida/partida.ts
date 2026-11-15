@@ -101,6 +101,9 @@ export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
   if (publica) {
     conferirLoginReal(publica);
     // o primeiro admin entra pelo e-mail dele, sem convite (ADMIN_BOOTSTRAP_EMAIL, como em produção)
+    // a API está na internet: limites de tempo real bem abaixo dos da simulação (o relógio do jogo fica parado e a janela por segundo não anda)
+    process.env.WS_MAX_CONNECTIONS ??= "200";
+    process.env.WS_MAX_MESSAGES_PER_SECOND ??= "500";
     if (!process.env.ADMIN_BOOTSTRAP_EMAIL?.trim()) throw new Error("Falta ADMIN_BOOTSTRAP_EMAIL no ambiente: o e-mail do admin da partida (conta separada da de jogador).");
   }
   const portaApi = o.portaApi ?? (publica ? PORTAS_DA_PARTIDA.apiPublica : PORTAS_DA_PARTIDA.api);
@@ -139,6 +142,8 @@ export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
     poolSize: 20,
     bots: ritmo,
     autenticacao: publica ? loginReal(publica, clock) : undefined,
+    // atrás do túnel (ngrok) todo pedido chega de 127.0.0.1: o limite de taxa precisa do IP de quem chama
+    trustProxy: publica ? "127.0.0.1" : undefined,
   });
   const db = servidor.conexao.db;
   const escala = o.escala ?? 0.2;
@@ -272,6 +277,10 @@ async function servirSiteDaPartida(
 ): Promise<Server> {
   const estatico = comRelogioNoSite(manipuladorDoSite(pasta), ctx.clock);
   const http = createServer(async (req, res) => {
+    if (!hostLocal(req)) {
+      res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
+      return void res.end("só atende 127.0.0.1 ou localhost");
+    }
     const caminho = (req.url ?? "/").split("?")[0]!;
     if (caminho === "/__hora") {
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
@@ -316,6 +325,11 @@ function scriptDoRelogio(clock: RelogioFlutuante): string {
   );
 }
 
+/** O cabeçalho `Host` tem que ser local: um túnel apontado para estas portas por engano, ou um DNS rebinding, não chega ao token do admin. */
+export function hostLocal(req: IncomingMessage): boolean {
+  return /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i.test(req.headers.host ?? "");
+}
+
 type Atendente = (req: IncomingMessage, res: ServerResponse) => void;
 
 /** Põe o script do relógio no começo das páginas HTML do site. */
@@ -352,6 +366,7 @@ async function abrirControleDaPartida(relogio: RelogioDaPartida, porta: number, 
       res.end(JSON.stringify(corpo));
     };
     if (req.headers.origin) return responder(403, { erro: "a porta de controle não atende navegador" });
+    if (!hostLocal(req)) return responder(403, { erro: "só atende 127.0.0.1 ou localhost" });
     try {
       if (req.method === "GET" && req.url === "/estado") return responder(200, relogio.estado());
       if (req.method === "POST" && req.url === "/relogio") {

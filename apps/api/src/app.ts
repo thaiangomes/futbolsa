@@ -8,8 +8,9 @@ import { AppModule } from "./app.module.js";
 export const BODY_LIMIT = 64 * 1024;
 
 /** O servidor HTTP (Fastify) com o limite do corpo. */
-export function createAdapter(): FastifyAdapter {
-  return new FastifyAdapter({ bodyLimit: BODY_LIMIT });
+export function createAdapter(opcoes: { trustProxy?: string } = {}): FastifyAdapter {
+  // `trustProxy`: só a partida de teste atrás de um túnel o liga (para o limite de taxa contar por pessoa, não pelo túnel); o jogo público não
+  return new FastifyAdapter({ bodyLimit: BODY_LIMIT, ...(opcoes.trustProxy ? { trustProxy: opcoes.trustProxy } : {}) });
 }
 
 /** Ajustes de uma aplicação já criada; createApp e os testes que montam o módulo na mão usam o mesmo. */

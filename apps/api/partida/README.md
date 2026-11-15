@@ -89,13 +89,13 @@ admin (o e-mail de `ADMIN_BOOTSTRAP_EMAIL`; sem carteira e fora dos rankings). U
 ## O que só você faz (contas e painéis)
 
 Nada disso foi feito pelo código, e **nenhuma chave vai para arquivo, README, chat ou log**: cada valor abaixo você digita no painel
-ou no terminal, na hora.
+ou no terminal, na hora. A chave de serviço do Supabase **não é usada** na partida.
 
 ### 1. Túnel (ngrok, domínio fixo grátis, decisão D8)
 1. Crie a conta em ngrok.com e instale: `winget install ngrok.ngrok`.
 2. No painel (Your Authtoken), copie o token e rode **uma vez**: `ngrok config add-authtoken <seu token>` (fica na configuração do ngrok, fora do repositório).
 3. No painel, em Domains, anote o **dev domain grátis** (`<nome>.ngrok-free.app`; é fixo e não muda ao reiniciar).
-4. Para ligar o túnel (com a partida de pé): `ngrok http --url=https://<nome>.ngrok-free.app 127.0.0.1:4000`.
+4. Para ligar o túnel (com a partida de pé): `ngrok http --inspect=false --url=https://<nome>.ngrok-free.app 127.0.0.1:4000` (sem `--inspect=false` o painel local do ngrok, em `127.0.0.1:4040`, guarda os cabeçalhos `Authorization` dos convidados).
 
 Limites do plano grátis (conferidos em 2026-11-15 em ngrok.com/docs/pricing-limits/free-plan-limits): **1 GB de saída por mês**,
 **20.000 requisições HTTP por mês** (4.000 por minuto), 3 endpoints, sem limite de tempo da sessão. A página **não diz** se as
@@ -131,7 +131,7 @@ Crie um **projeto novo e separado do jogo público** (a flag `NEXT_PUBLIC_PARTID
    - `NEXT_PUBLIC_SUPABASE_URL` = `https://<projeto>.supabase.co`
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` = a chave **pública** (publishable) do Supabase
 
-   **Nunca** ponha aqui a chave de serviço (`SUPABASE_SERVICE_ROLE_KEY`): ela fica só no seu terminal.
+   **Nunca** ponha aqui a chave de serviço (`SUPABASE_SERVICE_ROLE_KEY`): a partida não a usa.
 3. Deploy. O endereço (`https://<site>.vercel.app`) é o `WEB_ORIGIN` da subida e o que entra nos Redirect URLs do Supabase.
 
 Outro jeito, sem ligar o repositório: construa aqui e publique a pasta pronta
@@ -141,25 +141,32 @@ O build pesa na memória: se o computador estiver apertado, prefira a Vercel con
 
 ## Subir a partida aberta a convidados
 
-No PowerShell, **na hora** (nada disso fica em arquivo):
+No PowerShell. A senha do Postgres **não** é digitada na linha de comando: o PowerShell guarda o que você digita em
+`ConsoleHost_history.txt`. Use `Read-Host`, que não grava a resposta, e desligue o histórico desta janela:
 
 ```powershell
-$env:TEST_DATABASE_URL = "postgres://<usuario>:<senha>@localhost:5432/postgres"
+Set-PSReadLineOption -HistorySaveStyle SaveNothing
+$senha = Read-Host "senha do Postgres" -AsSecureString
+$env:TEST_DATABASE_URL = "postgres://<usuario>:" + [System.Net.WebUtility]::UrlEncode([System.Net.NetworkCredential]::new("", $senha).Password) + "@localhost:5432/postgres"
 $env:SUPABASE_URL = "https://<projeto>.supabase.co"
-$env:SUPABASE_SERVICE_ROLE_KEY = "<chave de serviço, só no terminal>"
 $env:ADMIN_BOOTSTRAP_EMAIL = "<o e-mail da sua conta de admin>"
 $env:WEB_ORIGIN = "https://<site>.vercel.app"
 npm run partida -w @futbolsa/api -- --publica --escala 0,2
 ```
 
-Em outro terminal: `ngrok http --url=https://<nome>.ngrok-free.app 127.0.0.1:4000`. A mensagem `PARTIDA PRONTA` diz "ABERTA A CONVIDADOS".
-A partida **recusa subir** sem `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_BOOTSTRAP_EMAIL` ou com `WEB_ORIGIN` que não seja o
+A partida pública **não usa nem recebe a chave de serviço do Supabase** (`SUPABASE_SERVICE_ROLE_KEY`): excluir a conta na partida não
+apaga a conta de login do Supabase de produção (continua na lista de usuários até você apagar). Pelo mesmo motivo, e-mails
+`@exemplo.com` (os das contas internas da partida) nunca entram pelo Supabase. Rode `ngrok config add-authtoken` e o token também
+fora do histórico (`Set-PSReadLineOption -HistorySaveStyle SaveNothing` na mesma janela).
+
+Em outro terminal: `ngrok http --inspect=false --url=https://<nome>.ngrok-free.app 127.0.0.1:4000`. A mensagem `PARTIDA PRONTA` diz "ABERTA A CONVIDADOS".
+A partida **recusa subir** sem `SUPABASE_URL`, `ADMIN_BOOTSTRAP_EMAIL` ou com `WEB_ORIGIN` que não seja o
 endereço `https` do site (sem barra no fim). Nesse modo o servidor não serve o site nem as páginas `/entrar/...` do login falso, e
 não cria a conta de jogador de teste. O relógio, o terminal e o zerar são os mesmos da etapa 1 (a porta de controle `3202` continua só local).
 `PARTIDA_BANCO=futbolsa_partida_<sufixo>` usa outro banco ao lado do da partida (para conferir sem mexer no jogo).
 
 ### Convidar
-1. Abra `https://<site>.vercel.app`, "Primeiro acesso" com o **e-mail do admin**, confirme o e-mail e entre: o primeiro login desse e-mail cria a conta de admin sem convite.
+1. **Antes de divulgar o site a qualquer pessoa**, abra `https://<site>.vercel.app`, "Primeiro acesso" com o **e-mail do admin**, confirme o e-mail e entre: o primeiro login desse e-mail cria a conta de admin sem convite. Confira em Authentication → Users que existe **um** usuário com esse e-mail, já confirmado (se o cadastro estiver aberto, outra pessoa poderia ter se cadastrado com ele antes).
 2. No menu do admin, em convites, ponha os e-mails dos convidados (até 10) e o seu de jogador. Só quem tem convite cria conta; quem não tem cai em "sem convite".
 3. Cada convidado abre o site, faz o "Primeiro acesso" e entra. Com o IPO aberto a conta já nasce com R$ 100.000,00.
 4. O admin usa "Relógio da partida" (ou o terminal) como na etapa 1.
@@ -179,8 +186,16 @@ aparelho sem recarregar (WebSocket pelo túnel); (4) com o IPO aberto, a tela do
 - O computador **dormindo** derruba o jogo para todos (o estado se mantém); desligue o modo de espera enquanto os convidados jogam.
 
 ## Segurança em uma página
-- Sai pelo túnel **só a API**; o Postgres escuta em `localhost` e a partida recusa banco que não seja local. A porta de controle (`3202`) é local e recusa quem manda `Origin`.
+- Sai pelo túnel **só a API**; a partida recusa banco que não seja local. Confira se o Postgres só escuta em `localhost` (o instalador do Windows às vezes deixa `listen_addresses = '*'`): no `psql`, `SHOW listen_addresses;`; se não for `localhost`, mude em `postgresql.conf` e reinicie o serviço `postgresql-x64-17`. A porta de controle (`3202`) é local e recusa quem manda `Origin`.
 - A rota do relógio (`/admin/partida/...`) só existe nesta montagem e só o admin passa (401 sem login, 403 para jogador). `GET /partida/hora` é pública e devolve só o instante do jogo.
-- O CORS e o WebSocket só aceitam `WEB_ORIGIN`.
+- O CORS e o WebSocket só aceitam `WEB_ORIGIN`. No modo público o tempo real aceita no máximo 200 conexões e 500 mensagens por segundo por conexão (a simulação relaxa esses limites). Atrás do túnel o limite de taxa conta pelo IP de quem chama (`X-Forwarded-For` do ngrok), não pelo túnel.
+- Os servidores locais da etapa 1 (site e porta de controle) só atendem `Host` local.
 - O login é a assinatura do Supabase (chaves públicas do projeto); o prazo do token conta no relógio de verdade, não no do jogo. Só e-mail convidado cria conta.
 - Desligue o `ngrok` quando não houver teste: sem túnel nada fica exposto.
+
+## Limitações conhecidas (revisão de segurança de 2026-11-15)
+- **Cota do túnel:** quem souber o endereço da API (ele está no JavaScript do site) pode gastar a cota de 20.000 requisições do ngrok grátis,
+  e o limite de taxa da API não ajuda porque o ngrok conta antes. Se acontecer, desligue o túnel; o plano B (Tailscale Funnel) não tem essa cota.
+  Reduzir isso exige um limite no próprio ngrok (Traffic Policy), a conferir no plano grátis.
+- **Token em sessão longa:** o site da partida troca o `Date` do navegador pelo relógio do jogo; o login do Supabase decide pelo `Date.now()` se o
+  token venceu e por isso só renova depois de um 401 (1 requisição a mais por hora por convidado). Funciona; a conferir numa sessão de mais de 1 hora.
