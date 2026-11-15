@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Inject, Module, Post } from "@nestjs/common";
 import { z } from "zod";
-import { AdminOnly } from "../src/infra/auth-adapter/index.js";
+import { AdminOnly, Public } from "../src/infra/auth-adapter/index.js";
 import { DomainError } from "../src/infra/http/errors.js";
 import { ZodValidationPipe } from "../src/infra/http/index.js";
 import type { Pedido, RelogioDaPartida, RespostaDoRelogio, EstadoDoRelogio } from "./relogio.js";
@@ -48,8 +48,25 @@ export class PartidaController {
   }
 }
 
+/**
+ * O site da Vercel não passa pelo servidor da partida, que na etapa 1 põe o relógio do jogo nas páginas: ele pergunta aqui a hora
+ * do jogo. Sem login (o site precisa dela antes de qualquer entrada); só o instante e se o relógio anda.
+ */
+@Controller("partida")
+export class HoraDaPartidaController {
+  constructor(@Inject(PorRelogio) private readonly por: PorRelogio) {}
+
+  @Public()
+  @Get("hora")
+  hora(): { sim: number; run: boolean } {
+    if (!this.por.atual) throw new DomainError("partida_nao_pronta", 503, "a partida ainda está subindo");
+    const e = this.por.atual.estado();
+    return { sim: Date.parse(e.instante), run: e.modo === "tempo-real" };
+  }
+}
+
 @Module({
-  controllers: [PartidaController],
+  controllers: [PartidaController, HoraDaPartidaController],
   providers: [PorRelogio],
   exports: [PorRelogio],
 })

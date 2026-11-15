@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { ModuleMetadata } from "@nestjs/common";
+import type { TestingModuleBuilder } from "@nestjs/testing";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { FixedClock } from "../src/infra/clock/index.js";
 import { connect, type DbConnection } from "../src/infra/db/client.js";
@@ -43,6 +44,8 @@ export interface OpcoesServidor {
   fonte?: ReplaySource;
   /** Módulos só de teste, montados junto com a API (a rota do relógio da partida). */
   imports?: ModuleMetadata["imports"];
+  /** O login do app: padrão, o de chaves de teste. A partida aberta a convidados troca por um que também aceita o Supabase de verdade. */
+  autenticacao?: (builder: TestingModuleBuilder) => TestingModuleBuilder;
   poolSize?: number;
   /** Temporada curta (ensaio rápido): só as primeiras rodadas do Brasileirão. */
   curta?: { rodadas: number };
@@ -73,7 +76,7 @@ export async function criarServidorEnsaio(opcoes: OpcoesServidor): Promise<Servi
       clock,
       imports: opcoes.imports,
       override: (b) =>
-        withTestAuth(clock)(b)
+        (opcoes.autenticacao ?? withTestAuth(clock))(b)
           .overrideProvider(ResultSourceRegistry)
           .useValue(new ResultSourceRegistry(() => fonte))
           .overrideProvider(BotRunnerSettings)

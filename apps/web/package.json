@@ -13,7 +13,8 @@
     "e2e": "npm run e2e:build && playwright test -c e2e/playwright.config.ts",
     "e2e:supabase": "node e2e/supabase/executar.mjs",
     "e2e:testar": "playwright test -c e2e/playwright.config.ts",
-    "partida:site": "node e2e/build.mjs --api http://127.0.0.1:3200 --saida out-partida"
+    "partida:site": "node e2e/build.mjs --api http://127.0.0.1:3200 --saida out-partida",
+    "partida:site:publico": "node e2e/build.mjs --publica --saida out-partida-publica"
   },
   "devDependencies": {
     "@futbolsa/engine": "*",
