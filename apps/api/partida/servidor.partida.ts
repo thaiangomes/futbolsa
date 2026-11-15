@@ -4,6 +4,7 @@
  * Variáveis: TEST_DATABASE_URL (Postgres local; a senha nunca vai para arquivo commitado), PARTIDA_SITE (pasta do site),
  * PARTIDA_ESCALA, PARTIDA_APELIDO, PARTIDA_APROVAR_SOZINHO, PARTIDA_PORTA_API, PARTIDA_PORTA_SITE, PARTIDA_PORTA_CONTROLE.
  */
+import { writeSync } from "node:fs";
 import { resolve } from "node:path";
 import { it } from "vitest";
 import { subirPartida } from "./partida.js";
@@ -24,8 +25,11 @@ it("servidor da partida", async () => {
     laco: true,
   });
   const e = partida.relogio.estado();
-  console.log(`\nPARTIDA PRONTA (${partida.nova ? "nova" : "retomada"}) em ${e.instante}, relógio ${e.modo}.`);
-  console.log(`Site:      ${partida.siteUrl}   (entrar: ${partida.siteUrl}/entrar/jogador  ou  /entrar/admin)`);
-  console.log(`Terminal:  npm run partida:relogio -- dia | rodada | ate AAAA-MM-DD | atualizar | pausar | tempo-real | estado`);
+  // o vitest segura o console.log até o teste acabar; o aviso vai direto para a saída
+  const dizer = (texto: string) => writeSync(1, `${texto}\n`);
+  dizer(`\nPARTIDA PRONTA (${partida.nova ? "nova" : "retomada"}) em ${e.instante}, relógio ${e.modo}.`);
+  dizer(`Site:      ${partida.siteUrl}   (entrar: ${partida.siteUrl}/entrar/jogador  ou  /entrar/admin)`);
+  dizer(`Terminal:  npm run partida:relogio -- dia | rodada | ate AAAA-MM-DD | atualizar | pausar | tempo-real | estado`);
+  dizer(`Zerar (com a partida desligada): npm run partida:zerar -- --sim`);
   await new Promise(() => undefined);
 }, 0);

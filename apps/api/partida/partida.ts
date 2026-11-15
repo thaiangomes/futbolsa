@@ -165,14 +165,20 @@ export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
     if (!jogador) throw new Error(`a conta de jogador "${apelido}" não existe no banco da partida (a partida foi criada com outro apelido)`);
   }
 
+  const [maisNova] = (await db.execute<{ d: Date }>(sql`select max(baixado_em) as d from public.partida_dados`)).rows;
+  let dadosDe: string | null = maisNova?.d ? new Date(maisNova.d).toISOString() : null;
   const relogio = new RelogioDaPartida({
     clock,
     condutor,
     fonte,
     salvar,
     laco: o.laco,
-    atualizar: () => atualizarFotos(db, { hoje: new Date(), baixar: o.baixar }),
-    dadosDe: () => null,
+    atualizar: async () => {
+      const r = await atualizarFotos(db, { hoje: new Date(), baixar: o.baixar });
+      if (r.mudaram.length > 0) dadosDe = new Date().toISOString();
+      return r;
+    },
+    dadosDe: () => dadosDe,
   });
   servidor.app.get(PorRelogio, { strict: false }).atual = relogio;
 
