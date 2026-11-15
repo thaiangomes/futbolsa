@@ -7,10 +7,10 @@ import { useTestDatabase } from "../support/db.js";
 describe("T4: dados iniciais", () => {
   const t = useTestDatabase(2);
 
-  it("grava os 20 clubes de CLUBS e a temporada em preparação com os padrões do formador", async () => {
+  it("grava os clubes de CLUBS e a temporada em preparação com os padrões do formador", async () => {
     await seed(t.db, 2027);
     const rows = await t.db.select().from(clubs);
-    expect(rows).toHaveLength(20);
+    expect(rows).toHaveLength(CLUBS.length);
     expect(rows.map((r) => r.ticker).sort()).toEqual(CLUBS.map((c) => c.id).sort());
     expect(rows.find((r) => r.ticker === "FLA3")!.name).toBe("Flamengo");
     const [season] = await t.db.select().from(seasons);
@@ -28,7 +28,7 @@ describe("T4: dados iniciais", () => {
 
   it("rodar de novo não muda nada e não cria carteira nem bot", async () => {
     await seed(t.db, 2027);
-    expect(await t.db.select().from(clubs)).toHaveLength(20);
+    expect(await t.db.select().from(clubs)).toHaveLength(CLUBS.length);
     expect(await t.db.select().from(seasons)).toHaveLength(1);
     expect(await t.db.select().from(wallets)).toHaveLength(0);
     expect(await t.db.select().from(bots)).toHaveLength(0);

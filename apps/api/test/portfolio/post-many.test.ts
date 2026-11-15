@@ -1,3 +1,4 @@
+import { CLUBS } from "@futbolsa/engine";
 import { asc, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../../src/infra/db/client.js";
@@ -18,7 +19,7 @@ describe("F11 T2: portfolio.postMany, vários movimentos de uma carteira de uma 
   const t = useTestDatabase();
   let counting: CountingDatabase;
   let seasonId: number;
-  /** Os 22 clubes listados na temporada, em ordem de ticker. */
+  /** Os clubes listados na temporada, em ordem de ticker. */
   let clubs: number[];
 
   beforeAll(async () => {
@@ -30,7 +31,7 @@ describe("F11 T2: portfolio.postMany, vários movimentos de uma carteira de uma 
     const seeded = await seedSeason(t.db);
     seasonId = seeded.seasonId;
     const tickers = [...seeded.clubIds.keys()].sort();
-    expect(tickers).toHaveLength(22);
+    expect(tickers).toHaveLength(CLUBS.length + 2); // os clubes de CLUBS e 2 de fora
     await listClubs(t.db, seasonId, seeded.clubIds, tickers);
     clubs = tickers.map((ticker) => seeded.clubIds.get(ticker)!);
     counting = countingDatabase(t.conn.pool);
@@ -195,7 +196,7 @@ describe("F11 T2: portfolio.postMany, vários movimentos de uma carteira de uma 
     let cash = INITIAL_CASH;
     expect(result.entries.map((e) => e.cashAfter)).toEqual(moves.map((m) => (cash += m.cashDelta!)));
     expect(result.wallet!.cash).toBe(cash);
-    expect(result.positions.size).toBe(22);
+    expect(result.positions.size).toBe(CLUBS.length + 2);
     await assertLedgerConsistent(t.db, seasonId);
   });
 

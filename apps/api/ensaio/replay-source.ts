@@ -12,18 +12,33 @@ import type { DateRange, ResultSource, SourceMatch, SourceStanding } from "../sr
  * nem a ESPN no ensaio.
  */
 
-const DATA_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../../packages/engine/data");
+export const DATA_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../../packages/engine/data");
 
-/** Arquivo de cada competição (o motor chama a Sul-Americana de `sul-americana`, a API de `sulamericana`). */
-const FILES: Record<CompetitionCode, string | null> = {
-  "brasileirao-a": "brasileirao-2025.json",
-  // não há arquivo da Série B de 2025 no repositório: `serieBSintetica` põe dois times de fora e duas rodadas, só para a
-  // competição existir e fechar (sem ela a recompra espera para sempre, porque `closes["brasileirao-b"]` fica indefinido)
-  "brasileirao-b": null,
-  "copa-do-brasil": "copa-do-brasil-2025.json",
-  libertadores: "libertadores-2025.json",
-  sulamericana: "sul-americana-2025.json",
+/** Arquivo de cada competição por ano (o motor chama a Sul-Americana de `sul-americana`, a API de `sulamericana`). */
+const ARQUIVOS: Record<number, Record<CompetitionCode, string | null>> = {
+  2025: {
+    "brasileirao-a": "brasileirao-2025.json",
+    // não há arquivo da Série B de 2025 no repositório: `serieBSintetica` põe dois times de fora e duas rodadas, só para a
+    // competição existir e fechar (sem ela a recompra espera para sempre, porque `closes["brasileirao-b"]` fica indefinido)
+    "brasileirao-b": null,
+    "copa-do-brasil": "copa-do-brasil-2025.json",
+    libertadores: "libertadores-2025.json",
+    sulamericana: "sul-americana-2025.json",
+  },
+  // 2026 (partida de teste): tudo real, inclusive a Série B, sem competições sintéticas
+  2026: {
+    "brasileirao-a": "brasileirao-2026.json",
+    "brasileirao-b": "brasileirao-b-2026.json",
+    "copa-do-brasil": "copa-do-brasil-2026.json",
+    libertadores: "libertadores-2026.json",
+    sulamericana: "sul-americana-2026.json",
+  },
 };
+
+/** Os jogos de cada competição quando não vêm dos arquivos do repositório (a partida os lê do banco, `partida_dados`). */
+export type DadosEmMemoria = Partial<Record<CompetitionCode, Match[]>>;
+
+const TODAS: CompetitionCode[] = ["brasileirao-a", "brasileirao-b", "copa-do-brasil", "libertadores", "sulamericana"];
 
 /** A Série B mínima do ensaio: dois times de fora do jogo, ida e volta em abril de 2025, já encerradas. */
 export function serieBSintetica(): Match[] {
@@ -63,14 +78,46 @@ export class ReplaySource implements ResultSource {
     private readonly now: () => Date,
     /** Temporada curta (ensaio rápido): só as primeiras rodadas do Brasileirão e nenhuma copa. */
     private readonly curta?: { rodadas: number },
-  ) {}
+    /** Ano dos arquivos (padrão 2025) e, se houver, os jogos já carregados em memória no lugar dos arquivos. */
+    origem: { ano?: number; dados?: DadosEmMemoria } = {},
+  ) {
+    this.ano = origem.ano ?? 2025;
+    this.dados = origem.dados;
+  }
+
+  private readonly ano: number;
+  private dados: DadosEmMemoria | undefined;
+
+  /** A partida baixou dados novos: troca a foto dos jogos (os percalços e os contadores ficam). */
+  trocarDados(dados: DadosEmMemoria): void {
+    this.dados = dados;
+    this.cache.clear();
+  }
+
+  /**
+   * O limite do relógio da partida: o fim do último jogo terminado nos dados (o tempo não passa daqui: depois dele não há
+   * resultado real para mostrar). `null` se nenhum jogo terminou.
+   */
+  limite(): number | null {
+    let ultimo: number | null = null;
+    for (const c of TODAS) {
+      for (const m of this.matchesOf(c)) {
+        if (m.status !== "finished") continue;
+        const fim = finishTime(m);
+        if (ultimo === null || fim > ultimo) ultimo = fim;
+      }
+    }
+    return ultimo;
+  }
 
   /** O arquivo da competição: todos os jogos, na ordem do arquivo. */
   matchesOf(competition: CompetitionCode): Match[] {
     let list = this.cache.get(competition);
     if (!list) {
-      const file = FILES[competition];
-      list = file ? (JSON.parse(readFileSync(join(DATA_DIR, file), "utf8")) as { matches: Match[] }).matches : competition === "brasileirao-b" ? serieBSintetica() : [];
+      const file = ARQUIVOS[this.ano]?.[competition];
+      if (this.dados) list = this.dados[competition] ?? [];
+      else if (!ARQUIVOS[this.ano]) throw new Error(`sem arquivos de dados para ${this.ano}`);
+      else list = file ? (JSON.parse(readFileSync(join(DATA_DIR, file), "utf8")) as { matches: Match[] }).matches : competition === "brasileirao-b" ? serieBSintetica() : [];
       if (this.curta) list = competition === "brasileirao-a" ? list.filter((m) => (m.round ?? 0) <= this.curta!.rodadas) : competition === "brasileirao-b" ? list : finalSintetica(competition);
       this.cache.set(competition, list);
     }

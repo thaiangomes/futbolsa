@@ -54,6 +54,8 @@ export interface OpcoesCondutor {
   chanceDeRepetir?: number;
   /** O admin de teste aprova os pagamentos (desligue para testar a aprovação à mão). */
   aprovar?: boolean;
+  /** Com a aprovação à mão, roda a liquidação dos créditos já aprovados em toda parada (como a tarefa de produção). */
+  liquidar?: boolean;
   ganchos?: Ganchos;
 }
 
@@ -68,7 +70,7 @@ export class ErroDeParada extends Error {
 }
 
 export class Condutor {
-  private readonly instantes: Array<{ at: number; motivo: string }>;
+  private instantes: Array<{ at: number; motivo: string }>;
   private ultimoDia: number;
   /** Quantas paradas e repetições já aconteceram (para o relatório). */
   paradas = 0;
@@ -92,6 +94,11 @@ export class Condutor {
 
   private get<T>(tipo: abstract new (...args: never[]) => T): T {
     return this.servidor.app.get(tipo as never, { strict: false }) as T;
+  }
+
+  /** Os jogos mudaram (a partida baixou dados novos): refaz a lista de instantes fixos. */
+  recalcularInstantes(): void {
+    this.instantes = this.calcularInstantes();
   }
 
   /** As datas fixas que não caem na grade de 3 horas: IPO, jogos e fim dos jogos, fim do mês às 23h59 de Brasília. */
@@ -119,11 +126,15 @@ export class Condutor {
     return [...lista].map(([at, motivo]) => ({ at, motivo })).sort((a, b) => a.at - b.at);
   }
 
-  /** O próximo instante interessante depois de `agora`, no máximo 3 horas à frente. */
-  proxima(agora: Date): { em: Date; motivo: string } {
+  /**
+   * O próximo instante interessante depois de `agora`, no máximo `passoMs` à frente (padrão 3 horas; a partida em tempo
+   * real usa 15 minutos) e, se houver, parando em `alvo`.
+   */
+  proxima(agora: Date, passoMs = 3 * HORA, alvo?: number): { em: Date; motivo: string } {
     const t = agora.getTime();
-    const grade = (Math.floor((t - BRT) / (3 * HORA)) + 1) * 3 * HORA + BRT;
-    let melhor = { at: grade, motivo: grade === Math.floor((t - BRT) / DIA + 1) * DIA + BRT ? "0h" : "grade de 3 horas" };
+    const grade = (Math.floor((t - BRT) / passoMs) + 1) * passoMs + BRT;
+    let melhor = { at: grade, motivo: grade === Math.floor((t - BRT) / DIA + 1) * DIA + BRT ? "0h" : passoMs === 3 * HORA ? "grade de 3 horas" : `grade de ${passoMs / 60_000} minutos` };
+    if (alvo !== undefined && alvo > t && alvo < melhor.at) melhor = { at: alvo, motivo: "alvo do relógio" };
     // busca binária do primeiro instante fixo depois de t
     let lo = 0;
     let hi = this.instantes.length;
@@ -138,8 +149,13 @@ export class Condutor {
   }
 
   /** Avança o relógio até a próxima parada e roda as passadas. */
-  async paradaUnica(): Promise<Parada> {
-    const { em, motivo } = this.proxima(this.servidor.clock.now());
+  async paradaUnica(opcoes: { passoMs?: number; alvo?: number } = {}): Promise<Parada> {
+    const { em, motivo } = this.proxima(this.servidor.clock.now(), opcoes.passoMs, opcoes.alvo);
+    return this.paradaEm(em, motivo);
+  }
+
+  /** Uma parada num instante dado (a partida em tempo real para quando o relógio chega nele): põe o relógio ali e roda tudo. */
+  async paradaEm(em: Date, motivo: string): Promise<Parada> {
     this.servidor.clock.set(em);
     const dia = this.diaDe(em.getTime());
     const parada: Parada = { em, motivo, novoDia: dia !== this.ultimoDia };
@@ -214,7 +230,10 @@ export class Condutor {
 
   /** O admin de teste aprova o que fechou há mais de N horas e roda a liquidação dos créditos em lotes. */
   async aprovarEPagar(parada: Parada): Promise<void> {
-    if (this.opcoes.aprovar === false) return;
+    if (this.opcoes.aprovar === false) {
+      if (this.opcoes.liquidar) await this.executar(parada, "liquidar créditos", () => this.get(SettleJob).run());
+      return;
+    }
     const atraso = this.opcoes.atrasoAprovacaoMs ?? HORA;
     await this.executar(parada, "aprovar pagamentos", async () => {
       const maduros = await this.servidor.conexao.db

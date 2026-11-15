@@ -60,19 +60,20 @@ describe("classificação oficial", () => {
     expect(report.clubsCreated.length).toBeGreaterThan(10);
     const b = await view("brasileirao-b");
     expect(b.rows).toHaveLength(20);
-    expect(b.rows[0]).toMatchObject({ position: 1, club: { name: "Coritiba", ticker: null }, sourcePosition: 1 });
+    expect(b.rows[0]).toMatchObject({ position: 1, club: { name: "Coritiba", ticker: "CFC3" }, sourcePosition: 1 });
     expect(b.manualOverride).toBe(false);
     expect(b.confirmedAt).toBeNull();
-    const created = await database.db.select().from(clubs).where(eq(clubs.name, "Coritiba"));
+    // o Coritiba, promovido para 2026, já tem ticker (CFC3); um clube que a fonte traz e o jogo não lista entra sem ticker
+    const created = await database.db.select().from(clubs).where(eq(clubs.name, "Criciúma"));
     expect(created).toEqual([expect.objectContaining({ ticker: null })]);
   });
 
   it("a Série A usa os clubes listados da temporada", async () => {
     await service.importStandings(seasonId, "brasileirao-a", tableA());
     const a = await view("brasileirao-a");
-    expect(a.rows).toHaveLength(20);
+    expect(a.rows).toHaveLength(CLUBS.length);
     expect(a.rows[0]!.club.ticker).toBe("FLA3");
-    expect(a.rows[19]!.club.ticker).toBe("RBB3");
+    expect(a.rows[CLUBS.length - 1]!.club.ticker).toBe(CLUBS.at(-1)!.id);
   });
 
   it("conferir grava autor e hora, e nada muda na ordem", async () => {
@@ -175,7 +176,7 @@ describe("classificação oficial", () => {
     expect((await view("brasileirao-a")).confirmedAt).not.toBeNull();
 
     const same = await service.importStandings(seasonId, "brasileirao-a", tableA());
-    expect(same).toMatchObject({ inserted: 0, updated: 0, unchanged: 20 });
+    expect(same).toMatchObject({ inserted: 0, updated: 0, unchanged: CLUBS.length });
     expect((await view("brasileirao-a")).confirmedAt).not.toBeNull();
 
     const changed = tableA();

@@ -26,7 +26,8 @@ describe("visão geral do admin", () => {
     app = await createTestApp({ db: database.db, clock, override: withTestAuth(clock) });
     admin = await createAccount(database.db, { role: "admin", nickname: "chefe" });
     ({ seasonId, clubIds } = await seedSeason(database.db));
-    await listClubs(database.db, seasonId, clubIds, [...clubIds.keys()]);
+    // a Série A tem 20 clubes listados (F17: a lista de clubes conhecidos tem 24, com os promovidos de 2026)
+    await listClubs(database.db, seasonId, clubIds, [...clubIds.keys()].slice(0, 20));
   });
   afterAll(() => app.close());
 
@@ -113,7 +114,7 @@ describe("visão geral do admin", () => {
 
     // tudo completo: nada a mostrar (a tarefa abre no minuto seguinte)
     await setSeason({ offerSize: 3000 });
-    const tickers = [...clubIds.keys()].sort();
+    const tickers = [...clubIds.keys()].slice(0, 20).sort();
     for (const [i, t] of tickers.entries()) {
       await database.db.update(seasonClubs).set({ prevPlacement: i + 1 }).where(eq(seasonClubs.clubId, clubIds.get(t)!));
     }

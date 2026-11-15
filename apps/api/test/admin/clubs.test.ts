@@ -1,6 +1,7 @@
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { knownClubsResponseSchema } from "@futbolsa/contracts";
+import { CLUBS } from "@futbolsa/engine/data/clubs";
 import { FixedClock } from "../../src/infra/clock/index.js";
 import { clubs } from "../../src/infra/db/schema/index.js";
 import { createAccount } from "../support/accounts.js";
@@ -31,7 +32,8 @@ describe("clubes conhecidos", () => {
     const res = await app.inject({ method: "GET", url: "/admin/clubs", headers: bearer(admin.token) });
     expect(res.statusCode).toBe(200);
     const body = knownClubsResponseSchema.parse(res.json());
-    expect(body.clubs).toHaveLength(20);
+    // F17: com os promovidos de 2026 a lista de clubes conhecidos passou de 20 para 24
+    expect(body.clubs).toHaveLength(CLUBS.length);
     expect(body.clubs.every((c) => c.ticker !== null)).toBe(true);
     const tickers = body.clubs.map((c) => c.ticker!);
     expect(tickers).toEqual([...tickers].sort());

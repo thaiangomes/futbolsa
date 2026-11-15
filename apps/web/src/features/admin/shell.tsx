@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Footer, SimpleHeader } from "../accounts/ui/brand";
 import { RequireAccount, useSession } from "../accounts/session-provider";
@@ -45,9 +45,31 @@ export function useAdminApi(): AdminApi {
   return useMemo(() => adminApi(api), [api]);
 }
 
+/** O item do relógio da partida de teste: só entra no menu se a API responder que está em modo partida. */
+export const ITEM_DO_RELOGIO = { href: "/admin/relogio", label: "Relógio da partida" } as const;
+
+/** Pergunta à API se ela é a da partida de teste (rota `/admin/partida`; em qualquer outra API o admin responde 404). */
+function useModoPartida(admin: AdminApi, ativo: boolean): boolean {
+  const [partida, setPartida] = useState(false);
+  useEffect(() => {
+    if (!ativo) return;
+    let vivo = true;
+    admin.partida().then(
+      () => vivo && setPartida(true),
+      () => vivo && setPartida(false),
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [admin, ativo]);
+  return partida;
+}
+
 /** O layout de `/admin`: o topo do jogo, o menu lateral do admin e a página. */
 export function AdminShell({ title, children }: { title: string; children: ReactNode }) {
   const { state } = useSession();
+  const admin = useAdminApi();
+  const menu = useModoPartida(admin, state.status === "ready" && state.me.role === "admin") ? [...ADMIN_MENU, ITEM_DO_RELOGIO] : ADMIN_MENU;
   const pathname = usePathname();
   const nickname = state.status === "ready" ? state.me.nickname : "";
   return (
@@ -64,7 +86,7 @@ export function AdminShell({ title, children }: { title: string; children: React
         <RequireAdmin>
           <div className="g-side">
             <nav className="side-nav" aria-label="Menu do admin">
-              {ADMIN_MENU.map((item) => (
+              {menu.map((item) => (
                 <a key={item.href} href={item.href} aria-current={pathname === item.href || pathname === `${item.href}/` ? "page" : undefined}>
                   {item.label}
                 </a>

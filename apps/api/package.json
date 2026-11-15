@@ -21,7 +21,10 @@
     "e2e:servidor": "vitest run --config vitest.e2e.config.ts ensaio/navegador.e2e.ts",
     "ensaio": "vitest run --config vitest.ensaio.config.ts ensaio/executar.ensaio.ts",
     "carga": "node --env-file-if-exists=../../.env --import tsx carga/executar.ts",
-    "demo:carteira": "node --env-file-if-exists=../../.env --import tsx scripts/demo-carteira.ts"
+    "demo:carteira": "node --env-file-if-exists=../../.env --import tsx scripts/demo-carteira.ts",
+    "partida": "node --import tsx partida/iniciar.ts",
+    "partida:relogio": "node --import tsx partida/comando.ts",
+    "partida:zerar": "node --import tsx partida/zerar.ts"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.11",

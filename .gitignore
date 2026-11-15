@@ -12,6 +12,7 @@ next-env.d.ts
 ensaio-saida/
 carga-saida/
 out-e2e/
+out-partida/
 playwright-report/
 test-results/
 out-supabase/

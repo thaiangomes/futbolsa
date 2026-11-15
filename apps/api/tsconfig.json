@@ -5,5 +5,5 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   },
-  "include": ["src", "test", "scripts", "ensaio", "carga"]
+  "include": ["src", "test", "scripts", "ensaio", "carga", "partida"]
 }

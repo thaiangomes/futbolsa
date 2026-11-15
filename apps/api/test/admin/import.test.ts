@@ -241,9 +241,9 @@ describe("importação de jogos", () => {
 
   it("clubes que a fonte traz e o jogo não lista entram em clubs sem ticker, e o relatório os lista", async () => {
     const report = await service.importMatches(seasonId, "brasileirao-b", [
-      league("x", "Coritiba FC", "Ferroviária", 1, day(10), { competition: "brasileirao-b" }),
+      league("x", "Ypiranga FC", "Ferroviária", 1, day(10), { competition: "brasileirao-b" }),
     ]);
-    expect(report.clubsCreated.sort()).toEqual(["Coritiba FC", "Ferroviária"]);
+    expect(report.clubsCreated.sort()).toEqual(["Ferroviária", "Ypiranga FC"]);
     const created = await database.db.select().from(clubs).where(eq(clubs.name, "Ferroviária"));
     expect(created).toEqual([expect.objectContaining({ ticker: null })]);
   });

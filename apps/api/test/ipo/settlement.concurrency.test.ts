@@ -3,7 +3,7 @@ import { Logger } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { type IpoClubSettlement, settleIpoClub } from "@futbolsa/engine";
+import { CLUBS, type IpoClubSettlement, settleIpoClub } from "@futbolsa/engine";
 import { FixedClock } from "../../src/infra/clock/index.js";
 import type { Tx } from "../../src/infra/db/index.js";
 import {
@@ -102,7 +102,7 @@ describe("liquidação do IPO sob concorrência, contra o Postgres", () => {
     await t.db.insert(clubs).values(SERIE_B.map((ticker, i) => ({ ticker, name: `Clube dos Treze na Série B ${i + 1} (teste)` })));
     clubIds = new Map((await t.db.select({ id: clubs.id, ticker: clubs.ticker }).from(clubs)).map((c) => [c.ticker!, c.id]));
     tickers = [...clubIds.keys()].sort();
-    expect(tickers).toHaveLength(24);
+    expect(tickers).toHaveLength(CLUBS.length + 4); // os clubes de CLUBS e 4 de fora
     // Faixas diferentes por clube (centro de R$ 15 a R$ 49,50, ±40%), como a abertura grava.
     tickers.forEach((ticker, i) => {
       const center = 1500 + 150 * i;
