@@ -58,10 +58,13 @@ describe("a partida de teste", () => {
     expect((await db.select().from(users).where(eq(users.id, p.carga.admin.conta.id)))[0]!.role).toBe("admin");
     expect((await db.select().from(users).where(eq(users.id, p.jogador.conta.id)))[0]!.role).toBe("player");
     // o jogador aparece nos rankings; o admin não
-    const ranking = await p.servidor.app.inject({ method: "GET", url: "/rankings/live" });
+    const ranking = await p.servidor.app.inject({ method: "GET", url: "/rankings/live?limit=100" });
     expect(ranking.statusCode).toBe(200);
     expect(ranking.body).toContain("jogador");
     expect(ranking.body).not.toContain("admin_partida");
+    // os bots entram nos rankings desde o começo (a chave nasce ligada na partida)
+    expect(ranking.json()).toMatchObject({ botsIncluded: true });
+    expect(ranking.json().rows.some((l: { isBot: boolean }) => l.isBot)).toBe(true);
   });
 
   it("3: com o relógio parado, o jogador manda oferta e lê o IPO e o relógio não se mexe", async () => {
@@ -139,6 +142,8 @@ describe("a partida de teste", () => {
 
   it("16: desligada e ligada de novo, a partida volta ao mesmo instante, pausada, com as mesmas contas, carteiras e bots", async () => {
     const instante = p.clock.now().getTime();
+    // o jogador muda o apelido na tela da conta: a retomada acha a conta mesmo assim
+    await p.servidor.conexao.db.update(users).set({ nickname: "Renomeado" }).where(eq(users.id, p.jogador.conta.id));
     const contas = async (x: Partida) => (await x.servidor.conexao.db.select({ id: users.id, nickname: users.nickname }).from(users)).map((u) => u.nickname).sort();
     const carteiras = async (x: Partida) => Number((await x.servidor.conexao.db.execute<{ n: string }>(sql`select count(*)::text as n from futbolsa.wallets`)).rows[0]!.n);
     const botsAtivos = async (x: Partida) => (await x.servidor.conexao.db.select().from(botsTabela).where(eq(botsTabela.active, true))).length;
@@ -154,7 +159,7 @@ describe("a partida de teste", () => {
     // o jogador de antes entra de novo (o token é novo, a conta é a mesma)
     const eu = await q.servidor.app.inject({ method: "GET", url: "/me", headers: await q.jogador.auth() });
     expect(eu.statusCode).toBe(200);
-    expect(eu.json()).toMatchObject({ nickname: "jogador" });
+    expect(eu.json()).toMatchObject({ nickname: "Renomeado" });
     p = q;
   }, 300_000);
 
