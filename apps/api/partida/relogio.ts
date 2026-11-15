@@ -1,6 +1,7 @@
 import { finishTime, kickoffTime } from "@futbolsa/engine";
 import { FixedClock } from "../src/infra/clock/index.js";
 import { DomainError } from "../src/infra/http/errors.js";
+import { CLOSE_MARGIN_MS } from "../src/modules/admin/payouts/close-events.service.js";
 import type { Condutor } from "../ensaio/condutor.js";
 import type { ReplaySource } from "../ensaio/replay-source.js";
 import { paraMemoria, type Fotos } from "./dados.js";
@@ -19,6 +20,8 @@ const HORA = 60 * MINUTO;
 const DIA = 24 * HORA;
 export const PASSO_TEMPO_REAL = 15 * MINUTO;
 export const PASSO_SALTO = 180 * MINUTO;
+/** O fechamento de um jogo espera 2 minutos depois do fim (margem da produção): o relógio vai um minuto além dela, para o fechamento já ter rodado. */
+export const MARGEM_DO_FECHAMENTO = CLOSE_MARGIN_MS + MINUTO;
 
 /** O relógio da API na partida: fixo entre as paradas quando pausado, e andando junto com o relógio de verdade no tempo real. */
 export class RelogioFlutuante extends FixedClock {
@@ -125,8 +128,17 @@ export class RelogioDaPartida {
 
   // ---------- leitura ----------
 
+  /**
+   * O limite do relógio: o fim do último jogo terminado nos dados mais a margem do fechamento (o placar já foi importado e o
+   * fechamento dele já rodou). Daí em diante é "aguardando resultados reais".
+   */
+  limiteMs(): number | null {
+    const fim = this.d.fonte.limite();
+    return fim === null ? null : fim + MARGEM_DO_FECHAMENTO;
+  }
+
   private limite(): number | null {
-    return this.d.fonte.limite();
+    return this.limiteMs();
   }
 
   estado(): EstadoDoRelogio {
@@ -188,7 +200,7 @@ export class RelogioDaPartida {
     }
     const proximas = [...porRodada.entries()].filter(([, fim]) => fim > agora).sort((a, b) => a[0] - b[0]);
     if (proximas.length === 0) throw new DomainError("sem_proxima_rodada", 422, "não há próxima rodada do Brasileirão nos dados");
-    return proximas[0]![1];
+    return proximas[0]![1] + MARGEM_DO_FECHAMENTO; // o fechamento da rodada já rodou
   }
 
   private async saltarAteData(data: string): Promise<RespostaDoRelogio> {

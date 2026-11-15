@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
-import { createServer, type Server } from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { eq, sql } from "drizzle-orm";
 import { ipoDates, type Match } from "@futbolsa/engine";
@@ -249,9 +249,13 @@ async function servirSiteDaPartida(
   porta: number,
   ctx: { servidor: ServidorEnsaio; carga: Carregado; jogador: ContaEnsaio; clock: RelogioFlutuante; host: string },
 ): Promise<Server> {
-  const estatico = manipuladorDoSite(pasta);
+  const estatico = comRelogioNoSite(manipuladorDoSite(pasta), ctx.clock);
   const http = createServer(async (req, res) => {
     const caminho = (req.url ?? "/").split("?")[0]!;
+    if (caminho === "/__hora") {
+      res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+      return void res.end(JSON.stringify({ sim: ctx.clock.now().getTime(), run: ctx.clock.andando }));
+    }
     const quem = /^\/entrar\/(jogador|admin)$/.exec(caminho)?.[1];
     if (!quem) return estatico(req, res);
     try {
@@ -271,6 +275,49 @@ async function servirSiteDaPartida(
   });
   await new Promise<void>((ok) => http.listen(porta, ctx.host, ok));
   return http;
+}
+
+/**
+ * O site decide pelo relógio do navegador (`Date.now()`) se o IPO aceita ofertas e se o mercado está aberto. Na partida o jogo
+ * está em 2026-01 e o navegador em outro dia: cada página HTML servida ganha, no começo, um script que troca `Date` pelo relógio
+ * da partida (parado quando pausado, andando junto quando em tempo real) e o atualiza de 2 em 2 segundos por `/__hora`.
+ */
+function scriptDoRelogio(clock: RelogioFlutuante): string {
+  const inicial = JSON.stringify({ sim: clock.now().getTime(), run: clock.andando });
+  return (
+    "<script>(function(){var R=Date,N=R.now.bind(R),e=" +
+    inicial +
+    ";e.real=N();function a(){return e.run?e.sim+(N()-e.real):e.sim}" +
+    "function F(){if(!(this instanceof F))return new R(a()).toString();if(arguments.length===0)return new R(a());return new (Function.prototype.bind.apply(R,[null].concat([].slice.call(arguments))))()}" +
+    "F.prototype=R.prototype;F.now=a;F.parse=R.parse;F.UTC=R.UTC;window.Date=F;" +
+    "function u(){fetch('/__hora',{cache:'no-store'}).then(function(r){return r.json()}).then(function(j){e={sim:j.sim,run:j.run,real:N()}}).catch(function(){})}" +
+    "setInterval(u,2000);document.addEventListener('visibilitychange',u)})()</script>"
+  );
+}
+
+type Atendente = (req: IncomingMessage, res: ServerResponse) => void;
+
+/** Põe o script do relógio no começo das páginas HTML do site. */
+function comRelogioNoSite(atender: Atendente, clock: RelogioFlutuante): Atendente {
+  return (req, res) => {
+    const r = res as unknown as { writeHead: (...a: unknown[]) => unknown };
+    const writeHead = r.writeHead.bind(res);
+    const write = res.write.bind(res) as (...a: unknown[]) => boolean;
+    const end = res.end.bind(res) as (...a: unknown[]) => unknown;
+    let html = false;
+    const pedacos: Buffer[] = [];
+    r.writeHead = (status: unknown, headers?: unknown) => {
+      html = String((headers as Record<string, unknown> | undefined)?.["content-type"] ?? "").startsWith("text/html") && status === 200;
+      return writeHead(status, headers);
+    };
+    res.write = ((c: unknown, ...resto: unknown[]) => (html ? (pedacos.push(Buffer.from(c as string)), true) : write(c, ...resto))) as typeof res.write;
+    res.end = ((c?: unknown, ...resto: unknown[]) => {
+      if (!html) return end(c, ...resto);
+      if (c) pedacos.push(Buffer.from(c as string));
+      return end(Buffer.concat(pedacos).toString("utf8").replace(/<head>/i, (m) => m + scriptDoRelogio(clock)));
+    }) as typeof res.end;
+    atender(req, res);
+  };
 }
 
 /**

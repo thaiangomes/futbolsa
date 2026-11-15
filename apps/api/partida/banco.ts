@@ -55,7 +55,8 @@ export async function prepararBanco(urlBase: string, nomeDoBanco = NOME_DO_BANCO
 /** Zerar a partida (só pelo terminal): apaga o banco `futbolsa_partida` e nenhum outro. */
 export async function apagarBanco(urlBase: string, nomeDoBanco = NOME_DO_BANCO): Promise<void> {
   recusarBancoNaoLocalEstrito(urlBase);
-  await comAdmin(urlBase, (c) => c.query(`drop database if exists "${conferirNome(nomeDoBanco)}" with (force)`));
+  const nome = conferirNome(nomeDoBanco);
+  await comAdmin(urlBase, (c) => c.query(`drop database if exists "${nome}" with (force)`));
 }
 
 /** As tabelas da partida (criadas só se faltarem). */

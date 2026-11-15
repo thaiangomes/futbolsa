@@ -66,6 +66,7 @@ import {
   type ListMatchesQuery,
 } from "@futbolsa/contracts";
 import type { ApiClient } from "../../lib/api";
+import { partidaViewSchema, respostaDoRelogioSchema, type PedidoDoRelogio } from "./partida/schemas";
 
 /** Monta a query string só com o que tem valor. */
 export function queryString(params: Record<string, string | number | boolean | undefined>): string {
@@ -80,6 +81,9 @@ export function queryString(params: Record<string, string | number | boolean | u
 export function adminApi(api: ApiClient) {
   return {
     overview: () => api.request(overviewSchema, "/admin/overview"),
+    /** O relógio da partida de teste (F17): só a API da partida responde; nas outras é 404 e a tela some. */
+    partida: () => api.request(partidaViewSchema, "/admin/partida"),
+    partidaRelogio: (pedido: PedidoDoRelogio) => api.request(respostaDoRelogioSchema, "/admin/partida/relogio", { method: "POST", body: pedido }),
     pending: () => api.request(pendingResponseSchema, "/admin/pending"),
     matches: (query: Partial<ListMatchesQuery> = {}) =>
       api.request(listMatchesResponseSchema, `/admin/matches${queryString({ ...query, diverging: query.diverging === undefined ? undefined : String(query.diverging) })}`),
