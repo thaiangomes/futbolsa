@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { eq, sql } from "drizzle-orm";
+import { eq, or, sql } from "drizzle-orm";
 import { ipoDates, type Match } from "@futbolsa/engine";
 import { authIdentities, clubs, seasons, users } from "../src/infra/db/schema/index.js";
 import { connect } from "../src/infra/db/client.js";
@@ -73,12 +73,16 @@ export interface Partida {
   fechar(): Promise<void>;
 }
 
+/**
+ * Acha a conta pelo apelido atual ou pelo e-mail com que a partida a criou (`<apelido>@exemplo.com`): o jogador pode mudar o
+ * apelido na tela da conta, e a retomada não pode depender de ele ser o do começo.
+ */
 async function contaPorApelido(db: ServidorEnsaio["conexao"]["db"], apelido: string, clock: RelogioFlutuante): Promise<ContaEnsaio | null> {
   const [l] = await db
     .select({ id: users.id, email: users.email, nickname: users.nickname, subject: authIdentities.subject })
     .from(users)
     .innerJoin(authIdentities, eq(authIdentities.userId, users.id))
-    .where(eq(users.nickname, apelido));
+    .where(or(eq(users.nickname, apelido), eq(users.email, `${apelido}@exemplo.com`)));
   if (!l?.email || !l.nickname) return null;
   const tokenWith = (opcoes: { at?: Date; expiresIn?: number } = {}) => tokenFor({ ...opcoes, subject: l.subject, email: l.email! });
   return {
@@ -159,6 +163,9 @@ export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
     // a partida começa na abertura do IPO (D5), com as ofertas abertas
     await condutor.ateExato(carga.ipo.opensAt);
     jogador = await cadastrarJogador(servidor, carga, clock, apelido);
+    // os bots aparecem nos rankings desde o começo (o admin pode desligar depois, na tela de bots)
+    const ligou = await servidor.app.inject({ method: "PATCH", url: `/admin/seasons/${carga.seasonId}`, payload: { botsInRankings: true }, headers: await carga.admin.auth() });
+    if (ligou.statusCode >= 300) throw new Error(`bots nos rankings → ${ligou.statusCode}: ${ligou.body}`);
     await salvar(clock.now());
   } else {
     jogador = await contaPorApelido(db, apelido, clock);
