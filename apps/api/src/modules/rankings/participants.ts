@@ -27,7 +27,7 @@ export async function participants(tx: Pick<Tx, "db">, seasonId: number, at: Dat
     from futbolsa.wallets w
     left join futbolsa.users u on u.id = w.user_id
     where w.season_id = ${seasonId} and w.entered_at <= ${at.toISOString()}::timestamptz
-      and ((w.owner_type = 'user' and u.status = 'active') or (w.owner_type = 'bot' and ${options.botsIncluded}))
+      and ((w.owner_type = 'user' and u.status = 'active' and u.role = 'player') or (w.owner_type = 'bot' and ${options.botsIncluded}))
     order by w.id`);
   return result.rows.map((r) => ({
     walletId: Number(r.id),

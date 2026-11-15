@@ -244,7 +244,7 @@ describe("abertura do IPO", () => {
       const [{ n: accounts }] = (await database.db
         .select({ n: sql<number>`count(*)::int` })
         .from(users)
-        .where(ne(users.status, "deleted"))) as [{ n: number }];
+        .where(and(ne(users.status, "deleted"), eq(users.role, "player")))) as [{ n: number }];
       const [sum] = await database.db
         .select({ cash: sql<string>`sum(${wallets.cash})`, n: sql<number>`count(*)::int` })
         .from(wallets)
@@ -477,7 +477,7 @@ describe("abertura do IPO", () => {
         const [{ n: accounts }] = (await database.db
           .select({ n: sql<number>`count(*)::int` })
           .from(users)
-          .where(ne(users.status, "deleted"))) as [{ n: number }];
+          .where(and(ne(users.status, "deleted"), eq(users.role, "player")))) as [{ n: number }];
         expect(credited.credited).toBe(accounts);
         const perUser = await database.db
           .select({ n: sql<number>`count(*)::int` })

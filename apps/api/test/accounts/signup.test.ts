@@ -196,10 +196,15 @@ describe("cadastro: GET /me e POST /me", () => {
   });
 
   it("primeiro admin: o e-mail de ADMIN_BOOTSTRAP_EMAIL entra sem convite e nasce admin; outro nasce jogador", async () => {
+    await setSeason({ status: "ipo_open" });
     const thaian = await person("Thaian@Exemplo.com");
     const res = await register(thaian.token, { nickname: "thaian", acceptTerms: true });
     expect(res.statusCode).toBe(201);
     expect(res.json().role).toBe("admin");
+    // o admin administra e não joga: mesmo com o IPO aberto, nasce sem carteira e sem ir para a entrada no meio
+    expect(res.json().season).toMatchObject({ hasWallet: false, needsEntry: false });
+    const [adm] = await database.db.select().from(users).where(eq(users.email, BOOTSTRAP));
+    expect(await database.db.select().from(wallets).where(eq(wallets.userId, adm!.id))).toHaveLength(0);
     const p = await person();
     await invite(p.email);
     expect((await register(p.token, { nickname: "comum_1", acceptTerms: true })).json().role).toBe("player");

@@ -30,6 +30,7 @@ export async function creditSeasonStart(
     .where(
       and(
         inArray(users.status, ["active", "blocked"]),
+        eq(users.role, "player"), // o admin administra e não joga
         notExists(
           tx.db
             .select({ one: sql`1` })
