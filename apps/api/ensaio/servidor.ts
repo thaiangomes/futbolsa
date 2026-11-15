@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import type { ModuleMetadata } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { FixedClock } from "../src/infra/clock/index.js";
 import { connect, type DbConnection } from "../src/infra/db/client.js";
@@ -36,6 +37,12 @@ export interface OpcoesServidor {
   /** Porta da API (padrão 0, qualquer uma livre). O navegador pede uma fixa, para o site de teste apontar para ela. */
   porta?: number;
   inicio: Date;
+  /** Um relógio próprio (a partida usa um que anda em tempo real); o padrão é um `FixedClock` em `inicio`. */
+  clock?: FixedClock;
+  /** A fonte de reprodução (a partida de 2026 lê o banco); o padrão lê os arquivos de 2025. */
+  fonte?: ReplaySource;
+  /** Módulos só de teste, montados junto com a API (a rota do relógio da partida). */
+  imports?: ModuleMetadata["imports"];
   poolSize?: number;
   /** Temporada curta (ensaio rápido): só as primeiras rodadas do Brasileirão. */
   curta?: { rodadas: number };
@@ -53,9 +60,9 @@ export async function criarServidorEnsaio(opcoes: OpcoesServidor): Promise<Servi
   process.env.WS_MAX_MESSAGES_PER_SECOND ??= "100000";
   recusarProducao();
   recusarBancoNaoLocal(opcoes.databaseUrl);
-  const clock = new FixedClock(opcoes.inicio);
+  const clock = opcoes.clock ?? new FixedClock(opcoes.inicio);
   const conexao = connect(opcoes.databaseUrl, opcoes.poolSize ?? 20);
-  const fonte = new ReplaySource(() => clock.now(), opcoes.curta);
+  const fonte = opcoes.fonte ?? new ReplaySource(() => clock.now(), opcoes.curta);
   const servidor = { clock, conexao, fonte } as ServidorEnsaio;
   const ritmo = opcoes.bots ?? { tickMinutes: 180, activityPer3h: 0.25 };
   let app: NestFastifyApplication | undefined;
@@ -64,6 +71,7 @@ export async function criarServidorEnsaio(opcoes: OpcoesServidor): Promise<Servi
     app = await createTestApp({
       db: conexao.db,
       clock,
+      imports: opcoes.imports,
       override: (b) =>
         withTestAuth(clock)(b)
           .overrideProvider(ResultSourceRegistry)

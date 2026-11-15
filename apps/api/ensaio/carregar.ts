@@ -14,6 +14,13 @@ import type { ServidorEnsaio } from "./servidor.js";
 
 const DATA_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../../packages/engine/data");
 
+/** O arquivo do Brasileirão Série A de uma temporada (`data/README.md`). */
+export interface ArquivoDaSerieA {
+  season: number;
+  clubs: Array<{ id: string; ipoPosition: number }>;
+  matches: Match[];
+}
+
 export interface Carregado {
   seasonId: number;
   year: number;
@@ -28,15 +35,28 @@ export interface Carregado {
 export interface OpcoesCarga {
   /** Ações ofertadas por clube. */
   offerSize: number;
+  /** A temporada de outro ano (a partida de 2026): o arquivo da Série A vem de fora (o banco da partida) em vez do repositório. */
+  ano?: number;
+  arquivo?: ArquivoDaSerieA;
+  /** Apelido do admin criado (padrão `admin_ensaio`). */
+  adminApelido?: string;
+  /** Um admin que já existe (a partida retomada): não cria outro. */
+  admin?: ContaEnsaio;
 }
 
+/** O ensaio de 2025: o arquivo do repositório e o admin de teste. */
 export async function carregarTemporada2025(servidor: ServidorEnsaio, opcoes: OpcoesCarga): Promise<Carregado> {
+  return carregarTemporada(servidor, opcoes);
+}
+
+/**
+ * Carrega uma temporada pelas rotas do admin: clubes, a temporada em preparação com a lista de clubes (a colocação do IPO vem
+ * do arquivo: em 2026, a tabela final de 2025), a oferta, o primeiro jogo e as copas confirmadas.
+ */
+export async function carregarTemporada(servidor: ServidorEnsaio, opcoes: OpcoesCarga): Promise<Carregado> {
   const db = servidor.conexao.db;
-  const arquivo = JSON.parse(readFileSync(join(DATA_DIR, "brasileirao-2025.json"), "utf8")) as {
-    season: number;
-    clubs: Array<{ id: string; ipoPosition: number }>;
-    matches: Match[];
-  };
+  const ano = opcoes.ano ?? 2025;
+  const arquivo = opcoes.arquivo ?? (JSON.parse(readFileSync(join(DATA_DIR, `brasileirao-${ano}.json`), "utf8")) as ArquivoDaSerieA);
   await db
     .insert(clubs)
     .values(CLUBS.map((c) => ({ ticker: c.id, name: c.name })))
@@ -44,7 +64,7 @@ export async function carregarTemporada2025(servidor: ServidorEnsaio, opcoes: Op
   const linhas = await db.select({ id: clubs.id, ticker: clubs.ticker }).from(clubs);
   const clubIds = new Map(linhas.map((c) => [c.ticker!, c.id]));
 
-  const admin = await criarConta(db, servidor, { nickname: "admin_ensaio", role: "admin" });
+  const admin = opcoes.admin ?? (await criarConta(db, servidor, { nickname: opcoes.adminApelido ?? "admin_ensaio", role: "admin" }));
   const chamar = async (method: "POST" | "PUT" | "PATCH", url: string, payload?: object) => {
     const res = await servidor.app.inject({ method, url, payload, headers: await admin.auth() });
     if (res.statusCode >= 300) throw new Error(`${method} ${url} → ${res.statusCode}: ${res.body}`);
