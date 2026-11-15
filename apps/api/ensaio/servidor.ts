@@ -33,6 +33,8 @@ export interface ServidorEnsaio {
 
 export interface OpcoesServidor {
   databaseUrl: string;
+  /** Porta da API (padrão 0, qualquer uma livre). O navegador pede uma fixa, para o site de teste apontar para ela. */
+  porta?: number;
   inicio: Date;
   poolSize?: number;
   /** Temporada curta (ensaio rápido): só as primeiras rodadas do Brasileirão. */
@@ -69,7 +71,7 @@ export async function criarServidorEnsaio(opcoes: OpcoesServidor): Promise<Servi
           .overrideProvider(BotRunnerSettings)
           .useValue({ config: ritmo }),
     });
-    await app.listen(0, "127.0.0.1");
+    await app.listen(opcoes.porta ?? 0, "127.0.0.1");
     servidor.app = app;
     servidor.url = (await app.getUrl()).replace("[::1]", "127.0.0.1");
   };
@@ -102,6 +104,8 @@ export async function abrirControle(
       res.writeHead(status, { "content-type": "application/json" });
       res.end(JSON.stringify(corpo));
     };
+    // uma página aberta no navegador do desenvolvedor não pode mexer no relógio nem nos cenários: quem manda `Origin` é recusado
+    if (req.headers.origin) return responder(403, { erro: "a porta de controle não atende navegador" });
     try {
       const partes: Buffer[] = [];
       for await (const parte of req) partes.push(parte as Buffer);

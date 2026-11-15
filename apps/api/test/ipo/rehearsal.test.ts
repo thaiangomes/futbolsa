@@ -223,12 +223,12 @@ describe("ensaio do IPO inteiro pela API", () => {
       expect(await job.runOnce()).toMatchObject({ skipped: false, opening: { status: "idle" }, closing: { status: "idle" }, settlement: { status: "idle" } });
       clock.set(new Date(DATES.opensAt));
       const opened = (await job.runOnce()) as Exclude<IpoJobReport, { skipped: true }>;
-      expect(opened.opening).toMatchObject({ status: "opened", seasonId, credited: PLAYERS + 1 });
+      expect(opened.opening).toMatchObject({ status: "opened", seasonId, credited: PLAYERS });
 
-      // Carteiras: 30 jogadores (mais a do admin, que não oferta) e 18 bots com R$ 100.000,00 e a tesouraria
+      // Carteiras: 30 jogadores (o admin não joga e fica sem carteira) e 18 bots com R$ 100.000,00 e a tesouraria
       // sem caixa, todas abertas pela abertura.
       const walletRows = await db.select().from(wallets).where(eq(wallets.seasonId, seasonId));
-      expect(walletRows).toHaveLength(PLAYERS + 1 +PROFILES.length * BOTS_PER_PROFILE + 1);
+      expect(walletRows).toHaveLength(PLAYERS + PROFILES.length * BOTS_PER_PROFILE + 1);
       for (const w of walletRows) expect(w.cash).toBe(w.ownerType === "treasury" ? 0 : INITIAL_CASH);
       const treasuryId = walletRows.find((w) => w.ownerType === "treasury")!.id;
       const playerWallet = new Map(walletRows.filter((w) => w.ownerType === "user").map((w) => [w.userId!, w.id]));
@@ -495,7 +495,7 @@ describe("ensaio do IPO inteiro pela API", () => {
         );
       const before = { users: await cashOf("user"), bots: await cashOf("bot"), treasury: await cashOf("treasury"), all: await totalCash(db, seasonId) };
       expect(before.treasury).toBe(0);
-      expect(before.all).toBe((PLAYERS + 1 + PROFILES.length * BOTS_PER_PROFILE) * INITIAL_CASH);
+      expect(before.all).toBe((PLAYERS + PROFILES.length * BOTS_PER_PROFILE) * INITIAL_CASH);
 
       // ---- Fechar e liquidar: só a tarefa --------------------------------------------------------------------------------
       const report = (await job.runOnce()) as Exclude<IpoJobReport, { skipped: true }>;

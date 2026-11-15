@@ -52,7 +52,7 @@ export class AccountsService {
         status: season.status as never,
         ipoOpensAt: season.ipoOpensAt?.toISOString() ?? null,
         hasWallet: Boolean(wallet),
-        needsEntry: !wallet && ENTRY_STATUSES.has(season.status) && (await this.entryWindowOpen(user)),
+        needsEntry: !wallet && row!.role === "player" && ENTRY_STATUSES.has(season.status) && (await this.entryWindowOpen(user)),
       };
     }
     return {
@@ -107,7 +107,8 @@ export class AccountsService {
           .insert(authIdentities)
           .values({ provider: identity.provider, subject: identity.subject, userId: user!.id, createdAt: now });
         await tx.db.update(invites).set({ usedAt: now }).where(eq(invites.email, identity.email));
-        if (season?.status === "ipo_open") {
+        // o admin administra e não joga: não recebe carteira (decisão do Thaian em 2026-11-14)
+        if (season?.status === "ipo_open" && !isBootstrapAdmin) {
           await this.ledger.openWallet(tx, {
             seasonId: season.id,
             owner: { type: "user", userId: user!.id },

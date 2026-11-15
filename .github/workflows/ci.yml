@@ -43,6 +43,53 @@ jobs:
       - name: Build do site
         run: npm run build -w @futbolsa/web
 
+  # T26 da F16 (Plano do ensaio, carga e testes no navegador): as jornadas do site no Chromium, contra a API de verdade, o
+  # banco do próprio job e o site de teste (login falso só neste build). Um trabalhador só. O roteiro do Supabase de verdade
+  # (`npm run e2e:supabase`) nunca roda aqui: usa segredos do projeto real.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: futbolsa
+          POSTGRES_PASSWORD: futbolsa
+          POSTGRES_DB: futbolsa_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U futbolsa -d futbolsa_test"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://futbolsa:futbolsa@localhost:5433/futbolsa_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build:libs
+      - name: Chromium do Playwright
+        run: npx playwright install --with-deps chromium
+      # o build normal fica pronto antes: a guarda do build confere que o site que vai ao ar não tem o login falso
+      - name: Build normal do site (para a guarda do build)
+        run: npm run build -w @futbolsa/web
+      - name: Jornadas no navegador
+        run: npm run e2e -w @futbolsa/web
+      - name: Relatório do Playwright (só se falhar)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7
+
   # T10 do Plano do banco: a imagem da API aplica as migrações antes de subir, e subir
   # de novo não aplica nada. Roda aqui porque o Docker fica desligado no computador do Thaian.
   conteiner:

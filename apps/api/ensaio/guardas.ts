@@ -8,6 +8,11 @@ const BANCOS_RECUSADOS = [/supabase\.(co|com)$/i, /\.neon\.tech$/i, /rds\.amazon
 
 /** Só servidor local ou do CI: localhost, 127.0.0.1, ::1 ou um serviço de contêiner sem ponto no nome. */
 export function recusarBancoNaoLocal(url: string): void {
+  // o `pg` dá prioridade a `?host=` e `?hostaddr=` sobre o endereço da URL, e um host vazio cai no PGHOST: nenhum dos dois vale
+  const bruta = new URL(url);
+  if (bruta.searchParams.has("host") || bruta.searchParams.has("hostaddr") || bruta.hostname === "") {
+    throw new Error("O ensaio só aceita a URL do banco com o host escrito no endereço (sem ?host= e sem host vazio).");
+  }
   const host = new URL(url).hostname.replace(/^\[|\]$/g, "");
   if (BANCOS_RECUSADOS.some((r) => r.test(host))) {
     throw new Error(`O ensaio se recusa a ligar num banco hospedado (${host}). Use o Postgres local.`);

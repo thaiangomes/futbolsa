@@ -75,7 +75,7 @@ describe("recálculo: um pagamento que nasce depois do fechamento", () => {
 describe("recálculo: cascata, conjunto de participantes e pedidos", () => {
   const { ctx, closeMonth, request, rows, version } = useRecalc();
 
-  it("cascata: um evento de 30/06 refaz junho, julho e agosto; o conjunto de quem estava no oficial não muda", async () => {
+  it("rankings 25: cascata: um evento de 30/06 refaz junho, julho e agosto; o conjunto de quem estava no oficial não muda", async () => {
     const { database, s, fla, cor } = ctx;
     const ana = await player(database.db, s.seasonId);
     const bruno = await player(database.db, s.seasonId);

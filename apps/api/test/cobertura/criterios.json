@@ -1,0 +1,38 @@
+{
+  "contagem": "refeita em 2026-11-14 a partir das listas numeradas das especificações do vault (Funcionalidades/): 264 critérios",
+  "total": {
+    "ipo": 29,
+    "livro": 45,
+    "dividendos": 29,
+    "carteira": 45,
+    "entrada": 16,
+    "rankings": 28,
+    "admin": 45,
+    "conta": 27
+  },
+  "excecoes": {
+    "conta": {
+      "3": "Google de verdade: só no roteiro manual da A11 do plano de login (o e-mail e a senha na mesma conta do Google não se automatizam sem a conta Google do Thaian)."
+    },
+    "ipo": {
+      "25": "Sem teste com o número no nome. A regra (clube de fora da lista que chega às quartas da Copa do Brasil não ganha IPO) depende da lista de clubes fixa da temporada; revisar com o Thaian se um teste próprio vale a pena (item de Problemas conhecidos da F16)."
+    },
+    "livro": {
+      "38": "O painel do clube com pagos, a receber e recompra \"se a temporada acabasse agora\" (R$ 2,70, R$ 0,30, R$ 4,50) não tem teste com o número: a tela do clube mostra o preço, o livro e o gráfico, mas o painel de dividendos por clube não foi achado no navegador (item de Problemas conhecidos da F16)."
+    },
+    "carteira": {
+      "7": "Sem teste com o número: o dividendo sobre as ações totais, inclusive as que estão numa ordem de venda aberta (R$ 360,00). A foto do pagamento lê as ações totais, mas falta o teste com a ordem aberta (item de Problemas conhecidos da F16).",
+      "35": "Compra que executa inteira contra uma venda mais barata (paga R$ 3.900,00, reservado a zero): coberta em parte pelo teste do livro 3 (devolve a diferença do preço melhor), sem o caso exato do critério.",
+      "40": "Reservas de ordem e de oferta do IPO não aparecem como linhas no extrato, e a soma do extrato fecha com o caixa total: coberto pelos testes de invariantes (\"carteiras iguais à soma do extrato\") e pelo verificador do ensaio, sem teste com o número.",
+      "45": "O aviso \"em leilão até 15h40\" na carteira (posição, ordem e valor a mercado pelo preço de antes): a lista de clubes e a tela do clube têm o aviso testado; na carteira falta o teste (o ensaio não chega a um leilão na carteira)."
+    },
+    "entrada": {
+      "11": "Dividendo de quem entrou pela carteira índice (R$ 40,20 pelo FLA3, como qualquer dono): sem teste com o número; a foto do pagamento não distingue a origem das ações, mas o teste vale a pena (item de Problemas conhecidos da F16)."
+    },
+    "rankings": {
+      "24": "Patrimônio negativo no fechamento do mês (−R$ 250,00): o ranking aceita a base negativa (schema.test.ts), mas o fechamento de junho com retorno nulo não tem teste com o número.",
+      "26": "Rodada que fecha às 20h de 30/06 e só tem o placar importado em 01/07: o ranking de junho é recalculado na hora, sem esperar a aprovação. Há teste de equity-at (rankings 9), mas não do recálculo imediato.",
+      "27": "Bot desligado pelo admin no fechamento do mês aparece marcado como bot: coberto em parte (bot marcado na parcial e no oficial: admin 35 e rankings 6, 15, 18, 19 e 21), sem o caso do bot desligado."
+    }
+  }
+}

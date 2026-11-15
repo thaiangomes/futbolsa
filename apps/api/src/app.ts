@@ -20,7 +20,8 @@ export async function configureApp(app: NestFastifyApplication): Promise<void> {
   app.useWebSocketAdapter(new WsAdapter(app));
   // A API libera o CORS só para o endereço do site (WEB_ORIGIN).
   const origin = process.env.WEB_ORIGIN;
-  if (origin) app.enableCors({ origin });
+  // Sem `methods` o padrão do @fastify/cors é só GET, HEAD e POST: o preflight de PUT (oferta do IPO), PATCH e DELETE (cancelar) falharia no navegador.
+  if (origin) app.enableCors({ origin, methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"] });
 }
 
 /** Monta a aplicação sem abrir porta; main.ts e os testes usam a mesma. */

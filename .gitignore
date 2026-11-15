@@ -11,3 +11,8 @@ out/
 next-env.d.ts
 ensaio-saida/
 carga-saida/
+out-e2e/
+playwright-report/
+test-results/
+out-supabase/
+test-results-supabase/
