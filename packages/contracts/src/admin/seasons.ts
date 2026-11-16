@@ -104,7 +104,7 @@ export type PutCupBody = z.infer<typeof putCupBodySchema>;
 
 /**
  * A correção da tabela de uma copa no meio da temporada (item 16 da fila da partida de teste): a tabela inteira, com as fases que
- * faltavam, e o motivo (obrigatório, porque vai para o registro do admin). Só acrescenta fases: as que já estão ficam iguais.
+ * faltavam, e o motivo (obrigatório, porque vai para o registro do admin). As fases que já têm pagamento ficam como estão.
  */
 export const correctCupBodySchema = z.strictObject({
   phases: z.array(cupPhaseSchema).min(1),

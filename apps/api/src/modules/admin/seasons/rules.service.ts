@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import {
   ADMIN_ERROR_MESSAGES,
   COMMON_ERROR_MESSAGES,
@@ -14,7 +14,7 @@ import {
 import { validateCupTable } from "@futbolsa/engine";
 import { Clock } from "../../../infra/clock/index.js";
 import { DB, type Database, lockSeason, type Tx, withTransaction } from "../../../infra/db/index.js";
-import { cupPhases, matches, seasonCups, seasonRules, seasons, users } from "../../../infra/db/schema/index.js";
+import { cupPhases, matches, payoutEvents, seasonCups, seasonRules, seasons, users } from "../../../infra/db/schema/index.js";
 import { CUP_COMPETITIONS } from "../../../infra/db/schema/values.js";
 import { DomainError } from "../../../infra/http/index.js";
 import { cupFromRows } from "../../dividends/season-values/mapper.js";
@@ -112,8 +112,9 @@ export class RulesService {
 
   /**
    * Corrige a tabela de uma copa **depois** da abertura do IPO, para consertar um erro de configuração (item 16 da fila da
-   * partida de teste: a Copa do Brasil de 2026 veio sem a 4ª e a 5ª fase). Só acrescenta fases; as que já estão na tabela ficam
-   * com o mesmo valor, porque o que já foi pago não pode mudar por baixo. A exceção à trava do banco vale só dentro desta
+   * partida de teste: a Copa do Brasil de 2026 veio sem a 4ª e a 5ª fase). Fase que já tem pagamento (aguardando ou aprovado)
+   * fica na tabela com o mesmo valor e na mesma ordem, porque o que foi calculado não pode mudar por baixo; as outras podem ser
+   * acrescentadas, ajustadas ou tiradas. A exceção à trava do banco vale só dentro desta
    * transação (`futbolsa.cup_correction`), e o antes e o depois vão para o registro do admin, com o motivo. Os pagamentos das fases
    * novas nascem na próxima passada de fechamento, aguardando aprovação, com a foto das posições no fim de cada fase.
    */
@@ -129,10 +130,16 @@ export class RulesService {
       }
       const before = await this.phaseRows(tx, seasonId, competition);
       const next = new Map(body.phases.map((p) => [`${p.phaseKey}|${p.variant}`, p.perShare]));
-      // as fases que já existem ficam todas, com o mesmo valor, na mesma ordem relativa
-      const kept = body.phases.filter((p) => before.some((b) => b.phaseKey === p.phaseKey && b.variant === p.variant));
-      const sameOrder = JSON.stringify(kept.map((p) => [p.phaseKey, p.variant])) === JSON.stringify(before.map((b) => [b.phaseKey, b.variant]));
-      if (before.some((b) => next.get(`${b.phaseKey}|${b.variant}`) !== b.perShare) || !sameOrder) {
+      // as fases com pagamento ficam todas, com o mesmo valor, na mesma ordem relativa
+      const paid = await tx.db
+        .selectDistinct({ phase: payoutEvents.phase })
+        .from(payoutEvents)
+        .where(and(eq(payoutEvents.seasonId, seasonId), eq(payoutEvents.competition, competition), ne(payoutEvents.status, "superseded")));
+      const withPayout = new Set(paid.map((p) => p.phase));
+      const protectedBefore = before.filter((b) => withPayout.has(b.phaseKey));
+      const protectedNext = body.phases.filter((p) => withPayout.has(p.phaseKey) && before.some((b) => b.phaseKey === p.phaseKey && b.variant === p.variant));
+      const sameOrder = JSON.stringify(protectedNext.map((p) => [p.phaseKey, p.variant])) === JSON.stringify(protectedBefore.map((b) => [b.phaseKey, b.variant]));
+      if (protectedBefore.some((b) => next.get(`${b.phaseKey}|${b.variant}`) !== b.perShare) || !sameOrder) {
         throw new DomainError("cup_correction_invalid", 409, ADMIN_ERROR_MESSAGES.cup_correction_invalid);
       }
       const order = [...new Set(body.phases.map((p) => p.phaseKey))];

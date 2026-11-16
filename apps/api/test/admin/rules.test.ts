@@ -5,7 +5,7 @@ import { cupViewSchema, seasonRulesSchema } from "@futbolsa/contracts";
 import { COPA_DO_BRASIL } from "@futbolsa/engine";
 import { FixedClock } from "../../src/infra/clock/index.js";
 import { withTransaction } from "../../src/infra/db/index.js";
-import { adminLog, cupPhases, matches, seasonCups, seasonRules, seasons } from "../../src/infra/db/schema/index.js";
+import { adminLog, cupPhases, matches, payoutEvents, seasonCups, seasonRules, seasons } from "../../src/infra/db/schema/index.js";
 import { SeasonValuesService } from "../../src/modules/dividends/season-values/season-values.service.js";
 import { createAccount, type TestAccount } from "../support/accounts.js";
 import { expectAdminOnly } from "../support/admin-routes.js";
@@ -202,7 +202,7 @@ describe("regras e copas da temporada", () => {
     expect(COPA_DO_BRASIL.phases).toHaveLength(7);
   });
 
-  it("item 16: a correção depois do IPO só acrescenta fases, entra no registro do admin e não abre a trava para mais nada", async () => {
+  it("item 16: a correção depois do IPO mexe só nas fases sem pagamento, entra no registro do admin e não abre a trava para mais nada", async () => {
     await call("GET", `/admin/seasons/${seasonId}/rules`); // a temporada ganha os valores dela na primeira consulta
     await withTransaction(database.db, (tx) => values.lockSeasonValues(tx, seasonId, clock.now()));
     const url = `/admin/seasons/${seasonId}/cups/sulamericana/correction`;
@@ -212,10 +212,15 @@ describe("regras e copas da temporada", () => {
     const depois = atual.findIndex((p) => p.phaseKey !== atual[0]!.phaseKey);
     const comNova = [...atual.slice(0, depois), nova, ...atual.slice(depois)];
     const motivo = "A fase nova ficou fora da tabela copiada da temporada anterior.";
+    // a fase de grupos já tem um pagamento aguardando aprovação: ela não pode mudar
+    await database.db.insert(payoutEvents).values({
+      seasonId, clubId: clubIds.get("FLA3")!, eventKey: "cup_phase|sulamericana|grupos|FLA3", kind: "cup_phase", reason: "avançou da fase grupos",
+      competition: "sulamericana", round: null, phase: atual[0]!.phaseKey, perShare: atual[0]!.perShare, closedAt: clock.now(), status: "pending", createdAt: clock.now(),
+    });
 
     // sem motivo não passa: o registro do admin é obrigatório
     expect((await call("POST", url, { phases: comNova })).statusCode).toBe(400);
-    // mudar o valor de uma fase que já existe, tirar uma fase ou trocar a ordem das que existem: recusado, e a tabela não muda
+    // mudar o valor da fase com pagamento, tirá-la ou trocar a ordem das variantes dela: recusado, e a tabela não muda
     for (const ruim of [
       atual.map((p, i) => (i === 0 ? { ...p, perShare: p.perShare + 1 } : p)),
       atual.slice(1),
@@ -228,13 +233,16 @@ describe("regras e copas da temporada", () => {
     expect((await cup("sulamericana")).phases).toEqual(atual);
     expect(await logs("cup.correct")).toHaveLength(0);
 
-    // acrescentar uma fase passa, mesmo com o IPO aberto
-    const ok = await call("POST", url, { phases: comNova, reason: motivo });
+    // acrescentar uma fase e ajustar o valor de outra sem pagamento passa, mesmo com o IPO aberto
+    const ultima = atual[atual.length - 1]!;
+    const corrigida = comNova.map((p) => (p.phaseKey === ultima.phaseKey && p.variant === ultima.variant ? { ...p, perShare: p.perShare + 5 } : p));
+    const ok = await call("POST", url, { phases: corrigida, reason: motivo });
     expect(ok.statusCode, JSON.stringify(ok.json())).toBe(200);
     const view = cupViewSchema.parse(ok.json());
     expect(view.phases.map((p) => p.phaseKey)).toEqual(comNova.map((p) => p.phaseKey));
     expect(view.phases.find((p) => p.phaseKey === "fase-nova")!.perShare).toBe(33);
-    for (const p of atual) expect(view.phases).toContainEqual(p);
+    expect(view.phases.find((p) => p.phaseKey === ultima.phaseKey && p.variant === ultima.variant)!.perShare).toBe(ultima.perShare + 5);
+    for (const p of atual.filter((x) => x.phaseKey === atual[0]!.phaseKey)) expect(view.phases).toContainEqual(p);
 
     // o antes e o depois ficam no registro, com o motivo e quem fez
     const [registro] = await logs("cup.correct");
@@ -243,7 +251,7 @@ describe("regras e copas da temporada", () => {
     expect((registro!.after as { phases: unknown[] }).phases).toHaveLength(atual.length + 1);
 
     // a exceção vale só dentro da correção: mudar a tabela por fora, pela tela normal ou pelo banco, segue recusado
-    expect((await call("PUT", `/admin/seasons/${seasonId}/cups/sulamericana`, { phases: comNova })).statusCode).toBe(409);
+    expect((await call("PUT", `/admin/seasons/${seasonId}/cups/sulamericana`, { phases: corrigida })).statusCode).toBe(409);
     await expect(database.db.insert(cupPhases).values({ seasonId, competition: "sulamericana", phaseKey: "solta", variant: "advance", ord: 99, perShare: 1 })).rejects.toThrow();
     await expect(database.db.update(seasonRules).set({ aPerPoint: 1 }).where(eq(seasonRules.seasonId, seasonId))).rejects.toThrow();
     expect((await cup("sulamericana")).phases).toEqual(view.phases);
