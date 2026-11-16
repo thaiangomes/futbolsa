@@ -54,7 +54,7 @@ test.describe.serial("jornada 3: mercado", () => {
     await entrarComo(page, "ana");
     await page.goto("/mercado");
     const linha = page.locator(`[data-ticker="${TICKER}"]`);
-    await expect(linha.getByTestId("selo")).toBeVisible();
+    await expect(linha.getByTestId("selo").first()).toBeVisible();
     await expect(linha.getByTestId("proximo-jogo")).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Próximo jogo" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Você tem" })).toBeVisible();
