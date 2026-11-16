@@ -111,7 +111,7 @@ export function ClubView({ ticker, api, logged, chart = null, position }: { tick
         </div>
       </div>
       <NextGamesCard ticker={ticker} api={api} />
-      <ClubValueCard ticker={ticker} name={NAMES.get(ticker)} price={view.price.displayed} api={api} />
+      <ClubValueCard ticker={ticker} name={NAMES.get(ticker)} price={view.price.displayed} api={api} logged={logged} />
     </div>
   );
 }

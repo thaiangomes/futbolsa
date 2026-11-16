@@ -86,7 +86,7 @@ export function MobileClub({
       {tab === "sobre" && (
         <>
           <NextGamesCard ticker={state.ticker} api={api} />
-          <ClubValueCard ticker={state.ticker} price={state.price.displayed} api={api} />
+          <ClubValueCard ticker={state.ticker} price={state.price.displayed} api={api} logged={logged} />
         </>
       )}
       {tab === "minhas" && logged && <MyOrders orders={orders} ticker={state.ticker} onCancel={onCancel} busyId={busyId} error={cancelError} />}

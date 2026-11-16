@@ -1,11 +1,13 @@
 "use client";
 
-import { type ClubList, type EventEnvelope, type PriceEvent, priceEventSchema } from "@futbolsa/contracts";
+import { type ClubList, type ClubValueView, type EventEnvelope, type PriceEvent, priceEventSchema, type Projection } from "@futbolsa/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChannel } from "../../realtime/react";
 import { formatCents } from "../../lib/format";
 import type { MarketApi } from "./api";
 import { competitionName, formatKickoffShort } from "../club-games";
+import { outlookShort, projectedValue } from "../club-value/model";
+import { useProjectedViews } from "../club-value/use-projections";
 import { ClubBadgeMark } from "../portfolio/club-badge";
 import { formatShares } from "../portfolio/format";
 import type { MyPositions } from "../portfolio/use-positions";
@@ -84,8 +86,23 @@ export function useClubList(api: MarketApi): { list: ClubList | null; error: boo
  * A lista de clubes (`/mercado`, decisão D6 do plano): ticker, nome, preço, variação do dia e os avisos "em jogo agora",
  * "em leilão até 15h40" e "suspenso", com link para a tela do clube.
  */
-export function ClubList({ api, positions }: { api: MarketApi; positions?: MyPositions | null }) {
+/** A célula "Sua projeção" (critério 55): o valor por ação e o upside ou downside em relação ao preço; "revisar" se a projeção ficou desatualizada; vazia sem projeção. */
+function ProjectionCell({ projection, view, price }: { projection: Projection | undefined; view: ClubValueView | undefined; price: number }) {
+  if (!projection) return <span className="muted">—</span>;
+  if (!view) return <span className="muted">…</span>;
+  const v = projectedValue(view, price, projection);
+  if (v.status === "stale") return <span className="chip chip-down" title="Sua projeção ficou desatualizada: abra o clube, revise e salve de novo.">revisar</span>;
+  const tone = v.outlook?.kind === "downside" ? "down" : v.outlook?.kind === "upside" ? "up" : "muted";
+  return (
+    <span>
+      <span className="b">{formatCents(v.value)}</span> <span className={`xs ${tone}`}>· {outlookShort(v.outlook)}</span>
+    </span>
+  );
+}
+
+export function ClubList({ api, positions, projections }: { api: MarketApi; positions?: MyPositions | null; projections?: ReadonlyMap<string, Projection> | null }) {
   const { list, error } = useClubList(api);
+  const views = useProjectedViews(api, projections);
   if (!list) {
     return error ? (
       <div className="note note-err" role="alert"><div>Não foi possível carregar os clubes. Tente de novo em instantes.</div></div>
@@ -105,7 +122,7 @@ export function ClubList({ api, positions }: { api: MarketApi; positions?: MyPos
       <div className="scroll-x">
         <table className="tbl">
           <thead>
-            <tr><th>Clube</th><th className="r">Preço</th><th className="r">Variação</th>{positions && <th className="r">Você tem</th>}<th>Próximo jogo</th><th>Estado</th></tr>
+            <tr><th>Clube</th><th className="r">Preço</th><th className="r">Variação</th>{positions && <th className="r">Você tem</th>}{projections && <th className="r">Sua projeção</th>}<th>Próximo jogo</th><th>Estado</th></tr>
           </thead>
           <tbody>
             {list.clubs.map((c) => (
@@ -124,6 +141,11 @@ export function ClubList({ api, positions }: { api: MarketApi; positions?: MyPos
                 {positions && (
                   <td className="r num" data-testid="minha-posicao">
                     {(positions.get(c.ticker)?.shares ?? 0) > 0 ? formatShares(positions.get(c.ticker)!.shares) : <span className="muted">—</span>}
+                  </td>
+                )}
+                {projections && (
+                  <td className="r num" data-testid="minha-projecao">
+                    <ProjectionCell projection={projections.get(c.ticker)} view={views.get(c.ticker)} price={c.price} />
                   </td>
                 )}
                 <td data-testid="proximo-jogo">

@@ -1,4 +1,4 @@
-import type { ClubValueCup, ClubValueView } from "@futbolsa/contracts";
+import type { ClubValueCup, ClubValueView, Projection, ProjectionBody } from "@futbolsa/contracts";
 import { CHAMPION, ClubBetError, clubValue, cupMissing, type ClubBet, type ClubValueInput, type ClubValueResult } from "@futbolsa/engine/engine/clubValue";
 
 /**
@@ -112,3 +112,36 @@ export function simulate(view: ClubValueView, displayedPrice: number, form: BetF
   }
 }
 
+
+/** A projeção salva volta ao formulário do simulador. */
+export function formFromProjection(p: Pick<Projection, "points" | "position" | "cups">): BetForm {
+  return { points: String(p.points), position: String(p.position), cups: { ...p.cups } };
+}
+
+/** O formulário vira o que se salva: só premissas. Com o campeonato fechado, pontos e colocação são os de hoje (já foram pagos). */
+export function projectionFromForm(view: ClubValueView, form: BetForm): ProjectionBody {
+  const open = view.leagueOpen;
+  return {
+    points: open ? Number(form.points) : view.points,
+    position: open ? Number(form.position) : (view.position ?? 1),
+    cups: Object.fromEntries(Object.entries(form.cups).filter(([, v]) => v !== "")),
+  };
+}
+
+/** O que a coluna "Sua projeção" mostra (critério 55): o valor e o upside ou downside, ou "desatualizada" (revisar). */
+export type ProjectedValue =
+  | { status: "ok"; value: number; outlook: { kind: "upside" | "downside" | "even"; percent: number } | null }
+  | { status: "stale" };
+
+/** Refaz o valor da projeção salva com os dividendos e as fases de agora; premissa que o clube já ultrapassou deixa a projeção desatualizada. */
+export function projectedValue(view: ClubValueView, price: number, p: Pick<Projection, "points" | "position" | "cups">): ProjectedValue {
+  const sim = simulate(view, price, formFromProjection(p));
+  if (!sim.ok || !sim.result.simulation) return { status: "stale" };
+  return { status: "ok", value: sim.result.simulation.value, outlook: sim.result.simulation.outlook };
+}
+
+/** A frase curta da coluna do Mercado (`downside 10%`, `upside 270%`, `igual`). */
+export function outlookShort(o: { kind: "upside" | "downside" | "even"; percent: number } | null): string {
+  if (o === null) return "sem comparação";
+  return o.kind === "even" ? "igual" : `${o.kind} ${o.percent}%`;
+}

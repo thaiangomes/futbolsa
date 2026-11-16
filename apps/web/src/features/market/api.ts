@@ -8,6 +8,10 @@ import {
   type PlaceOrderBody,
   placeOrderBodySchema,
   placeOrderResponseSchema,
+  type ProjectionBody,
+  projectionBodySchema,
+  projectionListSchema,
+  projectionSchema,
 } from "@futbolsa/contracts";
 import type { ApiClient } from "../../lib/api";
 
@@ -29,6 +33,11 @@ export function marketApi(api: ApiClient) {
         body: placeOrderBodySchema.parse(body),
         headers: { "Idempotency-Key": idempotencyKey },
       }),
+    /** As projeções do próprio jogador por clube (critérios 54 a 56); privadas, só logado. */
+    projections: () => api.request(projectionListSchema, "/me/projections"),
+    /** Salva (ou troca) a projeção do jogador para o clube. */
+    saveProjection: (ticker: string, body: ProjectionBody) =>
+      api.request(projectionSchema, `/me/projections/${encodeURIComponent(ticker)}`, { method: "PUT", body: projectionBodySchema.parse(body) }),
     cancelOrder: (id: number) => api.request(cancelOrderResponseSchema, `/orders/${id}`, { method: "DELETE" }),
     openOrders: () => api.request(listOrdersResponseSchema, "/orders?status=open"),
   };

@@ -182,3 +182,72 @@ describe("cartão \"Quanto vale para você\" na tela do clube", () => {
     expect(outlookText(4000, { kind: "even", percent: 0 })).toBe("O preço agora está igual à sua conta.");
   });
 });
+
+describe("minha projeção no cartão (critérios 54 e 55)", () => {
+  const dom = useDom();
+  const pick = async (selector: string, value: string) => {
+    const select = dom.$(selector) as HTMLSelectElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, value);
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  };
+  const salva = { ticker: "FLA3", points: 68, position: 3, cups: { "copa-do-brasil": "quartas", libertadores: "quartas" }, updatedAt: "2027-06-10T18:00:00.000Z" };
+  const apiWith = (saved: typeof salva | null) => ({
+    dividends: vi.fn(async () => fla3),
+    projections: vi.fn(async () => ({ projections: saved ? [saved] : [] })),
+    saveProjection: vi.fn(async (_t: string, body: object) => ({ ...salva, ...body })),
+  });
+  const abrir = async (api: ReturnType<typeof apiWith>, logged = true) => {
+    await dom.render(createElement(ClubValueCard, { ticker: "FLA3", name: "Flamengo", price: 4430, api, logged }));
+    await dom.settle();
+    await dom.settle();
+    await dom.settle();
+  };
+
+  it("livro 54: Salvar projeção manda só as premissas (pontos, colocação e a fase de cada copa)", async () => {
+    const api = apiWith(null);
+    await abrir(api);
+    await dom.type("#sim-pontos", "68");
+    await pick("#sim-colocacao", "3");
+    await pick("#sim-copa-copa-do-brasil", "quartas");
+    await pick("#sim-copa-libertadores", "quartas");
+    await dom.click(dom.$("[data-testid=salvar-projecao]"));
+    await dom.settle();
+    expect(api.saveProjection).toHaveBeenCalledWith("FLA3", { points: 68, position: 3, cups: { "copa-do-brasil": "quartas", libertadores: "quartas" } });
+    expect(dom.$("[data-testid=projecao-salva]")).not.toBeNull();
+  });
+
+  it("livro 54: ao reabrir, o cartão já vem com a projeção salva e o valor refeito (R$ 39,93)", async () => {
+    await abrir(apiWith(salva));
+    expect((dom.$("#sim-pontos") as HTMLInputElement).value).toBe("68");
+    expect((dom.$("#sim-colocacao") as HTMLSelectElement).value).toBe("3");
+    expect((dom.$("#sim-copa-copa-do-brasil") as HTMLSelectElement).value).toBe("quartas");
+    expect(dom.$("[data-testid=sim-valor]").textContent).toBe("R$ 39,93");
+    expect(dom.$("[data-testid=projecao-desatualizada]")).toBeNull();
+  });
+
+  it("livro 55: projeção que o clube já ultrapassou abre desatualizada, com o aviso, e salvar fica travado até revisar", async () => {
+    await abrir(apiWith({ ...salva, points: 10 }));
+    expect(dom.$("[data-testid=projecao-desatualizada]")).not.toBeNull();
+    expect((dom.$("[data-testid=salvar-projecao]") as HTMLButtonElement).disabled).toBe(true);
+    await dom.type("#sim-pontos", "30");
+    expect((dom.$("[data-testid=salvar-projecao]") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("visitante não vê o botão e a API de projeções nem é chamada", async () => {
+    const api = apiWith(null);
+    await abrir(api, false);
+    expect(dom.$("[data-testid=salvar-projecao]")).toBeNull();
+    expect(api.projections).not.toHaveBeenCalled();
+  });
+
+  it("falha ao salvar mostra aviso calmo", async () => {
+    const api = apiWith(null);
+    api.saveProjection.mockRejectedValueOnce(new Error("fora"));
+    await abrir(api);
+    await dom.click(dom.$("[data-testid=salvar-projecao]"));
+    await dom.settle();
+    expect(dom.$("[data-testid=projecao-erro]")).not.toBeNull();
+  });
+});

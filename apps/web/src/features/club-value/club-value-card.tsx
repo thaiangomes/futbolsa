@@ -1,6 +1,6 @@
 "use client";
 
-import type { ClubValueView } from "@futbolsa/contracts";
+import type { ClubValueView, Projection, ProjectionBody, ProjectionList } from "@futbolsa/contracts";
 import { buybackIfEndedNow, type ClubValueSimulation } from "@futbolsa/engine/engine/clubValue";
 import { useEffect, useMemo, useState } from "react";
 import { formatCents } from "../../lib/format";
@@ -10,15 +10,20 @@ import {
   CUP_NAMES,
   cupOptions,
   cupStateText,
+  formFromProjection,
   initialForm,
   MAX_POINTS,
   POSITIONS,
+  projectionFromForm,
   simulate,
 } from "./model";
 
 /** Só o que o cartão pede da API (o `MarketApi` inteiro também serve). */
 export interface ClubValueApi {
   dividends(ticker: string): Promise<ClubValueView>;
+  /** As projeções do jogador e o salvar (critérios 54 a 56); sem elas o cartão não oferece "Salvar projeção". */
+  projections?(): Promise<ProjectionList>;
+  saveProjection?(ticker: string, body: ProjectionBody): Promise<Projection>;
 }
 
 /** Lê o que o cartão precisa uma vez ao abrir: pago, a receber, pontos e fases das copas mudam a cada rodada, não a cada negócio. */
@@ -46,10 +51,11 @@ export function useClubValue(api: ClubValueApi, ticker: string): { view: ClubVal
  * Brasileirão, a colocação final e até onde ele vai em cada copa, e vê os dividendos que faltam, a recompra e o valor por ação
  * na conta dele comparado com o preço. Usa só os valores fixos da temporada e o que o jogador informou: nunca o valor justo da casa.
  */
-export function ClubValueCard({ ticker, name, price, api }: { ticker: string; name?: string; price: number; api: ClubValueApi }) {
+export function ClubValueCard({ ticker, name, price, api, logged = false }: { ticker: string; name?: string; price: number; api: ClubValueApi; logged?: boolean }) {
   const { view, status } = useClubValue(api, ticker);
+  const saved = useSavedProjection(api, ticker, logged);
   const title = `Quanto vale o ${ticker} para você?`;
-  if (!view) {
+  if (!view || saved === "loading") {
     return (
       <section className="card" aria-labelledby="t-valor" data-testid="valor-cartao">
         <div className="card-h"><h2 className="card-t" id="t-valor">{title}</h2></div>
@@ -62,18 +68,55 @@ export function ClubValueCard({ ticker, name, price, api }: { ticker: string; na
   return (
     <>
       <SituationCard view={view} />
-      <Loaded view={view} name={name ?? ticker} price={price} title={title} />
+      <Loaded view={view} name={name ?? ticker} price={price} title={title} ticker={ticker} api={api} canSave={logged && !!api.saveProjection} saved={saved} />
     </>
   );
 }
 
-function Loaded({ view, name, price, title }: { view: ClubValueView; name: string; price: number; title: string }) {
-  const [form, setForm] = useState<BetForm>(() => initialForm(view));
+/** A projeção salva do jogador para o clube: `"loading"` enquanto lê, `null` sem projeção (ou sem login, ou se a leitura falhar). */
+function useSavedProjection(api: ClubValueApi, ticker: string, logged: boolean): Projection | null | "loading" {
+  const [state, setState] = useState<Projection | null | "loading">(logged && api.projections ? "loading" : null);
+  useEffect(() => {
+    if (!logged || !api.projections) {
+      setState(null);
+      return;
+    }
+    let alive = true;
+    setState("loading");
+    api.projections().then(
+      (r) => alive && setState(r.projections.find((p) => p.ticker === ticker) ?? null),
+      () => alive && setState(null),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [api, ticker, logged]);
+  return state;
+}
+
+function Loaded({ view, name, price, title, ticker, api, canSave, saved }: { view: ClubValueView; name: string; price: number; title: string; ticker: string; api: ClubValueApi; canSave: boolean; saved: Projection | null }) {
+  // abre com a projeção salva (critério 54), mesmo desatualizada: o aviso pede para revisar; sem ela, o clube como está
+  const [form, setForm] = useState<BetForm>(() => (saved ? formFromProjection(saved) : initialForm(view)));
+  const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const staleSaved = saved !== null && !simulate(view, price, formFromProjection(saved)).ok;
   const sim = useMemo(() => simulate(view, price, form), [view, price, form]);
   const buybackNow = buybackIfEndedNow(view.paid, view.toReceive, view.buybackMultipleBp);
   const multiple = (view.buybackMultipleBp / 10_000).toLocaleString("pt-BR");
   const leagueName = view.league === "brasileirao-a" ? "Brasileirão" : "Série B";
-  const set = (patch: Partial<BetForm>) => setForm((f) => ({ ...f, ...patch }));
+  const set = (patch: Partial<BetForm>) => {
+    setSaving("idle");
+    setForm((f) => ({ ...f, ...patch }));
+  };
+  const save = async () => {
+    if (!sim.ok || !api.saveProjection) return;
+    setSaving("saving");
+    try {
+      await api.saveProjection(ticker, projectionFromForm(view, form));
+      setSaving("saved");
+    } catch {
+      setSaving("error");
+    }
+  };
   const pointsOk = sim.ok || !/pontos/.test(sim.message);
 
   return (
@@ -93,6 +136,11 @@ function Loaded({ view, name, price, title }: { view: ClubValueView; name: strin
         <div className="g-2" style={{ gap: 24 }}>
           <div className="stack" style={{ gap: 12 }}>
             <span className="lbl">O que você acha que vai acontecer até o fim da temporada?</span>
+            {staleSaved && (
+              <div className="note note-err" role="status" data-testid="projecao-desatualizada">
+                <div>Sua projeção salva ficou desatualizada: o clube já passou de algo que você apostou. Revise e salve de novo.</div>
+              </div>
+            )}
             {view.leagueOpen ? (
               <>
                 <div className="field">
@@ -138,6 +186,13 @@ function Loaded({ view, name, price, title }: { view: ClubValueView; name: strin
               <Account view={view} sim={sim.result.simulation} price={price} multiple={multiple} />
             ) : (
               <div className="note note-err" role="alert" data-testid="sim-erro"><div>{sim.ok ? "Preencha a aposta." : sim.message}</div></div>
+            )}
+            {canSave && (
+              <div className="stack-s" style={{ gap: 6 }}>
+                <button type="button" className="btn" data-testid="salvar-projecao" disabled={!sim.ok || saving === "saving"} onClick={save}>Salvar projeção</button>
+                {saving === "saved" && <span className="xs up" role="status" data-testid="projecao-salva">Projeção salva. Ela aparece no Mercado, só para você.</span>}
+                {saving === "error" && <span className="xs down" role="alert" data-testid="projecao-erro">Não foi possível salvar. Tente de novo.</span>}
+              </div>
             )}
             <span className="xs muted">
               Conta simplificada: não desconta o tempo até cada pagamento nem o risco de errar. Os valores por ponto, colocação, fase e o múltiplo da
