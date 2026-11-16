@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, count, desc, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, lt, ne, sql, type SQL } from "drizzle-orm";
 import {
   COMMON_ERROR_MESSAGES,
   type PayoutEventView,
@@ -29,7 +29,9 @@ export class PreviewService {
 
   async list(query: PayoutListQuery): Promise<PayoutListResponse> {
     const season = await currentSeason(this.db);
-    if (!season) return { events: [] };
+    const page = query.page;
+    const pageSize = query.pageSize;
+    if (!season) return { events: [], page, pageSize, total: 0, pendingTotal: 0 };
 
     // sem `status`: o que aguarda aprovação e o já aprovado; os substituídos só quando pedidos
     const filters: SQL[] = [
@@ -39,14 +41,30 @@ export class PreviewService {
     if (query.competition) filters.push(eq(payoutEvents.competition, query.competition));
     if (query.round !== undefined) filters.push(eq(payoutEvents.round, query.round));
     if (query.phase) filters.push(eq(payoutEvents.phase, query.phase));
+    if (query.kind) filters.push(eq(payoutEvents.kind, query.kind));
+    if (query.club) filters.push(eq(clubs.ticker, query.club.toUpperCase()));
+    if (query.closedFrom) filters.push(gte(payoutEvents.closedAt, new Date(query.closedFrom)));
+    if (query.closedBefore) filters.push(lt(payoutEvents.closedAt, new Date(query.closedBefore)));
+
+    const [{ total = 0 } = {}] = await this.db
+      .select({ total: count() })
+      .from(payoutEvents)
+      .innerJoin(clubs, eq(clubs.id, payoutEvents.clubId))
+      .where(and(...filters));
+    const [{ pending = 0 } = {}] = await this.db
+      .select({ pending: count() })
+      .from(payoutEvents)
+      .where(and(eq(payoutEvents.seasonId, season.id), eq(payoutEvents.status, "pending")));
 
     const rows = await this.db
       .select({ event: payoutEvents, club: clubs })
       .from(payoutEvents)
       .innerJoin(clubs, eq(clubs.id, payoutEvents.clubId))
       .where(and(...filters))
-      .orderBy(asc(payoutEvents.closedAt), asc(clubs.ticker), asc(payoutEvents.id));
-    if (rows.length === 0) return { events: [] };
+      .orderBy(desc(payoutEvents.closedAt), asc(clubs.ticker), desc(payoutEvents.id))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
+    if (rows.length === 0) return { events: [], page, pageSize, total, pendingTotal: pending };
 
     const ids = rows.map((r) => r.event.id);
     const [shares, credits, confirmed, owed] = await Promise.all([
@@ -89,6 +107,10 @@ export class PreviewService {
           },
         };
       }),
+      page,
+      pageSize,
+      total,
+      pendingTotal: pending,
     };
   }
 

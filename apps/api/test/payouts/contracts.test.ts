@@ -63,18 +63,25 @@ describe("contratos dos pagamentos", () => {
   });
 
   it("a lista de pagamentos filtra por situação, competição, rodada ou fase", () => {
-    expect(payoutListQuerySchema.parse({})).toEqual({});
+    expect(payoutListQuerySchema.parse({})).toEqual({ page: 1, pageSize: 50 });
     expect(payoutListQuerySchema.parse({ status: "pending", competition: "brasileirao-a", round: "10" })).toEqual({
       status: "pending",
       competition: "brasileirao-a",
       round: 10,
+      page: 1,
+      pageSize: 50,
     });
+    expect(payoutListQuerySchema.parse({ kind: "buyback", club: "FLA3", page: "2", pageSize: "20", closedFrom: "2027-06-01T03:00:00.000Z" })).toMatchObject({ kind: "buyback", club: "FLA3", page: 2, pageSize: 20 });
     expect(payoutListQuerySchema.parse({ competition: "copa-do-brasil", phase: "oitavas" }).phase).toBe("oitavas");
     expect(payoutListQuerySchema.safeParse({ status: "pago" }).success).toBe(false);
   });
 
   it("admin 2: a prévia traz motivo, valor por ação, ações de jogadores e de bots, total e a conferência", () => {
     const parsed = payoutListResponseSchema.parse({
+      page: 1,
+      pageSize: 50,
+      total: 1,
+      pendingTotal: 1,
       events: [
         {
           id: 7,

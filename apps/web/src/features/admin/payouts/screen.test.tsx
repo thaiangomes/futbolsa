@@ -48,8 +48,17 @@ const event = (over: Partial<PayoutEventView> & { id: number }): PayoutEventView
   settlement: { state: "not_started", credited: 0, expected: 0 },
   ...over,
 });
+/** A resposta da API: a página, o total do filtro e os aguardando da temporada inteira. */
+const page = (events: PayoutEventView[], extra: Partial<{ page: number; pageSize: number; total: number; pendingTotal: number }> = {}) => ({
+  events,
+  page: 1,
+  pageSize: 50,
+  total: events.length,
+  pendingTotal: events.filter((e) => e.status === "pending").length,
+  ...extra,
+});
 const fake = (events: PayoutEventView[], overrides: Partial<Record<keyof AdminApi, unknown>> = {}) =>
-  ({ payouts: async () => ({ events }), ...overrides }) as unknown as AdminApi;
+  ({ payouts: async () => page(events), ...overrides }) as unknown as AdminApi;
 
 describe("regras da lista de pagamentos (prancha 7a)", () => {
   it("o bloqueio pela classificação vem antes do aguardando, e o liquidando mostra o progresso", () => {
@@ -97,7 +106,8 @@ describe("tela de pagamentos aguardando (prancha 7a)", () => {
     expect(text()).toContain("Série A · rodada 16");
     expect(text()).toContain("Bloqueado: classificação não conferida");
     expect(text()).toContain("Confira a classificação oficial antes de aprovar");
-    expect(buttons("Aprovar todos os aguardando")[0]!.textContent).toContain("(1)");
+    // o total vem da API e conta todos os aguardando da temporada, inclusive o bloqueado (a aprovação diz depois o que ficou de fora)
+    expect(buttons("Aprovar todos os aguardando")[0]!.textContent).toContain("(2)");
     expect(buttons("Aprovar").filter((b) => b.textContent?.trim() === "Aprovar")).toHaveLength(1);
   });
 
@@ -124,7 +134,7 @@ describe("tela de pagamentos aguardando (prancha 7a)", () => {
 
   it("um evento substituído no meio mostra o erro da API e recarrega a lista", async () => {
     let calls = 0;
-    const payouts = vi.fn(async () => ({ events: [event({ id: calls++ === 0 ? 1 : 9 })] }));
+    const payouts = vi.fn(async () => page([event({ id: calls++ === 0 ? 1 : 9 })]));
     const approve = vi.fn(async () => {
       throw new ApiError(409, "event_superseded", "Este evento foi substituído por uma versão nova.");
     });
@@ -138,12 +148,69 @@ describe("tela de pagamentos aguardando (prancha 7a)", () => {
   it("enquanto há evento liquidando a tela recarrega sozinha", async () => {
     vi.useFakeTimers();
     const settling = event({ id: 1, status: "approved", settlement: { state: "settling", credited: 1, expected: 4 } });
-    const payouts = vi.fn(async () => ({ events: [settling] }));
+    const payouts = vi.fn(async () => page([settling]));
     await render(createElement(PayoutsScreen, { admin: fake([], { payouts }) }));
     expect(payouts).toHaveBeenCalledTimes(1);
     await act(async () => void (await vi.advanceTimersByTimeAsync(3100)));
     expect(payouts.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(text()).toContain("Liquidando 1 de 4 carteiras");
+  });
+
+  it("admin 47: a tela abre só com os aguardando, filtra por tipo, competição, clube e período, e pagina pela API", async () => {
+    const payouts = vi.fn(async (q?: unknown) => page([event({ id: 1 })], { total: 120, pendingTotal: 120, pageSize: 50, page: (q as { page?: number })?.page ?? 1 }));
+    await render(createElement(PayoutsScreen, { admin: fake([], { payouts }) }));
+    // abre com "só aguardando aprovação" ligado, na primeira página, 50 por vez
+    expect(payouts).toHaveBeenCalledTimes(1);
+    expect(payouts).toHaveBeenLastCalledWith({ status: "pending", page: 1, pageSize: 50 });
+    expect((container.querySelector("input[type=checkbox]") as HTMLInputElement).checked).toBe(true);
+    expect(text()).toContain("120 eventos · página 1 de 3");
+    // "aprovar todos" conta os aguardando da temporada inteira, não só os desta página
+    expect(buttons("Aprovar todos")[0]!.textContent).toContain("(120)");
+
+    // próxima página
+    await click(buttons("Próxima")[0]!);
+    expect(payouts).toHaveBeenLastCalledWith({ status: "pending", page: 2, pageSize: 50 });
+    expect(text()).toContain("página 2 de 3");
+
+    // os filtros só valem ao clicar em Filtrar, e voltam para a página 1
+    const set = async (el: Element, value: string) =>
+      act(async () => {
+        const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+        Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(el, value);
+        el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? "change" : "input", { bubbles: true }));
+      });
+    const form = container.querySelector("[data-testid=filtros]")!;
+    const selects = form.querySelectorAll("select");
+    await set(selects[0]!, "points");
+    await set(selects[1]!, "brasileirao-a");
+    await set(form.querySelector("input[type=text]")!, "fla3");
+    const dates = form.querySelectorAll("input[type=date]");
+    await set(dates[0]!, "2027-06-10");
+    await set(dates[1]!, "2027-06-12");
+    await click(form.querySelector("input[type=checkbox]")!);
+    expect(payouts).toHaveBeenCalledTimes(2);
+    await click(buttons("Filtrar")[0]!);
+    expect(payouts).toHaveBeenLastCalledWith({
+      kind: "points",
+      competition: "brasileirao-a",
+      club: "FLA3",
+      closedFrom: "2027-06-10T03:00:00.000Z",
+      closedBefore: "2027-06-13T03:00:00.000Z",
+      page: 1,
+      pageSize: 50,
+    });
+
+    // restaurar o padrão volta ao "só aguardando"
+    await click(buttons("Restaurar padrão")[0]!);
+    expect(payouts).toHaveBeenLastCalledWith({ status: "pending", page: 1, pageSize: 50 });
+  });
+
+  it("admin 47: sem resultado, diz que não há pagamento com os filtros", async () => {
+    await render(createElement(PayoutsScreen, { admin: fake([]) }));
+    expect(container.querySelector("[data-testid=sem-pagamentos]")!.textContent).toContain("Nenhum pagamento aguardando");
+    await click(container.querySelector("input[type=checkbox]")!);
+    await click(buttons("Filtrar")[0]!);
+    expect(container.querySelector("[data-testid=sem-pagamentos]")!.textContent).toContain("Nenhum pagamento com estes filtros");
   });
 
   it("os donos do evento abrem com a paginação e marcam bot e conta excluída", async () => {

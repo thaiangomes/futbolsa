@@ -31,7 +31,8 @@ describe("prévia dos pagamentos (GET /admin/payouts)", () => {
   let treasury: number;
 
   const call = (url: string) => app.inject({ method: "GET", url, headers: bearer(admin.token) });
-  const list = async (query = "") => payoutListResponseSchema.parse((await call(`/admin/payouts${query}`)).json()).events;
+  const listAll = async (query = "") => payoutListResponseSchema.parse((await call(`/admin/payouts${query}`)).json());
+  const list = async (query = "") => (await listAll(query)).events;
 
   const insertEvent = async (o: {
     ticker: string;
@@ -43,6 +44,7 @@ describe("prévia dos pagamentos (GET /admin/payouts)", () => {
     round?: number | null;
     phase?: string | null;
     reason?: string;
+    closedAt?: Date;
   }) => {
     const [row] = await database.db
       .insert(payoutEvents)
@@ -56,7 +58,7 @@ describe("prévia dos pagamentos (GET /admin/payouts)", () => {
         round: o.round === undefined ? 10 : o.round,
         phase: o.phase ?? null,
         perShare: o.perShare,
-        closedAt: CLOSED_AT,
+        closedAt: o.closedAt ?? CLOSED_AT,
         status: o.status ?? "pending",
         approvedAt: o.status === "approved" ? CLOSED_AT : null,
         createdAt: CLOSED_AT,
@@ -148,6 +150,52 @@ describe("prévia dos pagamentos (GET /admin/payouts)", () => {
     expect(ids(await list("?competition=brasileirao-a&round=10"))).toEqual([eventId]);
     expect(ids(await list("?competition=copa-do-brasil&phase=oitavas"))).toEqual([cup]);
     expect((await call("/admin/payouts?status=pago")).statusCode).toBe(400);
+  });
+
+  it("admin 46: a lista vem do fechamento mais novo para o mais antigo, com filtros de clube, tipo e período e paginação feita na API", async () => {
+    const dia = (n: number) => new Date(Date.UTC(2027, 5, n, 20));
+    const antes = await listAll();
+    const novo = await insertEvent({ ticker: "CAM3", key: "points|brasileirao-a|42|CAM3", kind: "points", perShare: 10, round: 42, closedAt: dia(20) });
+    const meio = await insertEvent({ ticker: "PAL3", key: "points|brasileirao-a|41|PAL3", kind: "points", perShare: 10, round: 41, closedAt: dia(13) });
+    const copa = await insertEvent({ ticker: "PAL3", key: "cup_phase|copa-do-brasil|semifinal|PAL3", kind: "cup_phase", perShare: 100, competition: "copa-do-brasil", round: null, phase: "semifinal", closedAt: dia(13) });
+    const aprovado = await insertEvent({ ticker: "CAM3", key: "points|brasileirao-a|39|CAM3", kind: "points", perShare: 10, status: "approved", round: 39, closedAt: dia(1) });
+    const meus = new Set([novo, meio, copa, aprovado]);
+    const ids = (events: PayoutEventView[]) => events.map((e) => e.id);
+    const meusDe = (events: PayoutEventView[]) => ids(events).filter((id) => meus.has(id));
+
+    // o mais novo primeiro; no mesmo fechamento, pelo clube e, no mesmo clube, o evento mais novo
+    const tudo = await listAll("?pageSize=100");
+    expect(meusDe(tudo.events)).toEqual([novo, copa, meio, aprovado]);
+    const datas = tudo.events.map((e) => Date.parse(e.closedAt));
+    expect(datas).toEqual([...datas].sort((x, y) => y - x));
+    expect(tudo.total).toBe(antes.total + 4);
+    expect(tudo.pendingTotal).toBe(antes.pendingTotal + 3);
+    expect([antes.page, antes.pageSize]).toEqual([1, 50]);
+
+    // filtros
+    const pal = await list("?club=PAL3&pageSize=100");
+    expect(pal.every((e) => e.club.ticker === "PAL3")).toBe(true);
+    expect(meusDe(pal)).toEqual([copa, meio]);
+    expect(meusDe(await list("?club=pal3&pageSize=100"))).toEqual([copa, meio]);
+    expect(ids(await list("?kind=cup_phase&club=PAL3&phase=semifinal"))).toEqual([copa]);
+    expect(meusDe(await list("?kind=points&status=pending&pageSize=100"))).toEqual([novo, meio]);
+    expect(ids(await list(`?closedFrom=${dia(13).toISOString()}&closedBefore=${dia(14).toISOString()}`))).toEqual([copa, meio]);
+    expect(ids(await list(`?closedBefore=${dia(2).toISOString()}`))).toEqual([aprovado]);
+
+    // paginação: as páginas seguem a mesma ordem da lista inteira, o total vale para todas e o "aprovar todos" não depende do filtro
+    const pedaco = 3;
+    const todas: number[] = [];
+    for (let p = 1; p * pedaco - pedaco < tudo.total; p++) {
+      const pagina = await listAll(`?pageSize=${pedaco}&page=${p}`);
+      expect([pagina.page, pagina.pageSize, pagina.total, pagina.pendingTotal]).toEqual([p, pedaco, tudo.total, tudo.pendingTotal]);
+      expect(pagina.events.length).toBeLessThanOrEqual(pedaco);
+      todas.push(...ids(pagina.events));
+    }
+    expect(todas).toEqual(ids(tudo.events));
+    expect((await listAll(`?pageSize=${pedaco}&page=${Math.ceil(tudo.total / pedaco) + 1}`)).events).toEqual([]);
+    const filtrada = await listAll("?kind=cup_phase&club=PAL3&phase=semifinal&pageSize=1");
+    expect([filtrada.total, filtrada.pendingTotal]).toEqual([1, tudo.pendingTotal]);
+    for (const ruim of ["?page=0", "?pageSize=101", "?pageSize=0", "?kind=pago", "?closedFrom=ontem"]) expect((await call(`/admin/payouts${ruim}`)).statusCode, ruim).toBe(400);
   });
 
   it("colocação e acesso mostram se a classificação oficial já foi conferida; os outros tipos não", async () => {
