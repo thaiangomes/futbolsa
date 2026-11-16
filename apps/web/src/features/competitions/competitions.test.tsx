@@ -75,16 +75,27 @@ describe("página das competições", () => {
     expect((dom.$("[aria-label='Rodada anterior']") as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("na copa: as fases em ordem, quem passou nos pênaltis e o jogo em andamento", async () => {
+  it("na copa: uma fase por vez, abrindo na fase atual, com as fases numa fileira; quem passou nos pênaltis e o jogo em andamento", async () => {
     await open();
     await dom.click(dom.$$("[role=tab]")[2]!);
     await dom.settle();
     await dom.settle();
     expect(dom.$("[data-testid=classificacao]")).toBeNull();
-    const fases = dom.$$("[data-testid=fase]");
-    expect(fases.map((f) => f.querySelector("h2")!.textContent)).toEqual(["Oitavas", "Quartas"]);
+    // as oitavas acabaram; as quartas têm jogo por acontecer: abre nelas, marcadas como a fase atual
+    expect(dom.$$("[data-testid=fases] button").map((b) => b.textContent)).toEqual(["Oitavas", "Quartas"]);
+    expect(dom.$$("[data-testid=fase]")).toHaveLength(1);
+    expect(dom.$("[data-testid=fase] h2").textContent).toBe("Quartas · fase atual");
+    expect(dom.$("[data-testid=fase] [data-testid=em-jogo]")).not.toBeNull();
+    expect(dom.$("[data-atual=true]").textContent).toContain("Quartas");
+    // escolhendo as oitavas: o resultado nos pênaltis; a fase atual continua marcada
+    await dom.click(dom.$$("[data-testid=fases] button")[0]!);
+    expect(dom.$("[data-testid=fase] h2").textContent).toBe("Oitavas");
     expect(dom.$("[data-testid=passou]").textContent).toBe("Passou o visitante nos pênaltis");
-    expect(fases[1]!.querySelector("[data-testid=em-jogo]")).not.toBeNull();
+    expect(dom.$("[data-atual=true]").textContent).toContain("Quartas");
+    // as setas
+    await dom.click(dom.$("[aria-label='Próxima fase']"));
+    expect(dom.$("[data-testid=fase] h2").textContent).toBe("Quartas · fase atual");
+    expect((dom.$("[aria-label='Próxima fase']") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("competição sem jogos avisa, em vez de mostrar uma página vazia", async () => {

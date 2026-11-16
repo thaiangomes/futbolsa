@@ -135,15 +135,44 @@ function Standings({ rows }: { rows: readonly StandingRow[] }) {
   );
 }
 
+/**
+ * A copa, uma fase por vez (a Copa do Brasil tem nove): abre na fase atual (a primeira com jogo por acontecer) e as fases ficam
+ * numa fileira para escolher; a atual leva um ponto, mesmo depois de o jogador olhar outra.
+ */
 function Cup({ view }: { view: CompetitionView }) {
+  const atual = currentStageIndex(view.stages);
+  const [index, setIndex] = useState(atual);
+  const stage: CompetitionStage | undefined = view.stages[index];
   return (
     <div className="stack">
-      {view.stages.map((st: CompetitionStage) => (
-        <section key={st.phase ?? "x"} className="card" aria-label={stageText(st) ?? "Jogos"} data-testid="fase">
-          <div className="card-h"><h2 className="card-t">{stageText(st) ?? "Jogos"}</h2></div>
-          <div className="card-b"><Matches matches={st.matches} /></div>
+      <div className="row-s" role="group" aria-label="Fases" style={{ overflowX: "auto", flexWrap: "nowrap", gap: 8, paddingBottom: 4 }} data-testid="fases">
+        {view.stages.map((st, i) => (
+          <button
+            key={st.phase ?? i}
+            type="button"
+            className={i === index ? "btn btn-p btn-sm" : "btn btn-ghost btn-sm"}
+            aria-pressed={i === index}
+            data-atual={i === atual ? "true" : undefined}
+            style={{ whiteSpace: "nowrap", flex: "none" }}
+            onClick={() => setIndex(i)}
+          >
+            {i === atual && <span className="dot-live" aria-hidden="true" style={{ marginRight: 6 }} />}
+            {stageText(st) ?? "Jogos"}
+          </button>
+        ))}
+      </div>
+      {stage && (
+        <section className="card" aria-labelledby="t-fase" data-testid="fase">
+          <div className="card-h row between" style={{ gap: 8 }}>
+            <h2 className="card-t" id="t-fase">{stageText(stage) ?? "Jogos"}{index === atual ? " · fase atual" : ""}</h2>
+            <span className="row-s">
+              <button type="button" className="btn btn-sm" aria-label="Fase anterior" disabled={index <= 0} onClick={() => setIndex(index - 1)}>‹</button>
+              <button type="button" className="btn btn-sm" aria-label="Próxima fase" disabled={index >= view.stages.length - 1} onClick={() => setIndex(index + 1)}>›</button>
+            </span>
+          </div>
+          <div className="card-b"><Matches matches={stage.matches} /></div>
         </section>
-      ))}
+      )}
     </div>
   );
 }
