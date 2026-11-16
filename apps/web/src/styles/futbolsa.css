@@ -156,9 +156,9 @@ select.input{appearance:auto}
 .tabs{display:flex;border-bottom:1px solid var(--line);overflow-x:auto}
 .tabs button{flex:1;height:44px;background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);font:600 14px Inter,sans-serif;cursor:pointer;white-space:nowrap;padding:0 12px}
 .tabs button[aria-pressed="true"]{color:var(--text);border-bottom-color:var(--amber)}
-.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--panel);border-radius:18px 18px 0 0;border-top:1px solid var(--line2);box-shadow:var(--shadow)}
+.sheet{position:fixed;z-index:50;max-height:92dvh;overflow-y:auto;overscroll-behavior:contain;padding-bottom:calc(20px + env(safe-area-inset-bottom));left:0;right:0;bottom:0;background:var(--panel);border-radius:18px 18px 0 0;border-top:1px solid var(--line2);box-shadow:var(--shadow)}
 .grab{width:40px;height:4px;border-radius:2px;background:var(--line2);margin:8px auto 4px}
-.scrim{position:absolute;inset:0;background:rgba(5,8,12,.62)}
+.scrim{position:fixed;z-index:40;inset:0;background:rgba(5,8,12,.62)}
 .step{display:flex;align-items:center;border:1px solid var(--line2);border-radius:8px;background:var(--bg2);height:44px}
 .step button{width:44px;height:42px;border:0;background:none;color:var(--text);font:600 18px Inter,sans-serif;cursor:pointer}
 .step input{flex:1;min-width:0;height:42px;border:0;background:none;color:var(--text);text-align:center;font:600 16px Inter,sans-serif;font-variant-numeric:tabular-nums}
