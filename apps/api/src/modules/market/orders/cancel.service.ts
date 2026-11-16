@@ -189,6 +189,16 @@ export class CancelService {
   }
 
   /**
+   * Cancela uma ordem aberta que quem chama já releu com o clube e a carteira travados, dentro da transação dele, e
+   * agenda os avisos (a troca atômica da edição, critérios 57 a 59: a ordem antiga sai e a nova entra na mesma transação).
+   */
+  async cancelLocked(tx: Tx, row: OrderRow, ticker: string, reason: OrderCancelReason, at: Date): Promise<{ order: OrderRecord; post: PostResult }> {
+    const released = await this.release(tx, row, ticker, reason, at);
+    await this.events?.ordersChanged(tx, ticker, [released.order], [released.post]);
+    return released;
+  }
+
+  /**
    * Cancela uma ordem aberta já relida com o clube e a carteira travados: `cancelled` com o motivo, sem reserva, e a
    * linha `order_release` que devolve o que ela prendia (o caixa gravado na ordem, na compra limitada; as ações que
    * faltavam vender, na venda) e tira uma das ordens abertas da carteira.

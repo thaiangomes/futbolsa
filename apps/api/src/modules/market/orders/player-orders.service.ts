@@ -9,9 +9,12 @@ import {
   type PlaceOrderBody,
   type PlaceOrderResponse,
   placeOrderResponseSchema,
+  type ReplaceOrderBody,
+  type ReplaceOrderResponse,
+  replaceOrderResponseSchema,
 } from "@futbolsa/contracts";
 import { Clock } from "../../../infra/clock/index.js";
-import { DB, type Database, type Tx, type WalletRow, withTransaction } from "../../../infra/db/index.js";
+import { DB, type Database, lockClubs, lockWallets, type Tx, type WalletRow, withTransaction } from "../../../infra/db/index.js";
 import { clubs, orders, seasonClubs, users, wallets } from "../../../infra/db/schema/index.js";
 import { DomainError } from "../../../infra/http/index.js";
 import { currentSeason } from "../../admin/current-season.js";
@@ -23,7 +26,7 @@ import {
   type PlaceOrderResult,
 } from "../matching/matching-engine.js";
 import { toOrderRecord } from "../matching/settle.js";
-import { AuctionCloser } from "../state/tunnel-state.js";
+import { AuctionCloser, auctionExpired } from "../state/tunnel-state.js";
 import { CancelService } from "./cancel.service.js";
 import { marketError, marketErrorMessage, marketErrorStatus } from "./errors.js";
 import {
@@ -41,6 +44,16 @@ const PLACE_ROUTE = "POST /orders";
 
 /** O status de uma ordem aceita (`POST` que cria). */
 const CREATED = 201;
+
+/** A troca de uma ordem recusada pelo motor: desfaz a transação inteira, e a ordem antiga continua como estava (critério 58). */
+class ReplaceRefused extends Error {
+  constructor(
+    readonly code: MarketErrorCode,
+    readonly reason?: string,
+  ) {
+    super(`a troca foi recusada: ${code}`);
+  }
+}
 
 /** Desfaz a transação da ordem que encontrou o leilão do clube vencido: a chave reservada não pode ficar. */
 class AuctionExpiredRollback extends Error {
@@ -142,6 +155,80 @@ export class PlayerOrdersService {
     const result = await this.cancels.cancelOrder({ walletId: wallet.walletId, orderId, now: this.clock.now() });
     if (!result.ok) throw marketError(result.code);
     return { order: myOrderView(result.order), cash: result.cash };
+  }
+
+  /**
+   * Edita uma ordem limitada aberta do próprio jogador (`PUT /orders/:id`, critérios 57 a 59): troca atômica. Numa só
+   * transação, com o clube e a carteira travados, a ordem antiga é cancelada (a reserva volta ao livre) e a nova, com o
+   * preço e a quantidade pedidos, entra pelo mesmo caminho de qualquer ordem: reserva recalculada, executa o que cruzar,
+   * o resto vai para o fim da fila daquele preço. Se a nova for recusada, a transação é desfeita e a antiga fica inteira.
+   * Aceita a `Idempotency-Key`, como o `POST`. Leilão vencido: igual ao `POST` (fecha o leilão e repete uma vez).
+   */
+  async replace(userId: string, orderId: number, body: ReplaceOrderBody, idempotencyKey?: string): Promise<ReplaceOrderResponse> {
+    const now = this.clock.now();
+    const wallet = await this.walletOf(userId);
+    if (!wallet) throw marketError("order_not_found");
+    const [found] = await this.db
+      .select({ walletId: orders.walletId, seasonId: orders.seasonId, ticker: listedTicker })
+      .from(orders)
+      .innerJoin(clubs, eq(clubs.id, orders.clubId))
+      .where(eq(orders.id, orderId));
+    if (!found || found.walletId !== wallet.walletId) throw marketError("order_not_found");
+    const ref: IdempotencyRef | undefined =
+      idempotencyKey === undefined ? undefined : { userId, key: idempotencyKey, requestHash: requestHash(`PUT /orders/${orderId}`, body) };
+
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const response = await withTransaction(this.db, (tx) => this.replaceInTransaction(tx, found, orderId, body, now, ref));
+        return answer(response) as unknown as ReplaceOrderResponse;
+      } catch (error) {
+        if (error instanceof ReplaceRefused) throw new DomainError(error.code, marketErrorStatus(error.code), marketErrorMessage(error.code, error.reason));
+        if (!(error instanceof AuctionExpiredRollback)) throw error;
+        if (!this.auctions) throw new Error(`o leilão de ${error.expired.ticker} venceu e não há quem o feche (AuctionCloser não registrado)`);
+        if (attempt > 0) throw new Error(`o leilão de ${error.expired.ticker} continua vencido depois de fechado`);
+        await this.auctions.closeAuction(error.expired.seasonId, error.expired.ticker, now);
+      }
+    }
+  }
+
+  private async replaceInTransaction(
+    tx: Tx,
+    found: { walletId: number; seasonId: number; ticker: string },
+    orderId: number,
+    body: ReplaceOrderBody,
+    now: Date,
+    ref: IdempotencyRef | undefined,
+  ): Promise<StoredResponse> {
+    if (ref) {
+      const claim = await claimIdempotencyKey(tx, ref, now);
+      if (claim.kind === "replay") return claim.response;
+      if (claim.kind === "conflict") return refusal("idempotency_conflict");
+    }
+    // o clube antes da carteira (a ordem das travas do jogo); a ordem só muda com o clube travado
+    const [club] = await lockClubs(tx, found.seasonId, [found.ticker]);
+    if (auctionExpired(club!, now)) {
+      throw new AuctionExpiredRollback({ ok: false, auctionExpired: true, seasonId: found.seasonId, ticker: found.ticker, until: club!.auctionUntil! });
+    }
+    const [row] = await tx.db.select().from(orders).where(eq(orders.id, orderId));
+    if (!row || row.walletId !== found.walletId) throw marketError("order_not_found");
+    if (row.status !== "open" || row.type !== "limit") throw marketError("order_not_open");
+    await lockWallets(tx, [row.walletId]);
+    const { order: replaced } = await this.cancels.cancelLocked(tx, row, found.ticker, "player", now);
+
+    const result = await this.orders.placeOrder(
+      tx,
+      { seasonId: found.seasonId, ticker: found.ticker, walletId: found.walletId, actor: "player", side: row.side as "buy" | "sell", type: "limit", quantity: body.quantity, limitPrice: body.limitPrice, now },
+      { afterWalletsLocked: (t, w) => refuseInactive(t, w) },
+    );
+    if (isAuctionExpired(result)) throw new AuctionExpiredRollback(result);
+    if (!result.ok) throw new ReplaceRefused(result.code, result.reason);
+    const placed = toStoredResponse(result);
+    const response: StoredResponse = {
+      status: 200,
+      body: replaceOrderResponseSchema.parse({ ...(placed.body as PlaceOrderResponse), replaced: myOrderView(replaced) }),
+    };
+    if (ref) await saveIdempotentResponse(tx, ref, response);
+    return response;
   }
 
   /** Uma tentativa da ordem, numa transação: a chave, a ordem e a resposta guardada. */

@@ -1,5 +1,8 @@
 import type { AuctionState, MyOrder } from "@futbolsa/contracts";
+import { useState } from "react";
 import { formatCents, formatInt } from "../../../lib/format";
+import type { MarketApi } from "../../market/api";
+import { EditOrderHost } from "../../market/edit-order";
 import { formatClock } from "../../market/format";
 import { AuctionChip } from "./sections";
 
@@ -13,6 +16,8 @@ export function OpenOrders({
   onCancel,
   busyId = null,
   error = null,
+  api,
+  onChanged,
 }: {
   orders: readonly MyOrder[] | null;
   /** O leilão de cada clube (por ticker), vivo pelo canal `prices`. */
@@ -20,7 +25,11 @@ export function OpenOrders({
   onCancel: (id: number) => void;
   busyId?: number | null;
   error?: string | null;
+  /** Com a API, cada ordem ganha Editar (troca atômica, critérios 57 a 60). */
+  api?: MarketApi;
+  onChanged?: () => void;
 }) {
+  const [editing, setEditing] = useState<number | null>(null);
   return (
     <section className="card" aria-labelledby="t-ordens" data-testid="ordens-abertas">
       <div className="card-h">
@@ -38,7 +47,8 @@ export function OpenOrders({
             const auction = auctions.get(o.ticker) ?? null;
             const rest = o.quantity - o.filled;
             return (
-              <div key={o.id} className="row between" style={{ flexWrap: "nowrap", gap: 12 }} data-testid="ordem-aberta" data-order-id={o.id}>
+              <div key={o.id} data-testid="ordem-bloco">
+              <div className="row between" style={{ flexWrap: "nowrap", gap: 12 }} data-testid="ordem-aberta" data-order-id={o.id}>
                 <div className="stack-s" style={{ gap: 2 }}>
                   <div className="row-s">
                     <span className={o.side === "buy" ? "chip chip-up" : "chip chip-down"}>{o.side === "buy" ? "Compra" : "Venda"}</span>
@@ -56,7 +66,16 @@ export function OpenOrders({
                     </span>
                   )}
                 </div>
-                <button type="button" className="btn btn-sm" disabled={busyId === o.id} onClick={() => onCancel(o.id)}>Cancelar</button>
+                <div className="row-s">
+                  {api && o.limitPrice !== null && (
+                    <button type="button" className="btn btn-sm" aria-expanded={editing === o.id} data-testid="editar" onClick={() => setEditing(editing === o.id ? null : o.id)}>Editar</button>
+                  )}
+                  <button type="button" className="btn btn-sm" disabled={busyId === o.id} onClick={() => onCancel(o.id)}>Cancelar</button>
+                </div>
+              </div>
+              {api && editing === o.id && orders && (
+                <EditOrderHost order={o} orders={orders} api={api} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); onChanged?.(); }} />
+              )}
               </div>
             );
           })

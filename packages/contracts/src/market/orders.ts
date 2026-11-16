@@ -158,3 +158,18 @@ export type CancelOrderResponse = z.infer<typeof cancelOrderResponseSchema>;
 export const listOrdersQuerySchema = z.strictObject({ status: z.enum(["open"]).default("open") });
 export const listOrdersResponseSchema = z.strictObject({ orders: z.array(myOrderSchema) });
 export type ListOrdersResponse = z.infer<typeof listOrdersResponseSchema>;
+
+/**
+ * `PUT /orders/:id` (Livro de ofertas e formador de mercado, critérios 57 a 59): editar uma ordem limitada aberta é uma
+ * troca atômica. Só o preço (centavos) e a quantidade mudam; o lado e o clube são os da ordem. Como em `POST /orders`, o
+ * esquema só pede números e o `validateOrder` do motor confere o resto.
+ */
+export const replaceOrderBodySchema = z.strictObject({
+  quantity: z.number(),
+  limitPrice: z.number(),
+});
+export type ReplaceOrderBody = z.infer<typeof replaceOrderBodySchema>;
+
+/** A ordem nova (como em `POST /orders`) e a antiga, já cancelada, que ela substituiu. */
+export const replaceOrderResponseSchema = placeOrderResponseSchema.extend({ replaced: myOrderSchema });
+export type ReplaceOrderResponse = z.infer<typeof replaceOrderResponseSchema>;

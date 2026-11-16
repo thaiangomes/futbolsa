@@ -95,6 +95,8 @@ export function WalletContent({ portfolio, market, logged }: { portfolio: Portfo
       busyId={busy}
       cancelError={cancelError}
       narrow={narrow}
+      market={market}
+      onOrderChanged={() => void orders.reload()}
     />
   );
 }
@@ -119,6 +121,9 @@ export interface WalletBodyProps {
   busyId: number | null;
   cancelError: string | null;
   narrow: boolean;
+  /** Com a API do mercado, as ordens abertas ganham Editar (critério 60 do livro). */
+  market?: MarketApi;
+  onOrderChanged?: () => void;
 }
 
 /** As peças da carteira arranjadas para o computador (uma página) ou para o celular (abas Resumo, Posições, Ordens e Extrato). */
@@ -131,7 +136,7 @@ export function WalletBody(p: WalletBodyProps) {
       <div className="card-b"><EquityChart data={p.equity} short={p.narrow} /></div>
     </section>
   ) : null;
-  const orders = <OpenOrders orders={p.orders} auctions={p.auctions} onCancel={p.onCancel} busyId={p.busyId} error={p.cancelError} />;
+  const orders = <OpenOrders orders={p.orders} auctions={p.auctions} onCancel={p.onCancel} busyId={p.busyId} error={p.cancelError} api={p.market} onChanged={p.onOrderChanged} />;
   const extract = <Extract data={p.entries} filter={p.filter} onFilter={p.onFilter} tickers={tickers} />;
 
   if (p.narrow) {
