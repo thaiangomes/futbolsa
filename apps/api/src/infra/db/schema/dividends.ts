@@ -1,8 +1,8 @@
 import { sql } from "drizzle-orm";
-import { bigint, check, integer, primaryKey, text, uuid } from "drizzle-orm/pg-core";
+import { bigint, check, integer, jsonb, primaryKey, text, uuid } from "drizzle-orm/pg-core";
 import { futbolsa, instant, money, oneOf } from "./base.js";
 import { users } from "./accounts.js";
-import { seasons } from "./admin.js";
+import { clubs, seasons } from "./admin.js";
 import { CUP_COMPETITIONS } from "./values.js";
 
 /**
@@ -75,5 +75,29 @@ export const seasonCups = futbolsa.table(
   (t) => [
     primaryKey({ columns: [t.seasonId, t.competition] }),
     check("season_cups_competition_check", oneOf(t.competition, CUP_COMPETITIONS)),
+  ],
+);
+
+/**
+ * As projeções privadas do jogador (item 20 das melhorias da partida; Livro de ofertas, critérios 54 a 56): as premissas
+ * do simulador "Quanto vale para você" por clube, uma por temporada, jogador e clube. Guarda premissas, não um preço:
+ * o valor se refaz com os dividendos de cada momento. Nem a casa nem os bots leem esta tabela.
+ */
+export const clubProjections = futbolsa.table(
+  "club_projections",
+  {
+    seasonId: integer("season_id").notNull().references(() => seasons.id),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    clubId: integer("club_id").notNull().references(() => clubs.id),
+    points: integer("points").notNull(),
+    position: integer("position").notNull(),
+    /** Por copa, a fase em que o clube cai (ou `campeao`). */
+    cups: jsonb("cups").$type<Record<string, string>>().notNull().default({}),
+    updatedAt: instant("updated_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.seasonId, t.userId, t.clubId] }),
+    check("club_projections_points_check", sql`${t.points} between 0 and 114`),
+    check("club_projections_position_check", sql`${t.position} between 1 and 20`),
   ],
 );

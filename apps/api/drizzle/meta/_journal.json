@@ -64,6 +64,13 @@
       "when": 1794809884635,
       "tag": "0008_correcao_da_tabela_de_copa",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794864140564,
+      "tag": "0009_projecoes_por_clube",
+      "breakpoints": true
     }
   ]
 }

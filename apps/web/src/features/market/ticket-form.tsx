@@ -1,7 +1,7 @@
 "use client";
 
 import type { MyOrder, PlaceOrderResponse } from "@futbolsa/contracts";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "../../lib/api";
 import { formatCents, formatInt } from "../../lib/format";
 import { reaisField } from "../ipo/forms";
@@ -9,6 +9,13 @@ import type { MarketApi } from "./api";
 import type { ClubState } from "./club-state";
 import { auctionNotice, formatHour } from "./format";
 import { marketErrorMessage, newIdempotencyKey, reviewTicket, type TicketForm } from "./order-ticket";
+
+/** Lado e preço (centavos) que o clique numa oferta do livro põe na boleta. */
+export interface BookPreset {
+  side: "buy" | "sell";
+  price: number;
+  nonce: number;
+}
 
 /**
  * A boleta do clube (Livro de ofertas, "O que o jogador vê › Limites da ordem"): limitada ou a mercado, compra ou
@@ -22,6 +29,8 @@ export function OrderTicket({
   api,
   onSent,
   initialSide = "buy",
+  initialPrice,
+  preset,
   onClose,
 }: {
   state: ClubState;
@@ -31,16 +40,33 @@ export function OrderTicket({
   onSent?: (result: PlaceOrderResponse) => void;
   /** O lado em que a boleta abre (no celular, o botão Comprar ou Vender que o jogador tocou). */
   initialSide?: "buy" | "sell";
+  /** O preço (em centavos) com que a boleta abre, vindo do clique numa oferta do livro (critério 53). */
+  initialPrice?: number;
+  /**
+   * Um clique no livro com a boleta já aberta (computador): troca lado, tipo e preço e mantém a quantidade. Cada
+   * clique manda um objeto novo (`nonce` diferente), mesmo no mesmo preço.
+   */
+  preset?: BookPreset | null;
   /** Mostra o botão de fechar (a boleta do celular é uma folha por cima da tela). */
   onClose?: () => void;
 }) {
-  const [form, setForm] = useState<TicketForm>({ side: initialSide, type: "limit", quantity: "", price: reaisField(state.price.displayed) });
+  const [form, setForm] = useState<TicketForm>({ side: initialSide, type: "limit", quantity: "", price: reaisField(initialPrice ?? state.price.displayed) });
   const [phase, setPhase] = useState<"editing" | "reviewing" | "sending">("editing");
   const [serverError, setServerError] = useState<string | null>(null);
   const [sent, setSent] = useState<PlaceOrderResponse | null>(null);
   // A chave vale para a ordem que o jogador está revisando: um clique repetido no "Enviar" reusa a mesma chave
   // (não duplica); mudar a ordem gera outra.
   const key = useRef<string | null>(null);
+
+  // O clique no livro: o lado oposto da oferta, limitada, no preço dela; a quantidade fica como está
+  useEffect(() => {
+    if (!preset) return;
+    key.current = null;
+    setServerError(null);
+    setSent(null);
+    setPhase("editing");
+    setForm((f) => ({ ...f, side: preset.side, type: "limit", price: reaisField(preset.price) }));
+  }, [preset]);
 
   const me = state.me;
   const inAuction = state.auction !== null;

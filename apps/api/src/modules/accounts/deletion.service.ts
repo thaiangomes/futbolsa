@@ -6,6 +6,7 @@ import { Clock } from "../../infra/clock/index.js";
 import { DB, type Database, lockClubs, lockSeason, lockWallets, type Tx, withTransaction } from "../../infra/db/index.js";
 import {
   authIdentities,
+  clubProjections,
   invites,
   playerNotices,
   positions,
@@ -82,6 +83,8 @@ export class AccountDeletionService {
       if (user.email) await tx.db.delete(invites).where(eq(invites.email, user.email));
       // os avisos de trapaça são dado da conta: somem com ela (o relatório do admin guarda só ids)
       await tx.db.delete(playerNotices).where(eq(playerNotices.userId, userId));
+      // as projeções por clube são privadas da conta (critério 56 do livro): somem com ela
+      await tx.db.delete(clubProjections).where(eq(clubProjections.userId, userId));
       if (options.record) await options.record(tx, { user, walletCloseout: result });
       tx.afterCommit(async () => {
         this.realtime.disconnectUser(userId);

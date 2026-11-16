@@ -136,3 +136,59 @@ describe("lista de clubes (tela)", () => {
     expect(dom.text()).toContain("Não foi possível carregar os clubes");
   });
 });
+
+describe("coluna Sua projeção (critério 55)", () => {
+  const dom = useDom();
+  const view = (over: Record<string, unknown> = {}) => ({
+    ticker: "FLA3",
+    league: "brasileirao-a" as const,
+    leagueRules: { perPoint: 10, placement: [500, 450, 400, 350, 300, 270, 240, 210, 180, 150, 120, 100, 80, 60, 40, 20] },
+    leagueOpen: true,
+    points: 20,
+    position: 5,
+    played: 9,
+    paid: 270,
+    toReceive: 30,
+    buybackMultipleBp: 15_000,
+    cups: [
+      {
+        competition: "copa-do-brasil" as const,
+        phases: ["1a-fase", "2a-fase", "3a-fase", "oitavas", "quartas", "semifinal", "final"],
+        advance: { "1a-fase": 50, "2a-fase": 75, "3a-fase": 100, oitavas: 150, quartas: 250, semifinal: 400 },
+        title: 800,
+        currentPhase: "oitavas",
+        outcome: "playing" as const,
+      },
+    ],
+    ...over,
+  });
+  const bet = { ticker: "FLA3", points: 68, position: 3, cups: { "copa-do-brasil": "quartas" }, updatedAt: "2027-06-10T18:00:00.000Z" };
+  const withDividends = (data: ClubListData, v: unknown) => ({ ...api(data), dividends: vi.fn(async () => v) }) as unknown as MarketApi;
+
+  it("livro 55: mostra o valor e o upside ou downside no clube com projeção e traço no que não tem", async () => {
+    const data = list({ clubs: [item("FLA3", { price: 6000 }), item("PAL3")] });
+    await dom.render(createElement(ClubList, { api: withDividends(data, view()), projections: new Map([["FLA3", bet]]) }));
+    await dom.settle();
+    await dom.settle();
+    const cells = dom.$$("[data-testid=minha-projecao]").map((c) => c.textContent);
+    expect(cells[0]).toMatch(/^R\$ \d+,\d{2} · downside \d+%$/);
+    expect(cells[1]).toBe("—");
+    expect(dom.text()).toContain("Sua projeção");
+  });
+
+  it("livro 55: projeção desatualizada mostra revisar, sem valor", async () => {
+    const data = list({ clubs: [item("FLA3", { price: 6000 })] });
+    // os pontos de hoje (50) já passam dos 40 que ela projetou
+    await dom.render(createElement(ClubList, { api: withDividends(data, view({ points: 50 })), projections: new Map([["FLA3", { ...bet, points: 40 }]]) }));
+    await dom.settle();
+    await dom.settle();
+    expect(dom.$("[data-testid=minha-projecao]").textContent).toBe("revisar");
+  });
+
+  it("livro 55: sem login (sem projeções), a coluna nem aparece", async () => {
+    await dom.render(createElement(ClubList, { api: api(list()) }));
+    await dom.settle();
+    expect(dom.$$("[data-testid=minha-projecao]")).toHaveLength(0);
+    expect(dom.text()).not.toContain("Sua projeção");
+  });
+});

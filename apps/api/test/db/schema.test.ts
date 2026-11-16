@@ -12,14 +12,14 @@ import { payoutEvents, positions, users, wallets, ipoBids } from "../../src/infr
 import { useTestDatabase } from "../support/db.js";
 import { createUser, listClubs, openPlayerWallets, seedSeason, T0 } from "../support/fixtures.js";
 
-/** As 38 tabelas de "Modelo de dados" da Arquitetura da Fase 1 (com as 5 da F14). */
+/** As 39 tabelas de "Modelo de dados" da Arquitetura da Fase 1 (com as 5 da F14 e a das projeções, item 20 das melhorias). */
 const TABLES = [
   "users", "auth_identities", "invites", "bots", "clubs", "seasons", "season_clubs", "season_rules",
   "cup_phases", "season_cups", "standings", "matches", "wallets", "positions", "wallet_entries",
   "ipo_bids", "ipo_results", "ipo_allocations", "orders", "trades", "market_refresh_requests", "candles",
   "payout_events", "payout_holdings", "payout_credits", "ranking_snapshots", "ranking_rows", "ranking_recalc_requests",
   "equity_daily", "portfolio_snapshots", "season_results", "admin_log", "idempotency_keys",
-  "fraud_cases", "fraud_case_trades", "trade_annulments", "fraud_warnings", "player_notices",
+  "fraud_cases", "fraud_case_trades", "trade_annulments", "fraud_warnings", "player_notices", "club_projections",
 ];
 
 /** Colunas de dinheiro (centavos). */
@@ -83,7 +83,7 @@ describe("T2: esquema completo e migração inicial", () => {
     await listClubs(t.db, seasonId, clubIds, ["FLA3", "PAL3"]);
   });
 
-  it("as 38 tabelas da arquitetura existem no esquema futbolsa, nem mais nem menos", async () => {
+  it("as 39 tabelas da arquitetura existem no esquema futbolsa, nem mais nem menos", async () => {
     const result = await t.db.execute(
       sql`select table_name from information_schema.tables where table_schema = 'futbolsa' order by table_name`,
     );

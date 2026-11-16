@@ -18,7 +18,7 @@ import { MobileClub, useIsNarrow } from "./mobile-club";
 import { marketErrorMessage } from "./order-ticket";
 import { MyOrders } from "./my-orders";
 import { PriceHeader } from "./price-header";
-import { OrderTicket } from "./ticket-form";
+import { type BookPreset, OrderTicket } from "./ticket-form";
 import { TradesPanel } from "./trades-panel";
 import { useBalances } from "./use-balances";
 import { useClubBook } from "./use-club-book";
@@ -58,6 +58,7 @@ export function ClubView({ ticker, api, logged, chart = null, position }: { tick
   const narrow = useIsNarrow();
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
+  const [preset, setPreset] = useState<BookPreset | null>(null);
 
   if (!book.state) {
     return book.status === "error" ? (
@@ -100,17 +101,17 @@ export function ClubView({ ticker, api, logged, chart = null, position }: { tick
       <div className="g-livro">
         <div className="stack">
           <div className="g-2">
-            <BookPanel bids={view.bids} asks={view.asks} mine={orders.filter((o) => o.ticker === ticker && o.limitPrice !== null).map((o) => ({ side: o.side, limitPrice: o.limitPrice! }))} />
+            <BookPanel bids={view.bids} asks={view.asks} mine={orders.filter((o) => o.ticker === ticker && o.limitPrice !== null).map((o) => ({ side: o.side, limitPrice: o.limitPrice! }))} onPick={logged ? (side, price) => setPreset({ side, price, nonce: (preset?.nonce ?? 0) + 1 }) : undefined} />
             <TradesPanel trades={view.trades} />
           </div>
         </div>
         <div className="stack">
-          <OrderTicket state={view} myOrders={orders} api={api} onSent={() => void mine.reload()} />
+          <OrderTicket state={view} myOrders={orders} api={api} preset={preset} onSent={() => void mine.reload()} />
           {logged && <MyOrders orders={orders} ticker={ticker} onCancel={(id) => void cancel(id)} busyId={busy} error={cancelError} />}
         </div>
       </div>
       <NextGamesCard ticker={ticker} api={api} />
-      <ClubValueCard ticker={ticker} name={NAMES.get(ticker)} price={view.price.displayed} api={api} />
+      <ClubValueCard ticker={ticker} name={NAMES.get(ticker)} price={view.price.displayed} api={api} logged={logged} />
     </div>
   );
 }

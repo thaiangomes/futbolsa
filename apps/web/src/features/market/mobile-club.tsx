@@ -63,6 +63,12 @@ export function MobileClub({
 }) {
   const [tab, setTab] = useState<Tab>("livro");
   const [sheet, setSheet] = useState<"buy" | "sell" | null>(null);
+  // O preço do clique no livro, com que a folha abre (sem clique, abre no preço exibido)
+  const [sheetPrice, setSheetPrice] = useState<number | undefined>(undefined);
+  const openSheet = (side: "buy" | "sell", price?: number) => {
+    setSheetPrice(price);
+    setSheet(side);
+  };
   const mine = orders.filter((o) => o.ticker === state.ticker && o.limitPrice !== null).map((o) => ({ side: o.side, limitPrice: o.limitPrice! }));
   const tabs: [Tab, string][] = [["livro", "Livro"], ["neg", "Negócios"], ...(logged ? ([["minhas", "Minhas ordens"]] as [Tab, string][]) : []), ["sobre", "Sobre"]];
 
@@ -75,19 +81,19 @@ export function MobileClub({
           <button key={id} type="button" aria-pressed={tab === id} onClick={() => setTab(id)}>{text}</button>
         ))}
       </div>
-      {tab === "livro" && <BookPanel bids={state.bids} asks={state.asks} mine={mine} />}
+      {tab === "livro" && <BookPanel bids={state.bids} asks={state.asks} mine={mine} onPick={logged ? (side, price) => openSheet(side, price) : undefined} />}
       {tab === "neg" && <TradesPanel trades={state.trades} />}
       {tab === "sobre" && (
         <>
           <NextGamesCard ticker={state.ticker} api={api} />
-          <ClubValueCard ticker={state.ticker} price={state.price.displayed} api={api} />
+          <ClubValueCard ticker={state.ticker} price={state.price.displayed} api={api} logged={logged} />
         </>
       )}
       {tab === "minhas" && logged && <MyOrders orders={orders} ticker={state.ticker} onCancel={onCancel} busyId={busyId} error={cancelError} />}
 
       <div className="row" style={{ padding: "12px 0", gap: 10, flexWrap: "nowrap", position: "sticky", bottom: "var(--altura-abas, 0px)", background: "var(--bg)" }}>
-        <button type="button" className="btn btn-buy btn-lg grow" onClick={() => setSheet("buy")}>Comprar</button>
-        <button type="button" className="btn btn-sell btn-lg grow" onClick={() => setSheet("sell")}>Vender</button>
+        <button type="button" className="btn btn-buy btn-lg grow" onClick={() => openSheet("buy")}>Comprar</button>
+        <button type="button" className="btn btn-sell btn-lg grow" onClick={() => openSheet("sell")}>Vender</button>
       </div>
 
       {sheet && (
@@ -100,7 +106,7 @@ export function MobileClub({
               <span className="disp num" style={{ fontSize: 24, fontWeight: 700 }}>{formatCents(state.price.displayed)}</span>
               <span className={`${changeClass(state.price.changeBp)} b`}>{formatChange(state.price.changeBp)}</span>
             </div>
-            <OrderTicket state={state} myOrders={orders} api={api} initialSide={sheet} onClose={() => setSheet(null)} onSent={onSent} />
+            <OrderTicket state={state} myOrders={orders} api={api} initialSide={sheet} initialPrice={sheetPrice} onClose={() => setSheet(null)} onSent={onSent} />
           </div>
         </>
       )}

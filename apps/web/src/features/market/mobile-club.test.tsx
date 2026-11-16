@@ -81,6 +81,23 @@ describe("tela do clube no celular", () => {
     expect(dom.$("[data-testid=livre]").textContent).toBe("1.200 FLA3");
   });
 
+  it("livro 53: tocar numa oferta do livro abre a folha da boleta já no lado oposto, limitada, no preço dela", async () => {
+    await open();
+    await dom.click(dom.$("[data-testid=nivel-venda]"));
+    expect(dom.$("[data-testid=folha-boleta]")).not.toBeNull();
+    expect(dom.$("[data-testid=boleta]").querySelector("[aria-pressed=true].buy")).not.toBeNull();
+    expect((dom.$('[aria-label="Preço"]') as HTMLInputElement).value).toBe("44,60");
+    expect((dom.$('[aria-label="Quantidade"]') as HTMLInputElement).value).toBe("");
+    await dom.click(dom.$('[aria-label="Fechar"]'));
+    await dom.click(dom.$("[data-testid=nivel-compra]"));
+    expect(dom.$("[data-testid=boleta]").querySelector("[aria-pressed=true].sell")).not.toBeNull();
+    expect((dom.$('[aria-label="Preço"]') as HTMLInputElement).value).toBe("44,20");
+    // Comprar volta ao preço exibido
+    await dom.click(dom.$('[aria-label="Fechar"]'));
+    await dom.click(dom.button("Comprar"));
+    expect((dom.$('[aria-label="Preço"]') as HTMLInputElement).value).toBe("44,30");
+  });
+
   it("o visitante vê as abas do livro e dos negócios, sem Minhas ordens", async () => {
     await open(false);
     expect(dom.button("Minhas ordens")).toBeUndefined();
