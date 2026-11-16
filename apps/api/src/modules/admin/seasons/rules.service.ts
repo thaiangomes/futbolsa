@@ -1,8 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import {
   ADMIN_ERROR_MESSAGES,
   COMMON_ERROR_MESSAGES,
+  type CorrectCupBody,
   type CupCompetitionCode,
   type CupView,
   type PutCupBody,
@@ -109,9 +110,60 @@ export class RulesService {
     });
   }
 
+  /**
+   * Corrige a tabela de uma copa **depois** da abertura do IPO, para consertar um erro de configuração (item 16 da fila da
+   * partida de teste: a Copa do Brasil de 2026 veio sem a 4ª e a 5ª fase). Só acrescenta fases; as que já estão na tabela ficam
+   * com o mesmo valor, porque o que já foi pago não pode mudar por baixo. A exceção à trava do banco vale só dentro desta
+   * transação (`futbolsa.cup_correction`), e o antes e o depois vão para o registro do admin, com o motivo. Os pagamentos das fases
+   * novas nascem na próxima passada de fechamento, aguardando aprovação, com a foto das posições no fim de cada fase.
+   */
+  async correctCup(actorId: string, seasonId: number, competition: CupCompetitionCode, body: CorrectCupBody): Promise<CupView> {
+    return withTransaction(this.db, async (tx) => {
+      await assertSeasonIdOpen(tx, seasonId);
+      await this.ensure(tx, seasonId);
+      const [rules] = await tx.db.select({ lockedAt: seasonRules.lockedAt }).from(seasonRules).where(eq(seasonRules.seasonId, seasonId));
+      if (!rules?.lockedAt) throw new DomainError("cup_correction_not_needed", 409, ADMIN_ERROR_MESSAGES.cup_correction_not_needed);
+      const keys = body.phases.map((p) => `${p.phaseKey}|${p.variant}`);
+      if (new Set(keys).size !== keys.length) {
+        throw new DomainError("invalid_input", 400, COMMON_ERROR_MESSAGES.invalid_input, ["phases"]);
+      }
+      const before = await this.phaseRows(tx, seasonId, competition);
+      const next = new Map(body.phases.map((p) => [`${p.phaseKey}|${p.variant}`, p.perShare]));
+      // as fases que já existem ficam todas, com o mesmo valor, na mesma ordem relativa
+      const kept = body.phases.filter((p) => before.some((b) => b.phaseKey === p.phaseKey && b.variant === p.variant));
+      const sameOrder = JSON.stringify(kept.map((p) => [p.phaseKey, p.variant])) === JSON.stringify(before.map((b) => [b.phaseKey, b.variant]));
+      if (before.some((b) => next.get(`${b.phaseKey}|${b.variant}`) !== b.perShare) || !sameOrder) {
+        throw new DomainError("cup_correction_invalid", 409, ADMIN_ERROR_MESSAGES.cup_correction_invalid);
+      }
+      const order = [...new Set(body.phases.map((p) => p.phaseKey))];
+      await tx.db.execute(sql`select set_config('futbolsa.cup_correction', 'on', true)`);
+      await tx.db.delete(cupPhases).where(and(eq(cupPhases.seasonId, seasonId), eq(cupPhases.competition, competition)));
+      await tx.db.insert(cupPhases).values(
+        body.phases.map((p) => ({ seasonId, competition, phaseKey: p.phaseKey, variant: p.variant, ord: order.indexOf(p.phaseKey), perShare: p.perShare })),
+      );
+      await tx.db.execute(sql`select set_config('futbolsa.cup_correction', 'off', true)`);
+      const view = await this.cupView(tx, seasonId, competition);
+      await this.log.record(tx, {
+        actorId,
+        action: "cup.correct",
+        targetType: "cup",
+        targetId: competition,
+        before: { phases: before },
+        after: { phases: view.phases },
+        reason: body.reason,
+      });
+      return view;
+    });
+  }
+
   async confirmCup(actorId: string, seasonId: number, competition: CupCompetitionCode): Promise<CupView> {
     return withTransaction(this.db, async (tx) => {
       await this.ensureEditable(tx, seasonId);
+      // Confirmar com jogos importados em fases sem valor na tabela é recusado (item 16): o pagamento dessas fases não sairia.
+      const pending = await this.cupView(tx, seasonId, competition);
+      if (pending.phasesWithoutValue.length > 0) {
+        throw new DomainError("cup_phases_missing", 409, `${ADMIN_ERROR_MESSAGES.cup_phases_missing} Faltam: ${pending.phasesWithoutValue.join(", ")}.`);
+      }
       await tx.db
         .update(seasonCups)
         .set({ confirmedBy: actorId, confirmedAt: this.clock.now() })

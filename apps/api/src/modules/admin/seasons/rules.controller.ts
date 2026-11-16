@@ -1,6 +1,8 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Put } from "@nestjs/common";
 import { z } from "zod";
 import {
+  type CorrectCupBody,
+  correctCupBodySchema,
   type CupCompetitionCode,
   cupCompetitionSchema,
   type CupView,
@@ -46,6 +48,18 @@ export class RulesController {
     @Body(new ZodValidationPipe(putCupBodySchema)) body: PutCupBody,
   ): Promise<CupView> {
     return this.rules.putCup(admin.id, id, competition, body);
+  }
+
+  /** A correção da tabela depois da abertura do IPO: só acrescenta fases, e entra no registro do admin. */
+  @HttpCode(200)
+  @Post("cups/:competition/correction")
+  correct(
+    @CurrentUser() admin: ResolvedUser,
+    @Param("id", idPipe) id: number,
+    @Param("competition", cupPipe) competition: CupCompetitionCode,
+    @Body(new ZodValidationPipe(correctCupBodySchema)) body: CorrectCupBody,
+  ): Promise<CupView> {
+    return this.rules.correctCup(admin.id, id, competition, body);
   }
 
   @HttpCode(200)
