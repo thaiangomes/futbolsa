@@ -144,7 +144,9 @@ describe("simulação com as regras do jogo (P5 do Plano do ensaio)", () => {
     expect(jogo.refused).toEqual(expect.any(Object));
     // o lote é de graça: o caixa da tesouraria depois do IPO é o mesmo, mas ela tem mais ações para vender
     expect(jogo.treasury.startCash).toBe(antiga.treasury.startCash);
-    expect(jogo.treasury.finalSharesValue + jogo.treasury.finalCash).not.toBe(antiga.treasury.finalSharesValue + antiga.treasury.finalCash);
+    // Neste cenário pequeno nenhum negócio sai (a ordem a mercado respeita a faixa de 20% desde a rodada Z, como na API,
+    // e não alcança mais a compra da casa fora dela); a comparação do lote fica no fim da temporada, em dinheiro.
+    expect(jogo.treasury.finalCash).toBe(antiga.treasury.finalCash);
   });
 
   it("ligada, é reproduzível com a mesma semente", () => {

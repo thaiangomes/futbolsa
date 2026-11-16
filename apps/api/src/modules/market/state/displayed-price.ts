@@ -18,6 +18,14 @@ export function displayedPriceOf(club: { lastPrice: Cents | null; ipoPrice: Cent
 }
 
 /**
+ * A referência do clube para a faixa de 20%, o túnel e a margem da casa: a que decai (`reference_price`) quando há,
+ * senão o preço exibido. O preço exibido, o dos candles e o das carteiras continuam sendo o do último negócio.
+ */
+export function referencePriceOf(club: { lastPrice: Cents | null; ipoPrice: Cents | null; referencePrice: Cents | null }): Cents {
+  return club.referencePrice ?? displayedPriceOf(club);
+}
+
+/**
  * Variação em centésimos de ponto percentual (+5,00% = 500) do preço atual contra o de referência (o preço exibido
  * às 0h de Brasília). Arredonda para o mais perto, a metade para longe do zero (critério 20).
  */

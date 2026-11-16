@@ -9,7 +9,7 @@ import { DomainError } from "../../../infra/http/index.js";
 import { EventBus } from "../../../infra/realtime/index.js";
 import { currentSeason } from "../../admin/current-season.js";
 import { auctionStateOf } from "../state/auction-states.js";
-import { changeBp, dayOpenPrice, displayedPriceOf, displayedPrices } from "../state/displayed-price.js";
+import { changeBp, dayOpenPrice, displayedPriceOf, displayedPrices, referencePriceOf } from "../state/displayed-price.js";
 import { tradingGate } from "../state/gate.js";
 import { clubsInMatch, inMatch } from "../state/match-mode.js";
 import { readBookLevels, readRecentTrades } from "./book-repo.js";
@@ -62,14 +62,14 @@ export class BookReadService {
     return {
       ticker,
       seq,
-      price: { displayed, open, changeBp: changeBp(displayed, open) },
+      price: { displayed, open, changeBp: changeBp(displayed, open), ...(club.referencePrice !== null ? { reference: club.referencePrice } : {}) },
       matchMode,
       auction: auctionStateOf(club),
       market: marketStateOf(season, { suspendedReason: club.suspendedReason }, now),
       bids: levels.bids,
       asks: levels.asks,
       trades,
-      me: me ? { band: tradingBand(displayed), ...me } : null,
+      me: me ? { band: tradingBand(referencePriceOf(club)), ...me } : null,
     };
   }
 
@@ -128,6 +128,7 @@ const seasonClubsColumns = {
   ticker: clubs.ticker,
   lastPrice: seasonClubs.lastPrice,
   ipoPrice: seasonClubs.ipoPrice,
+  referencePrice: seasonClubs.referencePrice,
   suspendedReason: seasonClubs.suspendedReason,
   auctionOpenedAt: seasonClubs.auctionOpenedAt,
   auctionUntil: seasonClubs.auctionUntil,

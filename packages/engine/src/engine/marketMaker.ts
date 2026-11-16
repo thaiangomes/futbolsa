@@ -78,6 +78,8 @@ export interface QuoteOptions {
   quantity?: number;
   /** Preço exibido do clube, para a regra de nunca ser melhor que o mercado (`marketMargin`). */
   displayedPrice?: Cents;
+  /** Margem desta cotação, no lugar de `config.marketMargin` (a margem que cresce com os dias sem negócio). */
+  margin?: number;
 }
 
 /** Calcula a cotação sem tocar no livro (função pura, fácil de testar). */
@@ -104,8 +106,9 @@ export function computeQuote(
   // Nunca melhor que o mercado: a venda fica em pelo menos ⌈preço × 0,95⌉ e a
   // compra em no máximo ⌊preço × 1,05⌋. Perto da âncora nada muda; longe dela,
   // ninguém compra barato da casa para revender caro (ou o contrário).
-  if (config.marketMargin !== undefined && options.displayedPrice !== undefined) {
-    const m = Math.round(config.marketMargin * 10_000);
+  const margin = options.margin ?? config.marketMargin;
+  if (margin !== undefined && options.displayedPrice !== undefined) {
+    const m = Math.round(margin * 10_000);
     askPrice = Math.max(askPrice, Math.ceil((options.displayedPrice * (10_000 - m)) / 10_000));
     bidPrice = Math.min(bidPrice, Math.floor((options.displayedPrice * (10_000 + m)) / 10_000));
   }
@@ -128,6 +131,8 @@ export class MarketMaker {
     private readonly fairValue?: (clubId: string) => Cents,
     /** Quantidade por lado de cada clube (`quoteSize`, regras do jogo); sem ela, vale a da configuração. */
     private readonly sizeFor?: (clubId: string, inMatch: boolean) => number,
+    /** Referência do clube no lugar do preço exibido (a que decai) e margem própria dele (a que cresce). */
+    private readonly context?: { reference?: (clubId: string) => Cents; margin?: (clubId: string) => number | undefined },
   ) {}
 
   /**
@@ -149,7 +154,11 @@ export class MarketMaker {
       this.ledger.availableCash(this.accountId),
       this.ledger.availableShares(this.accountId, clubId),
       this.config,
-      { displayedPrice: this.exchange.price(clubId), quantity: this.sizeFor?.(clubId, inMatch) },
+      {
+        displayedPrice: this.context?.reference?.(clubId) ?? this.exchange.price(clubId),
+        quantity: this.sizeFor?.(clubId, inMatch),
+        margin: this.context?.margin?.(clubId),
+      },
     );
     if (quote.bid) {
       this.exchange.placeOrder({

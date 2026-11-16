@@ -203,10 +203,10 @@ export async function updateOrderProgress(
     .where(eq(orders.id, orderId));
 }
 
-/** O preço exibido do clube passa a ser o do último negócio. Quem chama já travou a linha do clube. */
+/** O preço exibido do clube passa a ser o do último negócio e a referência que decai volta a ser ele. Quem chama já travou a linha do clube. */
 export async function setClubPrice(tx: Tx, seasonId: number, clubId: number, price: Cents, at: Date): Promise<void> {
   await tx.db
     .update(seasonClubs)
-    .set({ lastPrice: price, lastTradeAt: at })
+    .set({ lastPrice: price, lastTradeAt: at, referencePrice: null })
     .where(and(eq(seasonClubs.seasonId, seasonId), eq(seasonClubs.clubId, clubId)));
 }
