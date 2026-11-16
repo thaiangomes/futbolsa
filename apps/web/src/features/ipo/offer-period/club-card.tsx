@@ -7,6 +7,7 @@ import type { IpoApi } from "../api";
 import { STALE_CODES } from "../forms";
 import { ApiError } from "../../../lib/api";
 import { Cell, ErrorNote, useAction } from "../ui";
+import { ClubBadgeMark } from "../../portfolio/club-badge";
 import { BidForm } from "./bid-form";
 
 /**
@@ -36,6 +37,7 @@ export function ClubCard({ club, cash, canBid, api, onSaved, onCancelled, onStal
   return (
     <li className="ipo-card" data-ticker={ticker}>
       <div className="ipo-id">
+        <ClubBadgeMark club={{ ticker, name }} size={30} />
         <span className="chip">{ticker}</span>
         <b>{name}</b>
       </div>

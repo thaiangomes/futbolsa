@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { marketStateSchema } from "./book.js";
+import { fixtureSchema } from "./fixtures.js";
 import { auctionStateSchema } from "./orders.js";
 
 /**
@@ -20,6 +21,8 @@ export const clubListItemSchema = z.strictObject({
   auction: auctionStateSchema.nullable(),
   /** Suspensão do clube (ou do mercado todo), com o motivo que todos veem. */
   suspended: z.strictObject({ reason: z.string() }).nullable(),
+  /** O próximo jogo do clube (agendado, em qualquer competição), ou `null` sem jogo marcado. */
+  nextMatch: fixtureSchema.nullable(),
 });
 export type ClubListItem = z.infer<typeof clubListItemSchema>;
 

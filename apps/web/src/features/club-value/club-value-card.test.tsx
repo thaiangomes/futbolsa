@@ -16,6 +16,7 @@ const fla3: ClubValueView = {
   leagueOpen: true,
   points: 20,
   position: 5,
+  played: 9,
   paid: 270,
   toReceive: 30,
   buybackMultipleBp: 15_000,
@@ -26,6 +27,7 @@ const fla3: ClubValueView = {
       advance: { "1a-fase": 50, "2a-fase": 75, "3a-fase": 100, oitavas: 150, quartas: 250, semifinal: 400 },
       title: 800,
       currentPhase: "oitavas",
+      outcome: "playing" as const,
     },
     {
       competition: "libertadores",
@@ -33,6 +35,7 @@ const fla3: ClubValueView = {
       advance: { grupos: 150, oitavas: 225, quartas: 375, semifinal: 600 },
       title: 1200,
       currentPhase: "grupos",
+      outcome: "playing" as const,
     },
   ],
 };
@@ -137,7 +140,7 @@ describe("cartão \"Quanto vale para você\" na tela do clube", () => {
   });
 
   it("clube que já caiu da copa não ganha campo para ela, e campeonato fechado esconde pontos e colocação", async () => {
-    const caiu: ClubValueView = { ...fla3, leagueOpen: false, cups: [{ ...fla3.cups[0]!, currentPhase: null }] };
+    const caiu: ClubValueView = { ...fla3, leagueOpen: false, cups: [{ ...fla3.cups[0]!, currentPhase: null, outcome: "eliminated" as const }] };
     await dom.render(createElement(ClubValueCard, { ticker: "FLA3", name: "Flamengo", price: 4430, api: apiOf(caiu) }));
     await dom.settle();
     await dom.settle();

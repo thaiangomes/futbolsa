@@ -1,6 +1,7 @@
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import { CLUBS } from "@futbolsa/engine/data/clubs";
+import { badgeColumns } from "./club-badge.js";
 import { connect, type Database } from "./client.js";
 import { clubs, seasons } from "./schema/index.js";
 
@@ -17,7 +18,7 @@ export async function seed(db: Database, year = DEFAULT_SEED_YEAR): Promise<void
   await db.transaction(async (tx) => {
     await tx
       .insert(clubs)
-      .values(CLUBS.map((c) => ({ ticker: c.id, name: c.name })))
+      .values(CLUBS.map((c) => ({ ticker: c.id, name: c.name, ...badgeColumns(c.id) })))
       .onConflictDoNothing({ target: clubs.ticker });
     await tx.insert(seasons).values({ year }).onConflictDoNothing({ target: seasons.year });
   });

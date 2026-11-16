@@ -3,7 +3,9 @@
 import type { MyOrder, PlaceOrderResponse } from "@futbolsa/contracts";
 import { useEffect, useState } from "react";
 import { formatCents } from "../../lib/format";
+import { NextGamesCard } from "../club-games";
 import { ClubValueCard } from "../club-value";
+import type { MyPosition } from "../portfolio/use-positions";
 import type { MarketApi } from "./api";
 import { BookPanel } from "./book-panel";
 import type { ClubState } from "./club-state";
@@ -47,6 +49,7 @@ export function MobileClub({
   onCancel,
   busyId,
   cancelError,
+  position,
 }: {
   state: ClubState;
   orders: readonly MyOrder[];
@@ -56,6 +59,7 @@ export function MobileClub({
   onCancel: (id: number) => void;
   busyId: number | null;
   cancelError: string | null;
+  position?: MyPosition;
 }) {
   const [tab, setTab] = useState<Tab>("livro");
   const [sheet, setSheet] = useState<"buy" | "sell" | null>(null);
@@ -64,7 +68,7 @@ export function MobileClub({
 
   return (
     <div className="stack" data-testid="clube-celular" style={{ gap: 14 }}>
-      <PriceHeader state={state} />
+      <PriceHeader state={state} position={position} />
       <MarketStatus state={state} />
       <div className="tabs" role="group" aria-label="Seções">
         {tabs.map(([id, text]) => (
@@ -73,7 +77,12 @@ export function MobileClub({
       </div>
       {tab === "livro" && <BookPanel bids={state.bids} asks={state.asks} mine={mine} />}
       {tab === "neg" && <TradesPanel trades={state.trades} />}
-      {tab === "sobre" && <ClubValueCard ticker={state.ticker} price={state.price.displayed} api={api} />}
+      {tab === "sobre" && (
+        <>
+          <NextGamesCard ticker={state.ticker} api={api} />
+          <ClubValueCard ticker={state.ticker} price={state.price.displayed} api={api} />
+        </>
+      )}
       {tab === "minhas" && logged && <MyOrders orders={orders} ticker={state.ticker} onCancel={onCancel} busyId={busyId} error={cancelError} />}
 
       <div className="row" style={{ padding: "12px 0", gap: 10, flexWrap: "nowrap", position: "sticky", bottom: "var(--altura-abas, 0px)", background: "var(--bg)" }}>

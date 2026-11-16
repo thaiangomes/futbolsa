@@ -1,5 +1,5 @@
 import { Controller, Get, Param } from "@nestjs/common";
-import { type BookView, type ClubList, clubTickerParamSchema } from "@futbolsa/contracts";
+import { type BookView, type ClubFixtures, type ClubList, clubTickerParamSchema } from "@futbolsa/contracts";
 import { CurrentAuth, Public, type RequestAuth } from "../../../infra/auth-adapter/index.js";
 import { ZodValidationPipe } from "../../../infra/http/index.js";
 import { BookReadService } from "./book-read.service.js";
@@ -18,6 +18,12 @@ export class BookController {
   @Get()
   list(): Promise<ClubList> {
     return this.reads.list();
+  }
+
+  @Public()
+  @Get(":ticker/fixtures")
+  fixtures(@Param("ticker", tickerPipe) ticker: string): Promise<ClubFixtures> {
+    return this.reads.fixtures(ticker);
   }
 
   @Public()

@@ -13,6 +13,8 @@ export interface CandleRecord {
   low: Cents;
   close: Cents;
   volume: number;
+  /** O valor negociado no período, em centavos (preço × quantidade somados). */
+  turnover: number;
 }
 
 const INTERVALS: readonly CandleInterval[] = ["15m", "1d"];
@@ -43,6 +45,7 @@ export async function recordTrade(
         low: first.low,
         close: first.close,
         volume: first.volume,
+        turnover: trade.price * trade.quantity,
       })
       .onConflictDoUpdate({
         target: [candles.clubId, candles.interval, candles.start],
@@ -51,10 +54,11 @@ export async function recordTrade(
           low: sql`least(${candles.low}, excluded.low)`,
           close: sql`excluded.close`,
           volume: sql`${candles.volume} + excluded.volume`,
+          turnover: sql`${candles.turnover} + excluded.turnover`,
         },
       })
       .returning();
-    out.push({ clubId: row!.clubId, interval, start: row!.start, open: row!.open, high: row!.high, low: row!.low, close: row!.close, volume: row!.volume });
+    out.push({ clubId: row!.clubId, interval, start: row!.start, open: row!.open, high: row!.high, low: row!.low, close: row!.close, volume: row!.volume, turnover: row!.turnover });
   }
   return out;
 }

@@ -104,6 +104,7 @@ export class MarketEvents {
           low: c.low,
           close: c.close,
           volume: c.volume,
+          turnover: c.turnover,
         });
       }
       for (const o of orders) this.publishOrder(owners.get(o.walletId), o);

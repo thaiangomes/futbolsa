@@ -4,6 +4,7 @@ import type { ClubValueView } from "@futbolsa/contracts";
 import { buybackIfEndedNow, type ClubValueSimulation } from "@futbolsa/engine/engine/clubValue";
 import { useEffect, useMemo, useState } from "react";
 import { formatCents } from "../../lib/format";
+import { SituationCard } from "./situation-card";
 import {
   type BetForm,
   CUP_NAMES,
@@ -59,7 +60,12 @@ export function ClubValueCard({ ticker, name, price, api }: { ticker: string; na
       </section>
     );
   }
-  return <Loaded view={view} name={name ?? ticker} price={price} title={title} />;
+  return (
+    <>
+      <SituationCard view={view} />
+      <Loaded view={view} name={name ?? ticker} price={price} title={title} />
+    </>
+  );
 }
 
 function Loaded({ view, name, price, title }: { view: ClubValueView; name: string; price: number; title: string }) {

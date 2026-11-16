@@ -38,7 +38,7 @@ async function type(selector: string, value: string) {
 const click = (el: Element) => act(async () => (el as HTMLElement).click());
 const fake = (overrides: Partial<Record<keyof AdminApi, unknown>>) => overrides as unknown as AdminApi;
 
-const club = (ticker: string) => ({ ticker, name: ticker, badgeAbbr: null, colorPrimary: null, colorSecondary: null });
+const club = (ticker: string) => ({ ticker, name: ticker, badgeAbbr: null, colorPrimary: null, colorSecondary: null, badgePattern: null, badgeInk: null, badgeExtra: null });
 const ID = "11111111-1111-4111-8111-111111111111";
 const detail = (over: Partial<PlayerDetail> = {}): PlayerDetail => ({
   account: { id: ID, nickname: "Ana", email: "ana@exemplo.com", role: "player", status: "active", blockedReason: null, createdAt: "2027-03-01T12:00:00.000Z", deletedAt: null },

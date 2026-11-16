@@ -32,6 +32,9 @@ export interface EntryRow {
   club_name: string | null;
   badge_abbr: string | null;
   color_primary: string | null;
+  badge_pattern: string | null;
+  badge_ink: string | null;
+  badge_extra: string | null;
   color_secondary: string | null;
   cash_delta: number;
   shares_delta: number;
@@ -67,7 +70,7 @@ export function entryItemOf(r: EntryRow): EntryItem {
     at: r.at.toISOString(),
     kind: r.kind,
     group: ENTRY_GROUP_OF[r.kind] ?? "other",
-    club: r.ticker ? { ticker: r.ticker, name: r.club_name ?? r.ticker, badgeAbbr: r.badge_abbr, colorPrimary: r.color_primary, colorSecondary: r.color_secondary } : null,
+    club: r.ticker ? { ticker: r.ticker, name: r.club_name ?? r.ticker, badgeAbbr: r.badge_abbr, colorPrimary: r.color_primary, colorSecondary: r.color_secondary, badgePattern: r.badge_pattern, badgeInk: r.badge_ink, badgeExtra: r.badge_extra } : null,
     quantity: r.shares_delta,
     price: r.price,
     amount: r.cash_delta,

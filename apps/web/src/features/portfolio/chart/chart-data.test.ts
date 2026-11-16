@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 import { formatBp, formatChartClock, formatChartDay, formatMoney, formatMonth, formatPermille, formatSignedMoney, toneClass } from "../format";
 import { gameContext, resultText, scoreLine } from "./labels";
 import { aggregateTrades, buildMarkers } from "./markers";
-import { applyCandleEvent, candleData, lineData, volumeData } from "./series";
+import { applyCandleEvent, candleData, formatShortMoney, lineData, volumeData } from "./series";
 
 // T12: mapeamento puro dos dados do gráfico (Carteira e gráficos 22 a 28).
 
-const candle = (start: string, open: number, high: number, low: number, close: number, volume: number): ChartCandle => ({ start, open, high, low, close, volume });
+const candle = (start: string, open: number, high: number, low: number, close: number, volume: number): ChartCandle => ({ start, open, high, low, close, volume, turnover: volume * 100 });
 const sec = (iso: string) => Date.parse(iso) / 1000;
 
 describe("formatos", () => {
@@ -44,6 +44,21 @@ describe("séries", () => {
     expect(volumeData(candles, { up: "U", down: "D" }).map((v) => [v.value, v.color])).toEqual([[30, "U"], [0, "D"]]);
   });
 
+  it("livro 48: o volume do gráfico é o valor negociado em reais (preço × quantidade somados), não a quantidade de ações", () => {
+    // 166 ações a R$ 14,50 em média: R$ 2.407,00 negociados
+    const c: ChartCandle = { start: "2027-04-06T13:00:00.000Z", open: 1500, high: 1500, low: 1400, close: 1450, volume: 166, turnover: 240_700 };
+    expect(volumeData([c], { up: "U", down: "D" })).toEqual([{ time: sec("2027-04-06T13:00:00Z"), value: 2407, color: "D" }]);
+  });
+
+  it("o eixo do volume usa o formato curto: R$ 850, R$ 2,4 mil, R$ 1,2 mi, R$ 3 bi", () => {
+    expect(formatShortMoney(0)).toBe("R$ 0");
+    expect(formatShortMoney(850)).toBe("R$ 850");
+    expect(formatShortMoney(2407)).toBe("R$ 2,4 mil");
+    expect(formatShortMoney(12_000)).toBe("R$ 12 mil");
+    expect(formatShortMoney(1_234_000)).toBe("R$ 1,2 mi");
+    expect(formatShortMoney(3_000_000_000)).toBe("R$ 3 bi");
+  });
+
   it("carteira 23: o dia sem negócio chega com volume zero e fechamento repetido", () => {
     const flat = [candle("2027-04-07T03:00:00.000Z", 4000, 4000, 4000, 4000, 0)];
     expect(volumeData(flat, { up: "U", down: "D" })[0]!.value).toBe(0);
@@ -51,7 +66,7 @@ describe("séries", () => {
   });
 
   it("o candle do canal substitui o último sem repetir; a virada pede a recarga; outro intervalo e candle velho são ignorados", () => {
-    const event = { interval: "15m" as const, start: "2027-04-06T13:15:00.000Z", open: 4150, high: 4300, low: 4000, close: 4300, volume: 12 };
+    const event = { interval: "15m" as const, start: "2027-04-06T13:15:00.000Z", open: 4150, high: 4300, low: 4000, close: 4300, volume: 12, turnover: 51_600 };
     const first = applyCandleEvent(candles, "15m", event);
     expect(first.kind).toBe("replace");
     if (first.kind !== "replace") return;

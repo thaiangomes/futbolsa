@@ -5,9 +5,11 @@ import { tradingBand } from "@futbolsa/engine/engine/orderRules";
 import { CLUBS } from "@futbolsa/engine/data/clubs";
 import { ApiError } from "../../lib/api";
 import { useSession } from "../accounts/session-provider";
+import { NextGamesCard } from "../club-games";
 import { ClubValueCard } from "../club-value";
 import { ClubChart } from "../portfolio/chart/club-chart";
 import { portfolioApi } from "../portfolio/api";
+import { type MyPosition, NO_POSITION, usePositions } from "../portfolio/use-positions";
 import { type MarketApi, marketApi } from "./api";
 import { BookPanel } from "./book-panel";
 import type { ClubState } from "./club-state";
@@ -40,12 +42,16 @@ export function ClubScreen({ ticker }: { ticker: string }) {
   const { state: session } = useSession();
   const { api: client } = useSession();
   const logged = session.status === "ready";
-  const chart = useMemo(() => <ClubChart ticker={ticker} api={portfolioApi(client)} logged={logged} />, [ticker, client, logged]);
-  return <ClubView ticker={ticker} api={api} logged={logged} chart={chart} />;
+  const wallet = useMemo(() => portfolioApi(client), [client]);
+  const chart = useMemo(() => <ClubChart ticker={ticker} api={wallet} logged={logged} />, [ticker, wallet, logged]);
+  const positions = usePositions(wallet, logged);
+  // logado e com a carteira lida: sem a posição no clube, o jogador tem zero ações dele; sem a carteira lida, não se mostra nada
+  const position = positions ? (positions.get(ticker) ?? NO_POSITION) : undefined;
+  return <ClubView ticker={ticker} api={api} logged={logged} chart={chart} position={position} />;
 }
 
 /** O miolo da tela, sem depender da sessão (os testes passam a API e se está logado). */
-export function ClubView({ ticker, api, logged, chart = null }: { ticker: string; api: MarketApi; logged: boolean; chart?: ReactNode }) {
+export function ClubView({ ticker, api, logged, chart = null, position }: { ticker: string; api: MarketApi; logged: boolean; chart?: ReactNode; position?: MyPosition }) {
   const book = useClubBook(api, ticker);
   const mine = useMyOrders(api, logged);
   const balances = useBalances(api, ticker, logged);
@@ -82,13 +88,13 @@ export function ClubView({ ticker, api, logged, chart = null }: { ticker: string
 
   if (narrow) {
     return (
-      <MobileClub state={view} orders={orders} logged={logged} api={api} onSent={() => void mine.reload()} onCancel={(id) => void cancel(id)} busyId={busy} cancelError={cancelError} />
+      <MobileClub state={view} orders={orders} logged={logged} api={api} position={position} onSent={() => void mine.reload()} onCancel={(id) => void cancel(id)} busyId={busy} cancelError={cancelError} />
     );
   }
 
   return (
     <div className="stack" data-testid="clube">
-      <PriceHeader state={view} name={NAMES.get(ticker)} />
+      <PriceHeader state={view} name={NAMES.get(ticker)} position={position} />
       <MarketStatus state={view} />
       {chart}
       <div className="g-livro">
@@ -103,6 +109,7 @@ export function ClubView({ ticker, api, logged, chart = null }: { ticker: string
           {logged && <MyOrders orders={orders} ticker={ticker} onCancel={(id) => void cancel(id)} busyId={busy} error={cancelError} />}
         </div>
       </div>
+      <NextGamesCard ticker={ticker} api={api} />
       <ClubValueCard ticker={ticker} name={NAMES.get(ticker)} price={view.price.displayed} api={api} />
     </div>
   );

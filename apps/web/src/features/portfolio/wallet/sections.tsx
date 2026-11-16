@@ -97,7 +97,7 @@ export function PositionsTable({ view }: { view: WalletView }) {
             <thead>
               <tr>
                 <th>Clube</th><th className="r">Ações</th><th className="r">Preço médio</th><th className="r">Preço</th>
-                <th className="r">Valor</th><th className="r">Resultado</th><th className="r">Dividendos</th><th className="r">A receber</th><th className="r">Fatia</th>
+                <th className="r">Valor</th><th className="r">Resultado</th><th className="r">Dividendos</th><th className="r">A receber</th><th className="r">Fatia</th><th><span className="sr-only">Negociar</span></th>
               </tr>
             </thead>
             <tbody>
@@ -121,6 +121,9 @@ export function PositionsTable({ view }: { view: WalletView }) {
                   <td className="r num">{formatMoney(p.dividends)}</td>
                   <td className="r num">{formatMoney(p.receivable)}</td>
                   <td className="r num">{p.shareOfEquityPermille === null ? "—" : formatPermille(p.shareOfEquityPermille)}</td>
+                  <td className="r">
+                    <a href={`/clube?t=${p.club.ticker}`} className="btn btn-sm" data-testid="negociar" aria-label={`Negociar ${p.club.ticker}`}>Negociar</a>
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -17,8 +17,8 @@ import { seasons } from "../../../infra/db/schema/index.js";
 
 export const WALLET_NOT_FOUND = "wallet_not_found";
 
-export function clubRefOf(c: { ticker: string | null; name: string; badgeAbbr: string | null; colorPrimary: string | null; colorSecondary: string | null }): PortfolioClub {
-  return { ticker: c.ticker ?? "", name: c.name, badgeAbbr: c.badgeAbbr, colorPrimary: c.colorPrimary, colorSecondary: c.colorSecondary };
+export function clubRefOf(c: { ticker: string | null; name: string; badgeAbbr: string | null; colorPrimary: string | null; colorSecondary: string | null; badgePattern: string | null; badgeInk: string | null; badgeExtra: string | null }): PortfolioClub {
+  return { ticker: c.ticker ?? "", name: c.name, badgeAbbr: c.badgeAbbr, colorPrimary: c.colorPrimary, colorSecondary: c.colorSecondary, badgePattern: c.badgePattern, badgeInk: c.badgeInk, badgeExtra: c.badgeExtra };
 }
 
 /**
@@ -105,6 +105,9 @@ export class WalletService {
             badgeAbbr: clubs.badgeAbbr,
             colorPrimary: clubs.colorPrimary,
             colorSecondary: clubs.colorSecondary,
+            badgePattern: clubs.badgePattern,
+            badgeInk: clubs.badgeInk,
+            badgeExtra: clubs.badgeExtra,
           })
           .from(positions)
           .innerJoin(clubs, eq(clubs.id, positions.clubId))

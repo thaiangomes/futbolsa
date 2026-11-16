@@ -6,6 +6,9 @@ export interface CupMatch {
   awayClubId: number;
   /** Mata-mata: quem passou (inclusive nos pênaltis). Nulo na fase de grupos e antes do jogo. */
   advancedClubId: number | null;
+  /** O placar, quando o jogo acabou (a decisão sem `advancedClubId` vale por ele). */
+  homeGoals?: number | null;
+  awayGoals?: number | null;
   kickoff: Date;
 }
 
@@ -42,4 +45,24 @@ export function cupPhaseOf(matches: readonly CupMatch[], clubId: number, phases:
   // a fonte não diz quem passou (fase de grupos): se a fase seguinte já tem jogos e ele não está neles, caiu
   const laterStarted = matches.some((m) => m.status !== "cancelled" && m.phase !== null && phases.includes(m.phase) && phases.indexOf(m.phase) > latest);
   return laterStarted ? null : phase;
+}
+
+export type CupOutcome = "playing" | "eliminated" | "champion";
+
+/**
+ * A situação do clube numa copa: `playing` (ainda disputa), `champion` (ganhou a final) ou `eliminated` (saiu antes ou perdeu
+ * a final); `undefined` quando ele não disputa a copa. A final vale por `advancedClubId` e, sem ele, pelo placar.
+ */
+export function cupOutcomeOf(matches: readonly CupMatch[], clubId: number, phases: readonly string[]): CupOutcome | undefined {
+  const phase = cupPhaseOf(matches, clubId, phases);
+  if (phase === undefined) return undefined;
+  if (phase !== null) return "playing";
+  const finalPhase = phases[phases.length - 1];
+  const won = matches.some((m) => {
+    if (m.phase !== finalPhase || m.status !== "finished" || (m.homeClubId !== clubId && m.awayClubId !== clubId)) return false;
+    if (m.advancedClubId !== null) return m.advancedClubId === clubId;
+    if (m.homeGoals == null || m.awayGoals == null || m.homeGoals === m.awayGoals) return false;
+    return (m.homeGoals > m.awayGoals ? m.homeClubId : m.awayClubId) === clubId;
+  });
+  return won ? "champion" : "eliminated";
 }

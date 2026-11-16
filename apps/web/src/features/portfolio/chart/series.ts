@@ -34,9 +34,22 @@ export function candleData(candles: readonly ChartCandle[]): CandlePoint[] {
   return candles.map((c) => ({ time: toSeconds(c.start), open: reais(c.open), high: reais(c.high), low: reais(c.low), close: reais(c.close) }));
 }
 
-/** O volume colorido pela direção do candle: alta (fechou acima da abertura) ou baixa; sem variação fica como alta. */
+/**
+ * O volume financeiro (R$) de cada período, colorido pela direção do candle: alta (fechou acima da abertura) ou baixa; sem
+ * variação fica como alta. É o valor negociado (preço × quantidade somados), como nos home brokers, e não a quantidade de ações.
+ */
 export function volumeData(candles: readonly ChartCandle[], colors: { up: string; down: string }): VolumePoint[] {
-  return candles.map((c) => ({ time: toSeconds(c.start), value: c.volume, color: c.close >= c.open ? colors.up : colors.down }));
+  return candles.map((c) => ({ time: toSeconds(c.start), value: reais(c.turnover), color: c.close >= c.open ? colors.up : colors.down }));
+}
+
+/** Reais no formato curto do eixo do volume: `R$ 850`, `R$ 2,4 mil`, `R$ 1,2 mi`, `R$ 3 bi`. */
+export function formatShortMoney(valueInReais: number): string {
+  const abs = Math.abs(valueInReais);
+  const fmt = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+  if (abs < 1000) return `R$ ${fmt(Math.round(valueInReais))}`;
+  if (abs < 1_000_000) return `R$ ${fmt(valueInReais / 1000)} mil`;
+  if (abs < 1_000_000_000) return `R$ ${fmt(valueInReais / 1_000_000)} mi`;
+  return `R$ ${fmt(valueInReais / 1_000_000_000)} bi`;
 }
 
 export type CandleUpdate =
@@ -60,6 +73,6 @@ export function applyCandleEvent(candles: readonly ChartCandle[], interval: "15m
   const index = candles.findIndex((c) => Date.parse(c.start) === eventStart);
   if (index < 0) return { kind: "ignore" };
   const next = candles.slice();
-  next[index] = { start: candles[index]!.start, open: event.open, high: event.high, low: event.low, close: event.close, volume: event.volume };
+  next[index] = { start: candles[index]!.start, open: event.open, high: event.high, low: event.low, close: event.close, volume: event.volume, turnover: event.turnover };
   return { kind: "replace", candles: next };
 }

@@ -37,11 +37,13 @@ export async function rebuildCandles(tx: Tx, clubId: number, since: Date): Promi
   for (const interval of INTERVALS) {
     const start = starts.get(interval)!;
     const byStart = new Map<number, Candle>();
+    const turnoverOf = new Map<number, number>();
     for (const t of rows) {
       const at = t.at.getTime();
       if (at < start) continue;
       const key = candleStart(interval, at);
       byStart.set(key, applyTrade(byStart.get(key), interval, at, t.price, t.quantity));
+      turnoverOf.set(key, (turnoverOf.get(key) ?? 0) + t.price * t.quantity);
     }
     await tx.db
       .delete(candles)
@@ -55,6 +57,7 @@ export async function rebuildCandles(tx: Tx, clubId: number, since: Date): Promi
       low: c.low,
       close: c.close,
       volume: c.volume,
+      turnover: turnoverOf.get(c.start) ?? 0,
     }));
     for (let i = 0; i < values.length; i += BATCH) await tx.db.insert(candles).values(values.slice(i, i + BATCH));
     out[interval] = values.length;

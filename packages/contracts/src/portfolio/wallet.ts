@@ -8,6 +8,10 @@ export const portfolioClubSchema = z.strictObject({
   badgeAbbr: z.string().nullable(),
   colorPrimary: z.string().nullable(),
   colorSecondary: z.string().nullable(),
+  /** O padrão do selo (`solido`, `listras`, `aros`…), a cor da sigla e a segunda cor do tricolor. */
+  badgePattern: z.string().nullable(),
+  badgeInk: z.string().nullable(),
+  badgeExtra: z.string().nullable(),
 });
 export type PortfolioClub = z.infer<typeof portfolioClubSchema>;
 
