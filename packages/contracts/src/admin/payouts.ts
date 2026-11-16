@@ -25,6 +25,16 @@ export const payoutListQuerySchema = z.strictObject({
   competition: competitionSchema.optional(),
   round: z.coerce.number().int().min(1).optional(),
   phase: z.string().min(1).max(40).optional(),
+  /** O tipo de evento. */
+  kind: payoutKindSchema.optional(),
+  /** O clube, pelo ticker. */
+  club: z.string().min(1).max(10).optional(),
+  /** Período do fechamento do evento: de (inclusive) até (exclusive). */
+  closedFrom: isoInstantSchema.optional(),
+  closedBefore: isoInstantSchema.optional(),
+  /** Paginação feita na API (a lista pode ter centenas de eventos). */
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
 });
 export type PayoutListQuery = z.infer<typeof payoutListQuerySchema>;
 
@@ -62,7 +72,16 @@ export const payoutEventViewSchema = z.strictObject({
 });
 export type PayoutEventView = z.infer<typeof payoutEventViewSchema>;
 
-export const payoutListResponseSchema = z.strictObject({ events: z.array(payoutEventViewSchema) });
+export const payoutListResponseSchema = z.strictObject({
+  /** Do fechamento mais novo para o mais antigo. */
+  events: z.array(payoutEventViewSchema),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+  /** Quantos eventos batem com os filtros, em todas as páginas. */
+  total: z.number().int(),
+  /** Quantos aguardam aprovação na temporada inteira, sem filtro (é o que o "aprovar todos" aprova). */
+  pendingTotal: z.number().int(),
+});
 export type PayoutListResponse = z.infer<typeof payoutListResponseSchema>;
 
 // ---------- GET /admin/payouts/:id/holders ----------

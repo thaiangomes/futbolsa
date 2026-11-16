@@ -40,6 +40,9 @@ export const ADMIN_ERROR_MESSAGES = {
   match_not_found: "Jogo não encontrado.",
   season_exists: "Já existe uma temporada em andamento: encerre a anterior antes de preparar outra.",
   cups_not_confirmed: "Confirme a tabela das três copas antes de abrir o IPO.",
+  cup_phases_missing: "Há jogos importados em fases que não estão na tabela da copa: acrescente o valor delas antes de confirmar.",
+  cup_correction_not_needed: "Os valores desta temporada ainda não foram travados: edite a tabela da copa pela tela normal.",
+  cup_correction_invalid: "As fases que já têm pagamento não mudam: elas ficam na tabela, com o mesmo valor e na mesma ordem.",
   event_superseded: "Este pagamento mudou desde a prévia (um resultado foi corrigido): recarregue a prévia e aprove a versão nova.",
   standings_not_confirmed:
     "Confira a classificação oficial antes de aprovar a colocação ou o acesso: o valor depende da posição final.",

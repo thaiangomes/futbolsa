@@ -54,7 +54,7 @@ describe("clubValue: o simulador \"Quanto vale para você\"", () => {
     expect(s.seasonTotal).toBe(reais(17.05));
     expect(s.buyback).toBe(reais(25.58)); // 1,5 × R$ 17,05 = 25,575, meio centavo para cima
     expect(s.value).toBe(reais(39.93));
-    expect(s.priceGapBp).toBe(1094); // o preço de R$ 44,30 fica 10,94% acima
+    expect(s.outlook).toEqual({ kind: "downside", percent: 10 }); // o preço de R$ 44,30 está acima de R$ 39,93: 1 − 39,93 ÷ 44,30 = 9,86%
   });
 
   it("a recompra simulada é a mesma conta do buybackPerShare (meio centavo para cima)", () => {
@@ -135,12 +135,23 @@ describe("clubValue: o simulador \"Quanto vale para você\"", () => {
 
   it("valor zero: sem distância do preço (não divide por zero)", () => {
     const nada: ClubValueInput = { ...fla3, paid: 0, toReceive: 0, cups: [] };
-    expect(clubValue(nada, { points: 20, position: 20, cups: {} }).simulation!.priceGapBp).toBeNull();
+    expect(clubValue(nada, { points: 20, position: 20, cups: {} }).simulation!.outlook).toBeNull();
   });
 
-  it("preço abaixo do valor dá distância negativa", () => {
+  it("preço abaixo do valor é upside (valor ÷ preço − 1); acima, downside (1 − valor ÷ preço); igual, igual", () => {
+    const valor = clubValue(fla3, aposta68).simulation!.value; // R$ 39,93
+    const com = (displayedPrice: number) => clubValue({ ...fla3, displayedPrice }, aposta68).simulation!.outlook;
+    expect(com(valor)).toEqual({ kind: "even", percent: 0 });
+    expect(com(valor - 1)).toMatchObject({ kind: "upside" });
+    expect(com(valor + 1)).toMatchObject({ kind: "downside" });
+    // exemplos do vault: preço muito abaixo dá upside grande; o downside nunca passa de 100%
+    expect(clubValue({ ...fla3, displayedPrice: 1000 }, aposta68).simulation!.outlook).toEqual({ kind: "upside", percent: 299 }); // 39,93 ÷ 10 − 1 = 299,3%
+    expect(clubValue({ ...fla3, displayedPrice: 100_000 }, aposta68).simulation!.outlook).toEqual({ kind: "downside", percent: 96 }); // 1 − 39,93 ÷ 1000 = 96,0%
+  });
+
+  it("preço abaixo do valor dá upside de 33%", () => {
     const barato: ClubValueInput = { ...fla3, displayedPrice: reais(30) };
-    expect(clubValue(barato, aposta68).simulation!.priceGapBp).toBe(-2487); // (30 − 39,93) ÷ 39,93 = −24,87%
+    expect(clubValue(barato, aposta68).simulation!.outlook).toEqual({ kind: "upside", percent: 33 }); // 39,93 ÷ 30 − 1 = 33,1%
   });
 
   describe("copa com dois caminhos (Sul-Americana)", () => {

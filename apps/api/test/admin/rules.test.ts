@@ -5,7 +5,7 @@ import { cupViewSchema, seasonRulesSchema } from "@futbolsa/contracts";
 import { COPA_DO_BRASIL } from "@futbolsa/engine";
 import { FixedClock } from "../../src/infra/clock/index.js";
 import { withTransaction } from "../../src/infra/db/index.js";
-import { adminLog, cupPhases, matches, seasonCups, seasonRules, seasons } from "../../src/infra/db/schema/index.js";
+import { adminLog, cupPhases, matches, payoutEvents, seasonCups, seasonRules, seasons } from "../../src/infra/db/schema/index.js";
 import { SeasonValuesService } from "../../src/modules/dividends/season-values/season-values.service.js";
 import { createAccount, type TestAccount } from "../support/accounts.js";
 import { expectAdminOnly } from "../support/admin-routes.js";
@@ -126,6 +126,21 @@ describe("regras e copas da temporada", () => {
     expect((await cup("sulamericana")).phasesWithoutValue).toEqual(["dezesseis-avos"]);
   });
 
+  it("item 16: confirmar a tabela é recusado quando há jogos importados em fase que não está nela (as preliminares não contam)", async () => {
+    const jogo = (phase: string, id: string) => ({ seasonId, competition: "libertadores" as const, phase, homeClubId: clubIds.get("FLA3")!, awayClubId: clubIds.get("PAL3")!, kickoff: clock.now(), source: "t", sourceId: id });
+    await database.db.insert(matches).values([jogo("pre-2", "q1"), jogo("fase-extra", "q2")]);
+    const antes = (await cup("libertadores")).confirmedAt;
+    const recusada = await call("POST", `/admin/seasons/${seasonId}/cups/libertadores/confirm`);
+    expect(recusada.statusCode).toBe(409);
+    expect(recusada.json().code).toBe("cup_phases_missing");
+    expect(recusada.json().message).toContain("fase-extra");
+    expect(recusada.json().message).not.toContain("pre-2");
+    expect((await cup("libertadores")).confirmedAt).toBe(antes);
+    // sem o jogo da fase fora da tabela, a confirmação passa
+    await database.db.delete(matches).where(and(eq(matches.seasonId, seasonId), eq(matches.competition, "libertadores")));
+    expect((await call("POST", `/admin/seasons/${seasonId}/cups/libertadores/confirm`)).statusCode).toBe(200);
+  });
+
   it("linhas repetidas na mesma fase e variante são recusadas, e a tabela não muda", async () => {
     const before = await cup("sulamericana");
     const res = await call("PUT", `/admin/seasons/${seasonId}/cups/sulamericana`, {
@@ -185,6 +200,65 @@ describe("regras e copas da temporada", () => {
     const rows = await database.db.select().from(cupPhases).where(and(eq(cupPhases.seasonId, seasonId), eq(cupPhases.competition, "copa-do-brasil")));
     expect(rows.length).toBe(NOVE_FASES.length);
     expect(COPA_DO_BRASIL.phases).toHaveLength(7);
+  });
+
+  it("item 16: a correção depois do IPO mexe só nas fases sem pagamento, entra no registro do admin e não abre a trava para mais nada", async () => {
+    await call("GET", `/admin/seasons/${seasonId}/rules`); // a temporada ganha os valores dela na primeira consulta
+    await withTransaction(database.db, (tx) => values.lockSeasonValues(tx, seasonId, clock.now()));
+    const url = `/admin/seasons/${seasonId}/cups/sulamericana/correction`;
+    const atual = (await cup("sulamericana")).phases;
+    const nova = { phaseKey: "fase-nova", variant: "advance", perShare: 33 };
+    // depois de todas as linhas da primeira fase (a fase de grupos tem mais de uma variante)
+    const depois = atual.findIndex((p) => p.phaseKey !== atual[0]!.phaseKey);
+    const comNova = [...atual.slice(0, depois), nova, ...atual.slice(depois)];
+    const motivo = "A fase nova ficou fora da tabela copiada da temporada anterior.";
+    // a fase de grupos já tem um pagamento aguardando aprovação: ela não pode mudar
+    await database.db.insert(payoutEvents).values({
+      seasonId, clubId: clubIds.get("FLA3")!, eventKey: "cup_phase|sulamericana|grupos|FLA3", kind: "cup_phase", reason: "avançou da fase grupos",
+      competition: "sulamericana", round: null, phase: atual[0]!.phaseKey, perShare: atual[0]!.perShare, closedAt: clock.now(), status: "pending", createdAt: clock.now(),
+    });
+
+    // sem motivo não passa: o registro do admin é obrigatório
+    expect((await call("POST", url, { phases: comNova })).statusCode).toBe(400);
+    // mudar o valor da fase com pagamento, tirá-la ou trocar a ordem das variantes dela: recusado, e a tabela não muda
+    for (const ruim of [
+      atual.map((p, i) => (i === 0 ? { ...p, perShare: p.perShare + 1 } : p)),
+      atual.slice(1),
+      [...atual].reverse(),
+    ]) {
+      const res = await call("POST", url, { phases: ruim, reason: motivo });
+      expect(res.statusCode).toBe(409);
+      expect(res.json().code).toBe("cup_correction_invalid");
+    }
+    expect((await cup("sulamericana")).phases).toEqual(atual);
+    expect(await logs("cup.correct")).toHaveLength(0);
+
+    // acrescentar uma fase e ajustar o valor de outra sem pagamento passa, mesmo com o IPO aberto
+    const ultima = atual[atual.length - 1]!;
+    const corrigida = comNova.map((p) => (p.phaseKey === ultima.phaseKey && p.variant === ultima.variant ? { ...p, perShare: p.perShare + 5 } : p));
+    const ok = await call("POST", url, { phases: corrigida, reason: motivo });
+    expect(ok.statusCode, JSON.stringify(ok.json())).toBe(200);
+    const view = cupViewSchema.parse(ok.json());
+    expect(view.phases.map((p) => p.phaseKey)).toEqual(comNova.map((p) => p.phaseKey));
+    expect(view.phases.find((p) => p.phaseKey === "fase-nova")!.perShare).toBe(33);
+    expect(view.phases.find((p) => p.phaseKey === ultima.phaseKey && p.variant === ultima.variant)!.perShare).toBe(ultima.perShare + 5);
+    for (const p of atual.filter((x) => x.phaseKey === atual[0]!.phaseKey)) expect(view.phases).toContainEqual(p);
+
+    // o antes e o depois ficam no registro, com o motivo e quem fez
+    const [registro] = await logs("cup.correct");
+    expect(registro).toMatchObject({ actorId: admin.id, targetType: "cup", targetId: "sulamericana", reason: motivo });
+    expect((registro!.before as { phases: unknown[] }).phases).toHaveLength(atual.length);
+    expect((registro!.after as { phases: unknown[] }).phases).toHaveLength(atual.length + 1);
+
+    // a exceção vale só dentro da correção: mudar a tabela por fora, pela tela normal ou pelo banco, segue recusado
+    expect((await call("PUT", `/admin/seasons/${seasonId}/cups/sulamericana`, { phases: corrigida })).statusCode).toBe(409);
+    await expect(database.db.insert(cupPhases).values({ seasonId, competition: "sulamericana", phaseKey: "solta", variant: "advance", ord: 99, perShare: 1 })).rejects.toThrow();
+    await expect(database.db.update(seasonRules).set({ aPerPoint: 1 }).where(eq(seasonRules.seasonId, seasonId))).rejects.toThrow();
+    expect((await cup("sulamericana")).phases).toEqual(view.phases);
+  });
+
+  it("item 16: jogador comum não usa a correção da tabela", async () => {
+    await expectAdminOnly(app, database.db, { method: "POST", url: `/admin/seasons/${seasonId}/cups/sulamericana/correction`, payload: { phases: [{ phaseKey: "final", variant: "title", perShare: 1 }], reason: "x" } });
   });
 
   it("temporada que não existe volta 404", async () => {

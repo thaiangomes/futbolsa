@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm";
 import type { EspnEvent } from "@futbolsa/engine";
 import { apagarBanco, criarTabelasDaPartida } from "../../partida/banco.js";
 import { atualizarFotos, fotosMaisNovas, limiteDasFotos, semearFotos } from "../../partida/dados.js";
-import { recusarAmbienteDaPartida, recusarBancoNaoLocalEstrito, recusarEscutaForaDoLocal } from "../../partida/guardas.js";
+import { recusarAmbienteDaPartida, recusarBancoNaoLocalEstrito, ehEnderecoPrivado, recusarEscutaForaDoLocal } from "../../partida/guardas.js";
 import { createTestDatabase, type TestDatabase } from "../support/db.js";
 
 // F17: os dados no banco (D4) e as guardas da partida (critério 14).
@@ -36,6 +36,22 @@ describe("guardas da partida", () => {
       }
     }
     expect(() => recusarAmbienteDaPartida({ urlBanco: "postgres://u:s@localhost:5432/x", host: "127.0.0.1", env: { NODE_ENV: "test" } })).not.toThrow();
+  });
+
+  it("14: a rede privada é opção explícita: só endereço privado, nunca 0.0.0.0 nem público, e a porta de controle continua local", () => {
+    for (const ip of ["192.168.0.10", "192.168.255.1", "10.0.0.5", "10.255.1.1", "172.16.0.1", "172.31.255.254"]) {
+      expect(ehEnderecoPrivado(ip), ip).toBe(true);
+      expect(() => recusarEscutaForaDoLocal(ip, true), ip).not.toThrow();
+      // sem a opção, o endereço de rede continua recusado
+      expect(() => recusarEscutaForaDoLocal(ip), ip).toThrow(/127.0.0.1/);
+    }
+    for (const ip of ["0.0.0.0", "8.8.8.8", "172.15.0.1", "172.32.0.1", "192.169.0.1", "11.0.0.1", "192.168.0.256", "192.168.0", "exemplo.com", "::", "169.254.1.1", "100.64.0.1"]) {
+      expect(ehEnderecoPrivado(ip), ip).toBe(false);
+      expect(() => recusarEscutaForaDoLocal(ip, true), ip).toThrow(/rede privada/);
+    }
+    expect(() => recusarEscutaForaDoLocal("127.0.0.1", true)).not.toThrow();
+    // o ambiente da partida (a porta de controle) segue exigindo o endereço local, mesmo com a opção de rede ligada no resto
+    expect(() => recusarAmbienteDaPartida({ urlBanco: "postgres://u:s@localhost:5432/x", host: "192.168.0.10" })).toThrow(/127.0.0.1/);
   });
 
   it("14: a partida só mexe em bancos futbolsa_partida", async () => {

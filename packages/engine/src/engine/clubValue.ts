@@ -58,8 +58,17 @@ export interface ClubValueSimulation {
   buyback: Cents;
   /** Valor por ação na conta do jogador: dividendos que faltam + recompra. */
   value: Cents;
-  /** Quanto o preço exibido está acima (positivo) ou abaixo (negativo) do valor, em pontos-base (1.094 = 10,94%); `null` com valor zero. */
-  priceGapBp: number | null;
+  /** O preço exibido contra o valor da conta, medido a partir do preço (o que o jogador ganha ou perde); `null` com valor zero. */
+  outlook: PriceOutlook | null;
+}
+
+/**
+ * Preço abaixo do valor: `upside` = valor ÷ preço − 1. Preço acima: `downside` = 1 − valor ÷ preço. Igual: `even`.
+ * Percentual inteiro, com meio ponto para longe do zero (critério 38 de Livro de ofertas e formador de mercado).
+ */
+export interface PriceOutlook {
+  kind: "upside" | "downside" | "even";
+  percent: number;
 }
 
 export interface ClubValueResult {
@@ -167,14 +176,14 @@ export function clubValue(input: ClubValueInput, bet?: ClubBet): ClubValueResult
   const seasonTotal = input.paid + total;
   const buyback = buybackPerShare(seasonTotal, input.buybackMultipleBp);
   const value = total + buyback;
-  const priceGapBp = value > 0 ? gapBp(input.displayedPrice, value) : null;
-  return { buybackNow, simulation: { missing: { points, placement, cups, toReceive: input.toReceive, total }, seasonTotal, buyback, value, priceGapBp } };
+  const outlook = value > 0 ? outlookOf(input.displayedPrice, value) : null;
+  return { buybackNow, simulation: { missing: { points, placement, cups, toReceive: input.toReceive, total }, seasonTotal, buyback, value, outlook } };
 }
 
-/** (preço − valor) ÷ valor, em pontos-base, com meio ponto-base para longe do zero. */
-function gapBp(price: Cents, value: Cents): number {
-  const diff = price - value;
-  const scaled = (Math.abs(diff) * 20_000 + value) / (2 * value);
-  const rounded = Math.floor(scaled);
-  return diff < 0 ? -rounded : rounded;
+/** Upside ou downside em percentual inteiro, calculado só com inteiros. */
+function outlookOf(price: Cents, value: Cents): PriceOutlook {
+  if (price === value) return { kind: "even", percent: 0 };
+  const diff = Math.abs(value - price);
+  const percent = Math.floor((diff * 200 + price) / (2 * price));
+  return { kind: value > price ? "upside" : "downside", percent };
 }

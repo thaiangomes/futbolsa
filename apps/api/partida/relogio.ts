@@ -1,4 +1,4 @@
-import { finishTime, kickoffTime } from "@futbolsa/engine";
+import { finishTime, kickoffTime, type Match } from "@futbolsa/engine";
 import { FixedClock } from "../src/infra/clock/index.js";
 import { DomainError } from "../src/infra/http/errors.js";
 import { CLOSE_MARGIN_MS } from "../src/modules/admin/payouts/close-events.service.js";
@@ -20,6 +20,8 @@ const HORA = 60 * MINUTO;
 const DIA = 24 * HORA;
 export const PASSO_TEMPO_REAL = 15 * MINUTO;
 export const PASSO_SALTO = 180 * MINUTO;
+/** Os jogos de uma rodada que começam até aqui do primeiro dela contam para o fim da rodada; os remarcados para depois não. */
+const JANELA_DA_RODADA = 7 * DIA;
 /** O fechamento de um jogo espera 2 minutos depois do fim (margem da produção): o relógio vai um minuto além dela, para o fechamento já ter rodado. */
 export const MARGEM_DO_FECHAMENTO = CLOSE_MARGIN_MS + MINUTO;
 
@@ -111,6 +113,12 @@ export interface DepsDoRelogio {
   laco?: boolean;
 }
 
+/** O dia e o mês de Brasília de um instante (`23/07`). */
+function diaDeBrasilia(ms: number): string {
+  const p = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" }).formatToParts(new Date(ms));
+  return `${p.find((x) => x.type === "day")?.value}/${p.find((x) => x.type === "month")?.value}`;
+}
+
 const ocupado = () => new DomainError("relogio_ocupado", 409, "o relógio já está andando");
 
 export class RelogioDaPartida {
@@ -121,6 +129,10 @@ export class RelogioDaPartida {
   private ultimaParada: number;
   private geracao = 0;
   private cancelarEspera: (() => void) | null = null;
+  /** O Thaian pediu para pausar com um salto andando: o salto para ao fim da parada atual. */
+  private interromper = false;
+  /** Quem espera o salto em andamento acabar (o pausar). */
+  private fimDoSalto: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly d: DepsDoRelogio) {
     this.ultimaParada = d.clock.now().getTime();
@@ -168,7 +180,7 @@ export class RelogioDaPartida {
   async pedir(p: Pedido): Promise<RespostaDoRelogio> {
     switch (p.acao) {
       case "dia":
-        return this.saltar((agora) => agora + DIA, "1 dia");
+        return this.saltar((agora) => ({ alvo: agora + DIA }), "1 dia");
       case "rodada":
         return this.saltar((agora) => this.fimDaProximaRodada(agora), "até a próxima rodada");
       case "ate":
@@ -191,16 +203,27 @@ export class RelogioDaPartida {
     return `aguardando resultados reais${ultimo ? ` (último resultado em ${ultimo.slice(0, 10)})` : ""}`;
   }
 
-  /** O fim do último jogo da próxima rodada do Brasileirão (a rodada em curso, se o relógio estiver no meio dela). */
-  private fimDaProximaRodada(agora: number): number {
-    const porRodada = new Map<number, number>();
+  /**
+   * O fechamento da próxima rodada do Brasileirão: o que vem primeiro no tempo (a rodada em curso, se o relógio estiver no meio
+   * dela). O fim de uma rodada é o fim do último jogo dentro da janela dela (7 dias do primeiro jogo): jogo remarcado para
+   * semanas depois não a segura, senão uma rodada antiga com jogo remarcado viraria o alvo e o salto passaria por rodadas
+   * inteiras (defeito do item 18).
+   */
+  private fimDaProximaRodada(agora: number): { alvo: number; rodada: number } {
+    const jogos = new Map<number, Match[]>();
     for (const m of this.d.fonte.matchesOf("brasileirao-a")) {
       if (m.round === undefined || m.postponed || m.status === "cancelled") continue;
-      porRodada.set(m.round, Math.max(porRodada.get(m.round) ?? 0, finishTime(m)));
+      jogos.set(m.round, [...(jogos.get(m.round) ?? []), m]);
     }
-    const proximas = [...porRodada.entries()].filter(([, fim]) => fim > agora).sort((a, b) => a[0] - b[0]);
-    if (proximas.length === 0) throw new DomainError("sem_proxima_rodada", 422, "não há próxima rodada do Brasileirão nos dados");
-    return proximas[0]![1] + MARGEM_DO_FECHAMENTO; // o fechamento da rodada já rodou
+    const fins: Array<{ rodada: number; fim: number }> = [];
+    for (const [rodada, ms] of jogos) {
+      const janela = Math.min(...ms.map(kickoffTime)) + JANELA_DA_RODADA;
+      const fim = Math.max(...ms.filter((m) => kickoffTime(m) <= janela).map(finishTime));
+      if (fim > agora) fins.push({ rodada, fim });
+    }
+    fins.sort((a, b) => a.fim - b.fim || a.rodada - b.rodada);
+    if (fins.length === 0) throw new DomainError("sem_proxima_rodada", 422, "não há próxima rodada do Brasileirão nos dados");
+    return { alvo: fins[0]!.fim + MARGEM_DO_FECHAMENTO, rodada: fins[0]!.rodada }; // o fechamento da rodada já rodou
   }
 
   private async saltarAteData(data: string): Promise<RespostaDoRelogio> {
@@ -214,16 +237,19 @@ export class RelogioDaPartida {
     if (limite !== null && alvo > limite) {
       throw new DomainError("alem_do_limite", 422, `a data ${data} passa do último resultado real (${new Date(limite).toISOString().slice(0, 10)}): peça "atualizar" quando houver mais jogos`);
     }
-    return this.saltar(() => alvo, `até ${data}`);
+    return this.saltar(() => ({ alvo }), `até ${data}`);
   }
 
   /**
    * Um salto: paradas de 180 minutos até o alvo (ou até o limite), um pedido por vez. Se o relógio estava em tempo real, ele
    * congela durante o salto e volta a correr do instante onde o salto terminou.
    */
-  private async saltar(calcularAlvo: (agora: number) => number, rotulo: string): Promise<RespostaDoRelogio> {
+  private async saltar(calcularAlvo: (agora: number) => { alvo: number; rodada?: number }, rotulo: string): Promise<RespostaDoRelogio> {
     if (this.emAndamento) throw ocupado();
     this.emAndamento = rotulo;
+    this.interromper = false;
+    let terminou!: () => void;
+    this.fimDoSalto = new Promise<void>((ok) => (terminou = ok));
     try {
       const estavaEmTempoReal = this.modo === "tempo-real";
       this.geracao++; // o laço do tempo real para de agendar
@@ -234,20 +260,26 @@ export class RelogioDaPartida {
         const inicio = this.d.clock.now().getTime();
         const limite = this.limite();
         if (limite !== null && inicio >= limite) return this.resposta(false, this.mensagemDeEspera());
-        let alvo = calcularAlvo(inicio);
+        const pedido = calcularAlvo(inicio);
+        let alvo = pedido.alvo;
         let cortou = false;
         if (limite !== null && alvo > limite) {
           alvo = limite;
           cortou = true;
         }
-        while (this.d.clock.now().getTime() < alvo) {
+        // enquanto o salto corre, a tela mostra para onde ele vai (data de Brasília e, na rodada, qual)
+        this.emAndamento = `avançando até ${diaDeBrasilia(alvo)}${pedido.rodada !== undefined && !cortou ? `, fim da rodada ${pedido.rodada}` : ""}`;
+        while (this.d.clock.now().getTime() < alvo && !this.interromper) {
           await this.d.condutor.paradaUnica({ passoMs: PASSO_SALTO, alvo });
           await this.d.salvar(this.d.clock.now());
         }
         this.ultimaParada = this.d.clock.now().getTime();
+        if (this.interromper) return this.resposta(this.d.clock.now().getTime() > inicio, `salto interrompido em ${this.d.clock.now().toISOString()}: pausado`);
         return this.resposta(true, cortou ? `avancei até o último resultado real. ${this.mensagemDeEspera()}` : `avancei: ${rotulo}`);
       } finally {
-        if (estavaEmTempoReal && !this.noLimite()) {
+        if (this.interromper) {
+          this.modo = "pausado"; // pausar com o salto andando: fica parado onde o salto chegou
+        } else if (estavaEmTempoReal && !this.noLimite()) {
           this.d.clock.correr();
           this.iniciarLaco();
         } else if (estavaEmTempoReal) {
@@ -256,6 +288,8 @@ export class RelogioDaPartida {
       }
     } finally {
       this.emAndamento = null;
+      this.interromper = false;
+      terminou();
     }
   }
 
@@ -278,7 +312,13 @@ export class RelogioDaPartida {
   }
 
   async pausar(): Promise<RespostaDoRelogio> {
-    if (this.emAndamento) throw ocupado();
+    if (this.emAndamento === "atualizar") throw ocupado();
+    if (this.emAndamento) {
+      // um salto andando: ele para ao fim da parada atual (cada parada leva até 180 minutos do jogo) e o relógio fica onde chegou
+      this.interromper = true;
+      await this.fimDoSalto;
+      return this.resposta(false, `salto interrompido; pausado em ${this.d.clock.now().toISOString()}`);
+    }
     this.geracao++;
     this.cancelarEspera?.();
     await this.paradaAtual;

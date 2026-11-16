@@ -53,10 +53,41 @@ npm run partida:relogio -w @futbolsa/api -- pausar
 
 **Zerar** só pelo terminal, com a partida desligada: `npm run partida:zerar -w @futbolsa/api -- --sim` (apaga o banco `futbolsa_partida`).
 
+## Jogar pelo celular, na rede Wi-Fi de casa
+
+Opção explícita, **desligada por padrão**: com ela a API e o site escutam no endereço da máquina na rede privada (e não mais em
+127.0.0.1), e o celular, no mesmo Wi-Fi, abre o site por esse endereço. A porta de controle do terminal (3202) continua só em 127.0.0.1.
+
+> **Aviso:** o login da partida é falso. Enquanto a opção estiver ligada, **qualquer aparelho do Wi-Fi** que abrir
+> `http://<ip>:3201/entrar/jogador` ou `/entrar/admin` entra como o jogador ou como o admin. Use só em rede de casa, de gente de confiança,
+> e volte a subir sem a opção quando terminar. Nunca em rede pública (café, trabalho, hotel).
+
+1. **Descubra o IP da máquina na rede de casa:** `ipconfig` e olhe o "Endereço IPv4" do adaptador Wi-Fi (algo como `192.168.0.23`). A trava só
+   aceita endereços de rede privada (`192.168.x.x`, `10.x.x.x`, `172.16.x.x` a `172.31.x.x`); com `0.0.0.0` ou um endereço público a partida
+   se recusa a subir. O IP do roteador pode mudar: se o celular não abrir, confira o IP de novo.
+2. **Libere o Firewall do Windows, só para rede privada, nas portas 3200 e 3201** (quem cria a regra é você; a partida não mexe no firewall).
+   Num PowerShell **como administrador**:
+   ```powershell
+   New-NetFirewallRule -DisplayName "FutBolsa partida (rede privada)" -Direction Inbound -Protocol TCP -LocalPort 3200,3201 -Profile Private -Action Allow
+   ```
+   A rede do Wi-Fi precisa estar marcada como **Particular** (Configurações → Rede e Internet → Wi-Fi → a rede → "Particular"); em rede
+   "Pública" a regra não vale. Para apagar a regra depois: `Remove-NetFirewallRule -DisplayName "FutBolsa partida (rede privada)"`.
+3. **Construa o site apontando a API para esse IP** (o último `--api` vale):
+   ```bash
+   npm run partida:site -w @futbolsa/web -- --api http://192.168.0.23:3200
+   ```
+4. **Suba a partida com a opção** (com a partida antiga desligada):
+   ```bash
+   npm run partida -w @futbolsa/api -- --escala 0,2 --rede-privada 192.168.0.23
+   ```
+5. No celular, no mesmo Wi-Fi: `http://192.168.0.23:3201/entrar/jogador`. No computador, use o mesmo endereço (a escuta não é mais em 127.0.0.1).
+
+Para voltar ao modo só local: refaça o passo 3 sem o `-- --api` e suba a partida sem `--rede-privada`.
+
 ## Guardas
 
 A partida recusa subir com `NODE_ENV=production`, com banco que não seja `localhost`, `127.0.0.1` ou `::1` (nem `?host=`) e com escuta
-fora de `127.0.0.1`. Só mexe em bancos `futbolsa_partida*`. A porta de controle recusa quem manda `Origin` (uma página do navegador).
+fora de `127.0.0.1` (a única exceção é a opção `--rede-privada <ip>`, só com endereço de rede privada). Só mexe em bancos `futbolsa_partida*`. A porta de controle recusa quem manda `Origin` (uma página do navegador).
 O login do site é o falso do build de teste (`/entrar/...`); a etapa 2 troca pelo login de verdade.
 
 ## Arquivos

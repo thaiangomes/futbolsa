@@ -3,7 +3,7 @@ import type { ClubValueView } from "@futbolsa/contracts";
 import { act, createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { useDom } from "../../test-support/dom";
-import { ClubValueCard } from "./club-value-card";
+import { ClubValueCard, outlookText } from "./club-value-card";
 import { cupOptions, initialForm, simulate } from "./model";
 
 const PLACEMENT = [500, 450, 400, 350, 300, 270, 240, 210, 180, 150, 120, 100, 80, 60, 40, 20];
@@ -43,14 +43,14 @@ const fla3: ClubValueView = {
 const apiOf = (view: ClubValueView) => ({ dividends: vi.fn(async () => view) });
 
 describe("modelo do simulador (o mesmo motor da API)", () => {
-  it("livro 38: simulando 68 pontos, 3º lugar, queda nas quartas das duas copas: faltam R$ 14,35, recompra R$ 25,58, valor R$ 39,93, preço 10,94% acima", () => {
+  it("livro 38: simulando 68 pontos, 3º lugar, queda nas quartas das duas copas: faltam R$ 14,35, recompra R$ 25,58, valor R$ 39,93, preço com downside de 10%", () => {
     const r = simulate(fla3, 4430, { points: "68", position: "3", cups: { "copa-do-brasil": "quartas", libertadores: "quartas" } });
     expect(r.ok).toBe(true);
     const s = r.ok ? r.result.simulation! : null;
     expect(s!.missing.total).toBe(1435);
     expect(s!.buyback).toBe(2558);
     expect(s!.value).toBe(3993);
-    expect(s!.priceGapBp).toBe(1094);
+    expect(s!.outlook).toEqual({ kind: "downside", percent: 10 });
   });
 
   it("a aposta de partida é o clube terminar como está: sem pontos a mais e sem avançar nas copas (só a colocação atual e o a receber)", () => {
@@ -101,7 +101,7 @@ describe("cartão \"Quanto vale para você\" na tela do clube", () => {
     expect(dom.$("[data-testid=valor-pontos]").textContent).toContain("20 pontos");
   });
 
-  it("livro 38: simulando 68 pontos, 3º lugar, queda nas quartas das duas copas, faltam R$ 14,35, a recompra é R$ 25,58, o valor R$ 39,93 e o preço fica 10,94% acima", async () => {
+  it("livro 38: simulando 68 pontos, 3º lugar, queda nas quartas das duas copas, faltam R$ 14,35, a recompra é R$ 25,58, o valor R$ 39,93 e o preço tem downside de 10%", async () => {
     await dom.render(createElement(ClubValueCard, { ticker: "FLA3", name: "Flamengo", price: 4430, api: apiOf(fla3) }));
     await dom.settle();
     await dom.settle();
@@ -113,7 +113,7 @@ describe("cartão \"Quanto vale para você\" na tela do clube", () => {
     expect(dom.$("[data-testid=sim-total]").textContent).toBe("R$ 17,05");
     expect(dom.$("[data-testid=sim-recompra]").textContent).toBe("R$ 25,58");
     expect(dom.$("[data-testid=sim-valor]").textContent).toBe("R$ 39,93");
-    expect(dom.$("[data-testid=sim-comparacao]").textContent).toBe("O preço agora (R$ 44,30) está 10,94% acima da sua conta.");
+    expect(dom.$("[data-testid=sim-comparacao]").textContent).toBe("O preço agora (R$ 44,30) tem um downside de 10% até o preço da sua conta.");
     const conta = dom.$("[data-testid=sim-conta]").textContent!;
     for (const linha of ["R$ 4,80", "R$ 4,00", "R$ 1,50", "R$ 3,75", "R$ 0,30"]) expect(conta).toContain(linha);
   });
@@ -126,7 +126,7 @@ describe("cartão \"Quanto vale para você\" na tela do clube", () => {
     await pick("#sim-colocacao", "3");
     await pick("#sim-copa-copa-do-brasil", "quartas");
     await pick("#sim-copa-libertadores", "quartas");
-    expect(dom.$("[data-testid=sim-comparacao]").textContent).toBe("O preço agora (R$ 30,00) está 24,87% abaixo da sua conta.");
+    expect(dom.$("[data-testid=sim-comparacao]").textContent).toBe("O preço agora (R$ 30,00) tem um upside de 33% até o preço da sua conta.");
   });
 
   it("pontos abaixo dos atuais: avisa o motivo e não mostra a conta", async () => {
@@ -174,5 +174,11 @@ describe("cartão \"Quanto vale para você\" na tela do clube", () => {
     await dom.settle();
     expect(dom.text()).toContain("Não é o valor justo da casa");
     expect(dom.text()).not.toMatch(/projeç|cotação da casa/i);
+  });
+
+  it("livro 38: a frase mede a partir do preço, em upside e downside, com porcentagem inteira", () => {
+    expect(outlookText(3622, { kind: "upside", percent: 270 })).toBe("O preço agora (R$ 36,22) tem um upside de 270% até o preço da sua conta.");
+    expect(outlookText(15000, { kind: "downside", percent: 11 })).toBe("O preço agora (R$ 150,00) tem um downside de 11% até o preço da sua conta.");
+    expect(outlookText(4000, { kind: "even", percent: 0 })).toBe("O preço agora está igual à sua conta.");
   });
 });

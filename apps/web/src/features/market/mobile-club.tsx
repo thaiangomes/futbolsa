@@ -93,7 +93,7 @@ export function MobileClub({
       {sheet && (
         <>
           <div className="scrim" onClick={() => setSheet(null)} />
-          <div className="sheet" role="dialog" aria-label={`Enviar ordem · ${state.ticker}`} data-testid="folha-boleta" style={{ padding: "0 16px 20px" }}>
+          <div className="sheet" role="dialog" aria-label={`Enviar ordem · ${state.ticker}`} data-testid="folha-boleta" style={{ paddingLeft: 16, paddingRight: 16 }}>
             <div className="grab" />
             <div className="row-s" style={{ margin: "0 0 8px" }}>
               <span className="h2">{state.ticker}</span>

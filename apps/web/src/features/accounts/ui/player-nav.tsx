@@ -5,7 +5,7 @@ import { useSession } from "../session-provider";
 import { Logo, Wordmark } from "./brand";
 
 /** As telas do jogador que o menu liga. `perfil` é a Conta (avatar no computador, última aba no celular). */
-export type PlayerPage = "mercado" | "carteira" | "ipo" | "rankings" | "perfil";
+export type PlayerPage = "mercado" | "carteira" | "ipo" | "rankings" | "competicoes" | "perfil";
 
 interface Item {
   id: Exclude<PlayerPage, "perfil">;
@@ -16,12 +16,13 @@ interface Item {
 
 const stroke = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" } as const;
 
-/** A ordem e os ícones são os do protótipo (componentes Topo e TabBar): Mercado, Carteira, IPO, Rankings. */
+/** A ordem e os ícones são os do protótipo (componentes Topo e TabBar): Mercado, Carteira, IPO, Rankings e Competições. */
 export const PLAYER_MENU: readonly Item[] = [
   { id: "mercado", label: "Mercado", href: "/mercado", icon: <><path d="M3 17l5-5 4 3 8-8" /><path d="M15 7h5v5" /></> },
   { id: "carteira", label: "Carteira", href: "/carteira", icon: <><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18M16 14.5h2" /></> },
   { id: "ipo", label: "IPO", href: "/ipo", icon: <><path d="M12 3v4M5 8l2.5 2.5M19 8l-2.5 2.5" /><rect x="6" y="12" width="12" height="8" rx="2" /></> },
   { id: "rankings", label: "Rankings", href: "/rankings", icon: <><path d="M8 4h8v5a4 4 0 0 1-8 0z" /><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20h7" /></> },
+  { id: "competicoes", label: "Competições", href: "/competicoes", icon: <><circle cx="12" cy="12" r="9" /><path d="M12 3v18M3 12h18" /></> },
 ];
 
 const current = (active: PlayerPage, id: PlayerPage) => (active === id ? ("page" as const) : undefined);

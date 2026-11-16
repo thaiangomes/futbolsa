@@ -86,7 +86,7 @@ describe("GET /clubs/:ticker/dividends (T12)", () => {
     expect(view.cups[0]!.title).toBe(800);
   });
 
-  it("livro 38: o navegador e o motor dão o mesmo número com o que a rota devolve (faltam R$ 14,35; valor R$ 39,93; preço 10,94% acima)", async () => {
+  it("livro 38: o navegador e o motor dão o mesmo número com o que a rota devolve (faltam R$ 14,35; valor R$ 39,93; preço com downside de 10%)", async () => {
     const view = clubValueViewSchema.parse((await get("/clubs/FLA3/dividends")).json());
     const values = {
       leagues: { [view.league]: view.leagueRules },
@@ -108,7 +108,7 @@ describe("GET /clubs/:ticker/dividends (T12)", () => {
     expect(s.missing.total).toBe(1435);
     expect(s.buyback).toBe(2558);
     expect(s.value).toBe(3993);
-    expect(s.priceGapBp).toBe(1094);
+    expect(s.outlook).toEqual({ kind: "downside", percent: 10 });
   });
 
   it("clube sem jogo de copa devolve só o campeonato, e sem pagamentos zera o pago e o a receber", async () => {

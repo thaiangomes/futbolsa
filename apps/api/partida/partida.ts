@@ -17,7 +17,7 @@ import { criarConta, type ContaEnsaio } from "../ensaio/contas.js";
 import { prepararBanco, criarTabelasDaPartida } from "./banco.js";
 import { ANO_DA_PARTIDA, arquivoDaSerieA, atualizarFotos, fotosMaisNovas, paraMemoria, semearFotos, type Baixador } from "./dados.js";
 import { AgenteDaPartida } from "./bots.js";
-import { recusarAmbienteDaPartida } from "./guardas.js";
+import { recusarAmbienteDaPartida, recusarEscutaForaDoLocal } from "./guardas.js";
 import { PORTAS_DA_PARTIDA } from "./portas.js";
 import { ModuloDaPartida, PorRelogio } from "./modulo.js";
 import { type Pedido, RelogioDaPartida, RelogioFlutuante } from "./relogio.js";
@@ -54,6 +54,11 @@ export interface OpcoesDaPartida {
   /** Sem site nem porta de controle (os testes). */
   semPortas?: boolean;
   host?: string;
+  /**
+   * Opção explícita, desligada por padrão: o endereço da máquina na rede privada (192.168.x, 10.x, 172.16 a 31.x) em que a API e o
+   * site escutam, para jogar de outro aparelho da mesma rede (o celular). A porta de controle do terminal continua só local.
+   */
+  redePrivada?: string;
   /** Outro nome de banco (os testes; sempre `futbolsa_partida_<sufixo>`). */
   nomeDoBanco?: string;
 }
@@ -94,13 +99,16 @@ async function contaPorApelido(db: ServidorEnsaio["conexao"]["db"], apelido: str
 export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
   const host = o.host ?? "127.0.0.1";
   recusarAmbienteDaPartida({ urlBanco: o.urlBanco, host });
+  if (o.redePrivada) recusarEscutaForaDoLocal(o.redePrivada, true);
+  // onde a API e o site escutam e o endereço que o navegador usa (o do controle é sempre o local)
+  const hostWeb = o.redePrivada ?? host;
   const portaApi = o.portaApi ?? PORTAS_DA_PARTIDA.api;
   const portaSite = o.portaSite ?? PORTAS_DA_PARTIDA.site;
   const portaControle = o.portaControle ?? PORTAS_DA_PARTIDA.controle;
   const apelido = o.apelido ?? "jogador";
   const adminApelido = o.adminApelido ?? "admin_partida";
   // o WebSocket e o CORS só aceitam o site da partida
-  process.env.WEB_ORIGIN = `http://127.0.0.1:${portaSite}`;
+  process.env.WEB_ORIGIN = `http://${hostWeb}:${portaSite}`;
 
   const banco = await prepararBanco(o.urlBanco, o.nomeDoBanco);
   const prep = connect(banco.url, 2);
@@ -127,6 +135,7 @@ export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
     fonte,
     imports: [ModuloDaPartida],
     porta: portaApi,
+    host: hostWeb,
     poolSize: 20,
     bots: ritmo,
   });
@@ -193,7 +202,7 @@ export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
   let controle: Server | undefined;
   let controleUrl = "";
   if (!o.semPortas) {
-    site = await servirSiteDaPartida(o.pastaDoSite, portaSite, { servidor, carga, jogador, clock, host });
+    site = await servirSiteDaPartida(o.pastaDoSite, portaSite, { servidor, carga, jogador, clock, host: hostWeb });
     controle = await abrirControleDaPartida(relogio, portaControle, host);
     controleUrl = `http://${host}:${(controle.address() as AddressInfo).port}`;
   }
@@ -206,7 +215,7 @@ export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
     condutor,
     bots,
     jogador,
-    siteUrl: `http://${host}:${portaSite}`,
+    siteUrl: `http://${hostWeb}:${portaSite}`,
     controleUrl,
     nova,
     fechar: async () => {

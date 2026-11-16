@@ -1,4 +1,4 @@
-import { type ApprovePayoutsResponse, type CorrectionPreview, correctionPreviewSchema, type PayoutEventView } from "@futbolsa/contracts";
+import { type ApprovePayoutsResponse, type CorrectionPreview, correctionPreviewSchema, type PayoutEventView, type PayoutListQuery } from "@futbolsa/contracts";
 import { ApiError } from "../../../lib/api";
 import { COMPETITION_LABELS } from "../forms";
 
@@ -93,3 +93,42 @@ export function newChangeKeys(before: CorrectionPreview, after: CorrectionPrevie
   const was = new Map(before.changes.map((c) => [c.key, `${c.before}/${c.after}/${c.closedAtAfter}`]));
   return new Set(after.changes.filter((c) => was.get(c.key) !== `${c.before}/${c.after}/${c.closedAtAfter}`).map((c) => c.key));
 }
+
+/** Os filtros da tela de pagamentos (item 13 da fila da partida de teste; Admin, critério 47). */
+export interface PayoutFilters {
+  /** "Só aguardando aprovação": abre ligado. */
+  onlyPending: boolean;
+  kind: string;
+  competition: string;
+  /** O ticker do clube. */
+  club: string;
+  /** Dias de Brasília, `AAAA-MM-DD`; o período é pelo fechamento do evento. */
+  from: string;
+  to: string;
+}
+
+export const DEFAULT_PAYOUT_FILTERS: PayoutFilters = { onlyPending: true, kind: "", competition: "", club: "", from: "", to: "" };
+export const PAYOUTS_PAGE_SIZE = 50;
+
+const BRASILIA = "-03:00";
+const DAY_MS = 86_400_000;
+
+/** O pedido à API: o período vira o instante do começo do dia de Brasília (de) e do começo do dia seguinte (até, exclusivo). */
+export function payoutQuery(f: PayoutFilters, page: number): Partial<PayoutListQuery> {
+  const day = (iso: string): number => Date.parse(`${iso}T00:00:00${BRASILIA}`);
+  const from = f.from && !Number.isNaN(day(f.from)) ? new Date(day(f.from)).toISOString() : undefined;
+  const before = f.to && !Number.isNaN(day(f.to)) ? new Date(day(f.to) + DAY_MS).toISOString() : undefined;
+  return {
+    ...(f.onlyPending ? { status: "pending" as const } : {}),
+    ...(f.kind ? { kind: f.kind as PayoutListQuery["kind"] } : {}),
+    ...(f.competition ? { competition: f.competition as PayoutListQuery["competition"] } : {}),
+    ...(f.club.trim() ? { club: f.club.trim().toUpperCase() } : {}),
+    ...(from ? { closedFrom: from } : {}),
+    ...(before ? { closedBefore: before } : {}),
+    page,
+    pageSize: PAYOUTS_PAGE_SIZE,
+  };
+}
+
+/** Quantas páginas a lista tem (sempre ao menos uma). */
+export const pageCount = (total: number, pageSize: number): number => Math.max(1, Math.ceil(total / pageSize));

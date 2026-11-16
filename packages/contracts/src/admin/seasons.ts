@@ -102,6 +102,16 @@ export const putCupBodySchema = z.strictObject({
 });
 export type PutCupBody = z.infer<typeof putCupBodySchema>;
 
+/**
+ * A correção da tabela de uma copa no meio da temporada (item 16 da fila da partida de teste): a tabela inteira, com as fases que
+ * faltavam, e o motivo (obrigatório, porque vai para o registro do admin). As fases que já têm pagamento ficam como estão.
+ */
+export const correctCupBodySchema = z.strictObject({
+  phases: z.array(cupPhaseSchema).min(1),
+  reason: adminReasonSchema,
+});
+export type CorrectCupBody = z.infer<typeof correctCupBodySchema>;
+
 /** Aviso de `validateCupTable`: a tabela quebra uma regra, mas é aceita (decisão do Thaian em 2026-10-31). */
 export const cupViolationSchema = z.strictObject({ code: z.string(), message: z.string() });
 

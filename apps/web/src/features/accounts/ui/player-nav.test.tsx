@@ -16,7 +16,7 @@ describe("menu do jogador", () => {
   const show = (active: PlayerPage) => dom.render(createElement(PlayerHeader, { active }));
   const links = (root: string) => dom.$$(`[data-testid=${root}] a`).map((a) => [a.textContent!.trim(), a.getAttribute("href")]);
 
-  it("conta 28: topo do computador: Mercado, Carteira, IPO e Rankings, na ordem do protótipo, e a Conta à direita", async () => {
+  it("conta 28: topo do computador: Mercado, Carteira, IPO, Rankings e Competições, na ordem do protótipo, e a Conta à direita", async () => {
     await show("mercado");
     const nav = dom.$("[data-testid=menu-topo] nav");
     expect([...nav.querySelectorAll("a")].map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
@@ -24,19 +24,21 @@ describe("menu do jogador", () => {
       ["Carteira", "/carteira"],
       ["IPO", "/ipo"],
       ["Rankings", "/rankings"],
+      ["Competições", "/competicoes"],
     ]);
     const conta = dom.$("[data-testid=menu-topo] a[href='/conta']");
     expect(conta.textContent).toContain("anagol");
     expect(conta.getAttribute("aria-label")).toBe("Minha conta, anagol");
   });
 
-  it("abas do celular: as mesmas quatro mais o Perfil", async () => {
+  it("abas do celular: as mesmas cinco mais o Perfil", async () => {
     await show("carteira");
     expect(links("menu-abas")).toEqual([
       ["Mercado", "/mercado"],
       ["Carteira", "/carteira"],
       ["IPO", "/ipo"],
       ["Rankings", "/rankings"],
+      ["Competições", "/competicoes"],
       ["Perfil", "/conta"],
     ]);
   });
@@ -46,6 +48,7 @@ describe("menu do jogador", () => {
     ["carteira", "Carteira"],
     ["ipo", "IPO"],
     ["rankings", "Rankings"],
+    ["competicoes", "Competições"],
   ] as const)("a página atual (%s) fica destacada no topo e nas abas, e só ela", async (active, label) => {
     await show(active);
     for (const seletor of ["[data-testid=menu-topo] nav a[aria-current=page]", "[data-testid=menu-abas] a[aria-current=page]"]) {

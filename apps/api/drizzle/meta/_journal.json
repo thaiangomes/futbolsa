@@ -57,6 +57,13 @@
       "when": 1794799884635,
       "tag": "0007_selos_dos_clubes",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794809884635,
+      "tag": "0008_correcao_da_tabela_de_copa",
+      "breakpoints": true
     }
   ]
 }
