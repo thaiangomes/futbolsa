@@ -111,6 +111,33 @@ describe("tela do clube", () => {
     expect(dom.$("[data-testid=nivel-compra]").getAttribute("data-mine")).toBe("false");
   });
 
+  it("livro 53: clicar numa venda abre Compra limitada no preço dela; numa compra, Venda; a quantidade digitada fica e nada é enviado", async () => {
+    const a = api(view());
+    await dom.render(createElement(ClubView, { ticker: "FLA3", api: a, logged: true }));
+    await dom.settle();
+    await dom.settle();
+    const boleta = () => dom.$("[data-testid=boleta]");
+    await dom.type('[aria-label="Quantidade"]', "30");
+    await dom.click(dom.$("[data-testid=nivel-venda]"));
+    expect(boleta().querySelector('[aria-pressed=true].buy')).not.toBeNull();
+    expect((dom.$('[aria-label="Preço"]') as HTMLInputElement).value).toBe("44,10");
+    expect((dom.$('[aria-label="Quantidade"]') as HTMLInputElement).value).toBe("30");
+    await dom.click(dom.$("[data-testid=nivel-compra]"));
+    expect(boleta().querySelector('[aria-pressed=true].sell')).not.toBeNull();
+    expect((dom.$('[aria-label="Preço"]') as HTMLInputElement).value).toBe("42,00");
+    // de A mercado, o clique volta para Limitada
+    await dom.click(dom.button("A mercado"));
+    await dom.click(dom.$("[data-testid=nivel-venda]"));
+    expect(dom.$('[aria-label="Preço"]')).not.toBeNull();
+    expect(a.placeOrder).not.toHaveBeenCalled();
+  });
+
+  it("livro 53: o visitante não tem clique no livro", async () => {
+    await dom.render(createElement(ClubView, { ticker: "FLA3", api: api(view({ me: null })), logged: false }));
+    await dom.settle();
+    expect(dom.$("[data-testid=nivel-venda]").getAttribute("role")).toBeNull();
+  });
+
   it("livro 16: cancelar chama a API e relê as ordens", async () => {
     const a = api(view(), [mineOrder]);
     await dom.render(createElement(ClubView, { ticker: "FLA3", api: a, logged: true }));

@@ -1,4 +1,5 @@
 import type { BookLevel } from "@futbolsa/contracts";
+import type { KeyboardEvent } from "react";
 import { formatCents, formatInt } from "../../lib/format";
 
 /** Uma ordem aberta do próprio jogador, para destacar o nível dela no livro (só ele vê). */
@@ -15,7 +16,34 @@ const plain = (cents: number) => formatCents(cents).replace("R$ ", "");
  * sem marcar a casa nem os bots. As ordens do próprio jogador aparecem destacadas só para ele (`mine`), pelo que ele
  * já conhece (`GET /orders` e o canal `me`). Em leilão o livro aparece como sempre, mesmo cruzado, sem preço teórico.
  */
-export function BookPanel({ bids, asks, mine = [] }: { bids: readonly BookLevel[]; asks: readonly BookLevel[]; mine?: readonly MarkedOrder[] }) {
+export function BookPanel({
+  bids,
+  asks,
+  mine = [],
+  onPick,
+}: {
+  bids: readonly BookLevel[];
+  asks: readonly BookLevel[];
+  mine?: readonly MarkedOrder[];
+  /** Clique ou toque numa oferta: o lado da boleta (o oposto ao da oferta) e o preço dela. Sem isso, o livro só se lê. */
+  onPick?: (side: "buy" | "sell", price: number) => void;
+}) {
+  // Clicar numa venda abre a compra, e numa compra abre a venda (critério 53)
+  const pick = (offer: "buy" | "sell", price: number) =>
+    onPick
+      ? {
+          role: "button" as const,
+          tabIndex: 0,
+          title: offer === "sell" ? "Comprar neste preço" : "Vender neste preço",
+          onClick: () => onPick(offer === "sell" ? "buy" : "sell", price),
+          onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onPick(offer === "sell" ? "buy" : "sell", price);
+            }
+          },
+        }
+      : {};
   const isMine = (side: "buy" | "sell", price: number) => mine.some((o) => o.side === side && o.limitPrice === price);
   const maxQty = Math.max(largest(bids), largest(asks));
   const spread = bids[0] && asks[0] ? asks[0].price - bids[0].price : null;
@@ -33,7 +61,7 @@ export function BookPanel({ bids, asks, mine = [] }: { bids: readonly BookLevel[
             <span style={{ textAlign: "right" }}>Compra</span>
           </div>
           {bids.map((o) => (
-            <div key={o.price} className={isMine("buy", o.price) ? "bk-row bk-mine" : "bk-row"} data-testid="nivel-compra" data-mine={isMine("buy", o.price)}>
+            <div key={o.price} className={isMine("buy", o.price) ? "bk-row bk-mine" : "bk-row"} data-testid="nivel-compra" data-mine={isMine("buy", o.price)} style={onPick ? { cursor: "pointer" } : undefined} {...pick("buy", o.price)}>
               <div className="bk-bar" style={{ right: 0, width: `${Math.round((o.quantity / maxQty) * 100)}%`, background: "var(--up-soft)" }} />
               <span className="muted">{o.orders}</span>
               <span style={{ textAlign: "right" }}>{formatInt(o.quantity)}</span>
@@ -51,9 +79,10 @@ export function BookPanel({ bids, asks, mine = [] }: { bids: readonly BookLevel[
             <div
               key={o.price}
               className={isMine("sell", o.price) ? "bk-row bk-mine" : "bk-row"}
-              style={{ gridTemplateColumns: "84px minmax(0, 1fr) 52px" }}
+              style={{ gridTemplateColumns: "84px minmax(0, 1fr) 52px", ...(onPick ? { cursor: "pointer" } : {}) }}
               data-testid="nivel-venda"
               data-mine={isMine("sell", o.price)}
+              {...pick("sell", o.price)}
             >
               <div className="bk-bar" style={{ left: 0, width: `${Math.round((o.quantity / maxQty) * 100)}%`, background: "var(--down-soft)" }} />
               <span className="down b">{plain(o.price)}</span>
