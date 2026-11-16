@@ -36,6 +36,8 @@ export interface OpcoesServidor {
   databaseUrl: string;
   /** Porta da API (padrão 0, qualquer uma livre). O navegador pede uma fixa, para o site de teste apontar para ela. */
   porta?: number;
+  /** Endereço em que a API escuta (padrão 127.0.0.1; só a partida, com a opção de rede privada, usa outro). */
+  host?: string;
   inicio: Date;
   /** Um relógio próprio (a partida usa um que anda em tempo real); o padrão é um `FixedClock` em `inicio`. */
   clock?: FixedClock;
@@ -79,7 +81,7 @@ export async function criarServidorEnsaio(opcoes: OpcoesServidor): Promise<Servi
           .overrideProvider(BotRunnerSettings)
           .useValue({ config: ritmo }),
     });
-    await app.listen(opcoes.porta ?? 0, "127.0.0.1");
+    await app.listen(opcoes.porta ?? 0, opcoes.host ?? "127.0.0.1");
     servidor.app = app;
     servidor.url = (await app.getUrl()).replace("[::1]", "127.0.0.1");
   };
