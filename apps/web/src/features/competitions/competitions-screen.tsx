@@ -1,6 +1,6 @@
 "use client";
 
-import type { CompetitionMatch, CompetitionStage, CompetitionView, StandingRow } from "@futbolsa/contracts";
+import type { CompetitionMatch, CompetitionStage, CompetitionTie, CompetitionView, StandingRow } from "@futbolsa/contracts";
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "../accounts/session-provider";
 import { formatKickoff, stageText } from "../club-games";
@@ -104,6 +104,41 @@ function League({ view }: { view: CompetitionView }) {
   );
 }
 
+const LEG_LABEL = { ida: "Ida", volta: "Volta", unico: "Jogo único" } as const;
+
+/**
+ * Um confronto da copa: os dois clubes com o agregado, os jogos (ida e volta, ou jogo único) com a data e o placar, e quem
+ * passou, dizendo se foi nos pênaltis. O placar da disputa de pênaltis não está nos dados da temporada, então a tela diz só
+ * que foi nos pênaltis.
+ */
+function Tie({ tie }: { tie: CompetitionTie }) {
+  const winner = tie.advanced === "home" ? tie.home.name : tie.advanced === "away" ? tie.away.name : null;
+  return (
+    <li data-testid="confronto-copa" className="stack-s" style={{ gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 8, alignItems: "center" }}>
+        <span style={{ minWidth: 0 }} className={tie.advanced === "away" ? "muted" : undefined}><ClubLabel club={tie.home} size={28} /></span>
+        <span className="num b" style={{ textAlign: "center", minWidth: 74 }} data-testid="agregado" aria-label="Placar agregado">
+          {tie.aggregate ? `${tie.aggregate.home} × ${tie.aggregate.away}` : "×"}
+        </span>
+        <span style={{ minWidth: 0, display: "flex", justifyContent: "flex-end" }} className={tie.advanced === "home" ? "muted" : undefined}><ClubLabel club={tie.away} align="right" size={28} /></span>
+      </div>
+      <ul className="stack-s" style={{ listStyle: "none", margin: 0, padding: 0, gap: 4 }}>
+        {tie.legs.map(({ leg, match }, i) => (
+          <li key={i} className="row between xs" style={{ gap: 8, flexWrap: "nowrap" }} data-testid="jogo-do-confronto">
+            <span className="muted" style={{ minWidth: 70 }}>{LEG_LABEL[leg]}</span>
+            <span style={{ flex: 1, minWidth: 0 }}>{match.home.name} <Score m={{ ...match, advanced: null }} /> {match.away.name}</span>
+          </li>
+        ))}
+      </ul>
+      {winner && (
+        <p className="xs b m0" data-testid="passou-confronto">
+          Passou: {winner}{tie.penalties ? " · decidido nos pênaltis" : ""}
+        </p>
+      )}
+    </li>
+  );
+}
+
 function Standings({ rows }: { rows: readonly StandingRow[] }) {
   return (
     <section className="card" aria-labelledby="t-class" data-testid="classificacao">
@@ -135,15 +170,52 @@ function Standings({ rows }: { rows: readonly StandingRow[] }) {
   );
 }
 
+/**
+ * A copa, uma fase por vez (a Copa do Brasil tem nove): abre na fase atual (a primeira com jogo por acontecer) e as fases ficam
+ * numa fileira para escolher; a atual leva um ponto, mesmo depois de o jogador olhar outra.
+ */
 function Cup({ view }: { view: CompetitionView }) {
+  const atual = currentStageIndex(view.stages);
+  const [index, setIndex] = useState(atual);
+  const stage: CompetitionStage | undefined = view.stages[index];
   return (
     <div className="stack">
-      {view.stages.map((st: CompetitionStage) => (
-        <section key={st.phase ?? "x"} className="card" aria-label={stageText(st) ?? "Jogos"} data-testid="fase">
-          <div className="card-h"><h2 className="card-t">{stageText(st) ?? "Jogos"}</h2></div>
-          <div className="card-b"><Matches matches={st.matches} /></div>
+      <div className="row-s" role="group" aria-label="Fases" style={{ overflowX: "auto", flexWrap: "nowrap", gap: 8, paddingBottom: 4 }} data-testid="fases">
+        {view.stages.map((st, i) => (
+          <button
+            key={st.phase ?? i}
+            type="button"
+            className={i === index ? "btn btn-p btn-sm" : "btn btn-ghost btn-sm"}
+            aria-pressed={i === index}
+            data-atual={i === atual ? "true" : undefined}
+            style={{ whiteSpace: "nowrap", flex: "none" }}
+            onClick={() => setIndex(i)}
+          >
+            {i === atual && <span className="dot-live" aria-hidden="true" style={{ marginRight: 6 }} />}
+            {stageText(st) ?? "Jogos"}
+          </button>
+        ))}
+      </div>
+      {stage && (
+        <section className="card" aria-labelledby="t-fase" data-testid="fase">
+          <div className="card-h row between" style={{ gap: 8 }}>
+            <h2 className="card-t" id="t-fase">{stageText(stage) ?? "Jogos"}{index === atual ? " · fase atual" : ""}</h2>
+            <span className="row-s">
+              <button type="button" className="btn btn-sm" aria-label="Fase anterior" disabled={index <= 0} onClick={() => setIndex(index - 1)}>‹</button>
+              <button type="button" className="btn btn-sm" aria-label="Próxima fase" disabled={index >= view.stages.length - 1} onClick={() => setIndex(index + 1)}>›</button>
+            </span>
+          </div>
+          <div className="card-b">
+            {stage.ties.length > 0 ? (
+              <ul className="stack" style={{ listStyle: "none", margin: 0, padding: 0, gap: 18 }}>
+                {stage.ties.map((t, i) => <Tie key={`${t.home.name}|${t.away.name}|${i}`} tie={t} />)}
+              </ul>
+            ) : (
+              <Matches matches={stage.matches} />
+            )}
+          </div>
         </section>
-      ))}
+      )}
     </div>
   );
 }
