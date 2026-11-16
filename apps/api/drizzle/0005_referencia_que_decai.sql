@@ -1,0 +1,2 @@
+ALTER TABLE "futbolsa"."season_clubs" ADD COLUMN "reference_price" bigint;--> statement-breakpoint
+ALTER TABLE "futbolsa"."season_clubs" ADD CONSTRAINT "season_clubs_reference_price_check" CHECK ("futbolsa"."season_clubs"."reference_price" is null or "futbolsa"."season_clubs"."reference_price" > 0);

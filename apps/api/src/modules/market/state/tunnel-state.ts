@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { AUCTION_DURATION_MS, dayStart, rollTunnelReference, type Cents } from "@futbolsa/engine";
 import type { LockedClub, Tx } from "../../../infra/db/index.js";
 import { seasonClubs } from "../../../infra/db/schema/index.js";
-import { displayedPriceOf, lastTradeUntil } from "./displayed-price.js";
+import { displayedPriceOf, lastTradeUntil, referencePriceOf } from "./displayed-price.js";
 
 /**
  * O estado do túnel de preço e do leilão de um clube (Livro de ofertas e formador de mercado, "Túnel de preço e
@@ -63,7 +63,7 @@ export async function rollTunnel(tx: Tx, club: LockedClub, now: Date): Promise<C
   assertLocked(tx, club);
   const rolled = rollTunnelReference(
     { reference: club.tunnelRef, referenceDay: club.tunnelRefDay?.getTime() ?? null, inAuction: isInAuction(club) },
-    displayedPriceOf(club),
+    referencePriceOf(club),
     now.getTime(),
   );
   if (rolled.changed) {

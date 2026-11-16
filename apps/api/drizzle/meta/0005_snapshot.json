@@ -1,5 +1,5 @@
 {
-  "id": "231d8c8a-d3eb-47cf-8294-5a8b7cf9d464",
+  "id": "5d2d1cdf-5d96-47b4-9c0d-786498879238",
   "prevId": "a6b327e1-7098-4053-81ed-07e0661b6c9c",
   "version": "7",
   "dialect": "postgresql",
@@ -1003,6 +1003,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "reference_price": {
+          "name": "reference_price",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
         "mm_refreshed_at": {
           "name": "mm_refreshed_at",
           "type": "timestamp with time zone",
@@ -1088,6 +1094,10 @@
         "season_clubs_last_price_check": {
           "name": "season_clubs_last_price_check",
           "value": "\"futbolsa\".\"season_clubs\".\"last_price\" is null or \"futbolsa\".\"season_clubs\".\"last_price\" > 0"
+        },
+        "season_clubs_reference_price_check": {
+          "name": "season_clubs_reference_price_check",
+          "value": "\"futbolsa\".\"season_clubs\".\"reference_price\" is null or \"futbolsa\".\"season_clubs\".\"reference_price\" > 0"
         },
         "season_clubs_tunnel_ref_check": {
           "name": "season_clubs_tunnel_ref_check",
@@ -1702,13 +1712,6 @@
         },
         "volume": {
           "name": "volume",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "turnover": {
-          "name": "turnover",
           "type": "bigint",
           "primaryKey": false,
           "notNull": true,

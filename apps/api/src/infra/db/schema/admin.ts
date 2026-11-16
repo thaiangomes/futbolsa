@@ -105,6 +105,12 @@ export const seasonClubs = futbolsa.table(
     /** Preço exibido: o último negócio (antes dele, o preço do IPO). */
     lastPrice: money("last_price"),
     lastTradeAt: instant("last_trade_at"),
+    /**
+     * Referência que decai (rodada Z de Calibração): o último preço andando em direção ao valor justo enquanto o
+     * clube fica sem negócio e longe dele. Vale no lugar do preço exibido na faixa de 20%, no túnel e na margem da
+     * casa; vazia quando vale o preço exibido. A reposição da casa a calcula (`nextReference`); todo negócio a apaga.
+     */
+    referencePrice: money("reference_price"),
     mmRefreshedAt: instant("mm_refreshed_at"),
     /**
      * Referência do túnel de preço: o preço exibido às 0h de Brasília (na estreia, o de corte do IPO; depois de
@@ -123,6 +129,7 @@ export const seasonClubs = futbolsa.table(
     check("season_clubs_division_check", oneOf(t.division, DIVISIONS)),
     check("season_clubs_total_shares_check", sql`${t.totalShares} >= 0`),
     check("season_clubs_last_price_check", sql`${t.lastPrice} is null or ${t.lastPrice} > 0`),
+    check("season_clubs_reference_price_check", sql`${t.referencePrice} is null or ${t.referencePrice} > 0`),
     check("season_clubs_tunnel_ref_check", sql`${t.tunnelRef} is null or ${t.tunnelRef} > 0`),
     // o fim do leilão só existe com o início (sem fim = parado pela suspensão)
     check("season_clubs_auction_check", sql`${t.auctionUntil} is null or ${t.auctionOpenedAt} is not null`),

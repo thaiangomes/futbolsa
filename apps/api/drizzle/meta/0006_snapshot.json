@@ -1,6 +1,6 @@
 {
-  "id": "1b0f31e1-b2b5-4f71-be36-3dc89b418d50",
-  "prevId": "231d8c8a-d3eb-47cf-8294-5a8b7cf9d464",
+  "id": "231d8c8a-d3eb-47cf-8294-5a8b7cf9d464",
+  "prevId": "5d2d1cdf-5d96-47b4-9c0d-786498879238",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -651,24 +651,6 @@
         },
         "badge_abbr": {
           "name": "badge_abbr",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "badge_pattern": {
-          "name": "badge_pattern",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "badge_ink": {
-          "name": "badge_ink",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "badge_extra": {
-          "name": "badge_extra",
           "type": "text",
           "primaryKey": false,
           "notNull": false

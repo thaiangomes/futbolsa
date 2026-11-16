@@ -67,6 +67,11 @@ export const bookViewSchema = z.strictObject({
     open: z.number().int(),
     /** Variação desde o preço exibido às 0h de Brasília, em centésimos de ponto percentual (+5,00% = 500). */
     changeBp: z.number().int(),
+    /**
+     * A referência que decai (rodada Z de Calibração): com o clube sem negócio e longe do valor justo, a faixa de
+     * 20% e o túnel valem em volta dela, não do preço exibido. Vazia quando vale o preço exibido.
+     */
+    reference: z.number().int().nullable().optional(),
   }),
   /** O clube está no modo de jogo da casa ("em jogo agora"). */
   matchMode: z.boolean(),

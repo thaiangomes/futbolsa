@@ -18,6 +18,8 @@ export class MarketView extends LeagueView implements BotView {
   /** Regras do jogo: ordem limitada fora da faixa de 20% em volta do preço exibido é recusada (e contada). */
   enforceBand = false;
   readonly refused: Record<string, number> = {};
+  /** Referência da faixa no lugar do preço exibido (a referência que decai, rodada Z). */
+  reference?: (clubId: string) => Cents;
 
   constructor(
     readonly exchange: Exchange,
@@ -73,7 +75,7 @@ export class MarketView extends LeagueView implements BotView {
   limit(accountId: string, clubId: string, side: Side, quantity: number, price: number): void {
     const limitPrice = Math.max(MIN_PRICE, Math.round(price));
     if (this.enforceBand) {
-      const band = tradingBand(this.price(clubId));
+      const band = tradingBand(this.reference?.(clubId) ?? this.price(clubId));
       if (limitPrice < band.min || limitPrice > band.max) {
         this.refused.price_out_of_band = (this.refused.price_out_of_band ?? 0) + 1;
         return;
@@ -92,6 +94,8 @@ export class MarketView extends LeagueView implements BotView {
     const qty =
       side === "sell" ? Math.min(Math.floor(quantity), this.ledger.availableShares(accountId, clubId)) : Math.floor(quantity);
     if (qty <= 0) return;
-    this.exchange.placeOrder({ accountId, clubId, side, type: "market", quantity: qty });
+    // Com as regras do jogo a ordem a mercado também respeita a faixa de 20% (teto da compra, piso da venda), como na API.
+    const band = this.enforceBand ? tradingBand(this.reference?.(clubId) ?? this.price(clubId)) : undefined;
+    this.exchange.placeOrder({ accountId, clubId, side, type: "market", quantity: qty, ...(band ? { marketPriceLimit: side === "buy" ? band.max : band.min } : {}) });
   }
 }

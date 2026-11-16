@@ -34,7 +34,7 @@ describe("selos dos clubes no banco", () => {
   });
 
   it("a migração 0006 atualiza os clubes que já existiam com os mesmos valores do arquivo de dados", () => {
-    const sql = readFileSync(`${MIGRATIONS_FOLDER}/0006_selos_dos_clubes.sql`, "utf8");
+    const sql = readFileSync(`${MIGRATIONS_FOLDER}/0007_selos_dos_clubes.sql`, "utf8");
     for (const [ticker, badge] of Object.entries(CLUB_BADGES)) {
       const update = sql.split("--> statement-breakpoint").find((s) => s.includes(`WHERE "ticker" = '${ticker}'`));
       expect(update, ticker).toBeDefined();

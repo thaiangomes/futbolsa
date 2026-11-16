@@ -67,9 +67,9 @@ export function ClubView({ ticker, api, logged, chart = null, position }: { tick
     );
   }
   const state: ClubState = book.state;
-  // A faixa anda com o preço exibido e o saldo, com o último que a boleta conhece
+  // A faixa anda com a referência (o preço exibido, ou a que decai) e o saldo, com o último que a boleta conhece
   const view: ClubState = state.me
-    ? { ...state, me: { band: tradingBand(state.price.displayed), freeCash: balances?.freeCash ?? state.me.freeCash, freeShares: balances?.freeShares ?? state.me.freeShares } }
+    ? { ...state, me: { band: tradingBand(state.price.reference ?? state.price.displayed), freeCash: balances?.freeCash ?? state.me.freeCash, freeShares: balances?.freeShares ?? state.me.freeShares } }
     : state;
   const orders = mine.orders ?? [];
 
