@@ -44,6 +44,13 @@ describe("competições (HTTP)", () => {
       { ...jogo("copa-do-brasil", "COR3", "SPT3", "2027-06-04T22:00:00Z"), phase: "quartas", awayClubId: fora!.id },
       jogo("copa-do-brasil", "COR3", "SPT3", "2027-06-03T22:00:00Z", { phase: "1a-fase", status: "finished", homeGoals: 3, awayGoals: 0, advancedClubId: id("COR3") }),
       jogo("libertadores", "COR3", "PAL3", "2027-06-18T22:00:00Z"),
+      // a semifinal em ida e volta: COR3 passa por 2 a 1 no agregado (sem a marca da fonte); FLA3 e PAL3 empatam em 1 a 1 e o FLA3 passa nos pênaltis
+      jogo("copa-do-brasil", "COR3", "SPT3", "2027-06-05T22:00:00Z", { phase: "semifinal", status: "finished", homeGoals: 2, awayGoals: 0 }),
+      jogo("copa-do-brasil", "SPT3", "COR3", "2027-06-09T22:00:00Z", { phase: "semifinal", status: "finished", homeGoals: 1, awayGoals: 0 }),
+      jogo("copa-do-brasil", "FLA3", "PAL3", "2027-06-06T22:00:00Z", { phase: "semifinal", status: "finished", homeGoals: 1, awayGoals: 0 }),
+      jogo("copa-do-brasil", "PAL3", "FLA3", "2027-06-09T23:00:00Z", { phase: "semifinal", status: "finished", homeGoals: 1, awayGoals: 0, advancedClubId: id("FLA3") }),
+      // a volta da final ainda não foi jogada: a ida sozinha não fecha o agregado
+      jogo("copa-do-brasil", "FLA3", "COR3", "2027-06-30T22:00:00Z", { phase: "final" }),
     ]);
     await database.db.insert(standings).values([
       { seasonId: s.seasonId, competition: "brasileirao-a", clubId: id("FLA3"), position: 1, points: 4 },
@@ -71,10 +78,31 @@ describe("competições (HTTP)", () => {
   it("nas copas não há classificação: as fases vêm em ordem, com o placar, quem passou (também nos pênaltis) e o clube de fora sem ticker", async () => {
     const view = competitionViewSchema.parse((await get("/competitions/copa-do-brasil")).json());
     expect(view.standings).toEqual([]);
-    expect(view.stages.map((st) => st.phase)).toEqual(["1a-fase", "oitavas", "quartas"]);
+    expect(view.stages.map((st) => st.phase)).toEqual(["1a-fase", "oitavas", "quartas", "semifinal", "final"]);
     expect(view.stages[1]!.matches[0]).toMatchObject({ homeGoals: 1, awayGoals: 1, advanced: "away", home: { ticker: "FLA3" }, away: { ticker: "PAL3" } });
     expect(view.stages[0]!.matches[0]).toMatchObject({ advanced: "home", homeGoals: 3 });
     expect(view.stages[2]!.matches[0]!.away).toEqual({ ticker: null, name: "Clube de Fora" });
+  });
+
+  it("na copa, os jogos entre os mesmos clubes na fase viram um confronto com ida e volta, o agregado, quem passou e os pênaltis", async () => {
+    const view = competitionViewSchema.parse((await get("/competitions/copa-do-brasil")).json());
+    const semi = view.stages.find((st) => st.phase === "semifinal")!;
+    expect(semi.ties).toHaveLength(2);
+    const [cor, fla] = semi.ties;
+    // COR3 x SPT3: ida em casa 2 a 0, volta fora 0 a 1; agregado do COR3 2 a 1, passa sem pênaltis
+    expect(cor!.home.ticker).toBe("COR3");
+    expect(cor!.legs.map((l) => [l.leg, l.match.homeGoals, l.match.awayGoals])).toEqual([["ida", 2, 0], ["volta", 1, 0]]);
+    expect(cor).toMatchObject({ aggregate: { home: 2, away: 1 }, advanced: "home", penalties: false });
+    // FLA3 x PAL3: 1 a 0 e 0 a 1 (agregado 1 a 1), o FLA3 passou: pênaltis
+    expect(fla).toMatchObject({ aggregate: { home: 1, away: 1 }, advanced: "home", penalties: true });
+    expect(fla!.home.ticker).toBe("FLA3");
+    // as oitavas têm um jogo único (1 a 1, PAL3 passou): pênaltis; a final, só a ida agendada: sem agregado nem quem passou
+    const oitavas = view.stages.find((st) => st.phase === "oitavas")!;
+    expect(oitavas.ties[0]).toMatchObject({ legs: [{ leg: "unico" }], aggregate: { home: 1, away: 1 }, advanced: "away", penalties: true });
+    const final = view.stages.find((st) => st.phase === "final")!;
+    expect(final.ties[0]).toMatchObject({ aggregate: null, advanced: null, penalties: false });
+    // nos campeonatos não há confrontos
+    expect(competitionViewSchema.parse((await get("/competitions/brasileirao-a")).json()).stages.every((st) => st.ties.length === 0)).toBe(true);
   });
 
   it("competição sem jogo devolve vazio, e competição desconhecida dá 400", async () => {

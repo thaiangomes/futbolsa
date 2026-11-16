@@ -27,16 +27,19 @@ const league: CompetitionView = {
     { position: 2, club: club("PAL3", "Palmeiras"), points: 0, played: 1, wins: 0, draws: 0, losses: 1, goalDiff: -2 },
   ],
   stages: [
-    { round: 1, phase: null, matches: [match({ status: "finished", homeGoals: 2, awayGoals: 0 })] },
-    { round: 2, phase: null, matches: [match({ home: club("COR3", "Corinthians"), away: club(null, "Clube de Fora") })] },
+    { round: 1, phase: null, matches: [match({ status: "finished", homeGoals: 2, awayGoals: 0 })], ties: [] },
+    { round: 2, phase: null, matches: [match({ home: club("COR3", "Corinthians"), away: club(null, "Clube de Fora") })], ties: [] },
   ],
 };
+const oitavas = match({ status: "finished", homeGoals: 1, awayGoals: 1, advanced: "away" });
+const ida = match({ home: club("COR3", "Corinthians"), away: club("SPT3", "Santos"), status: "finished", homeGoals: 2, awayGoals: 0 });
+const volta = match({ home: club("SPT3", "Santos"), away: club("COR3", "Corinthians"), status: "finished", homeGoals: 1, awayGoals: 0 });
 const cup: CompetitionView = {
   competition: "copa-do-brasil",
   standings: [],
   stages: [
-    { round: null, phase: "oitavas", matches: [match({ status: "finished", homeGoals: 1, awayGoals: 1, advanced: "away" })] },
-    { round: null, phase: "quartas", matches: [match({ inPlay: true })] },
+    { round: null, phase: "oitavas", matches: [oitavas], ties: [{ home: club("FLA3", "Flamengo"), away: club("PAL3", "Palmeiras"), legs: [{ leg: "unico", match: oitavas }], aggregate: { home: 1, away: 1 }, advanced: "away", penalties: true }] },
+    { round: null, phase: "quartas", matches: [ida, volta], ties: [{ home: club("COR3", "Corinthians"), away: club("SPT3", "Santos"), legs: [{ leg: "ida", match: ida }, { leg: "volta", match: volta }], aggregate: { home: 2, away: 1 }, advanced: "home", penalties: false }] },
   ],
 };
 const api = () => ({ competition: vi.fn(async (c: CompetitionView["competition"]): Promise<CompetitionView> => (c === "copa-do-brasil" ? cup : c === "brasileirao-a" ? league : { competition: c, standings: [], stages: [] })) });
@@ -85,12 +88,16 @@ describe("página das competições", () => {
     expect(dom.$$("[data-testid=fases] button").map((b) => b.textContent)).toEqual(["Oitavas", "Quartas"]);
     expect(dom.$$("[data-testid=fase]")).toHaveLength(1);
     expect(dom.$("[data-testid=fase] h2").textContent).toBe("Quartas · fase atual");
-    expect(dom.$("[data-testid=fase] [data-testid=em-jogo]")).not.toBeNull();
     expect(dom.$("[data-atual=true]").textContent).toContain("Quartas");
+    // o confronto das quartas: ida e volta com o placar de cada jogo, o agregado e quem passou (sem pênaltis)
+    expect(dom.$$("[data-testid=jogo-do-confronto]").map((j) => j.textContent)).toEqual(["IdaCorinthians 2 × 0 Santos", "VoltaSantos 1 × 0 Corinthians"]);
+    expect(dom.$("[data-testid=agregado]").textContent).toBe("2 × 1");
+    expect(dom.$("[data-testid=passou-confronto]").textContent).toBe("Passou: Corinthians");
     // escolhendo as oitavas: o resultado nos pênaltis; a fase atual continua marcada
     await dom.click(dom.$$("[data-testid=fases] button")[0]!);
     expect(dom.$("[data-testid=fase] h2").textContent).toBe("Oitavas");
-    expect(dom.$("[data-testid=passou]").textContent).toBe("Passou o visitante nos pênaltis");
+    expect(dom.$$("[data-testid=jogo-do-confronto]").map((j) => j.textContent)).toEqual(["Jogo únicoFlamengo 1 × 1 Palmeiras"]);
+    expect(dom.$("[data-testid=passou-confronto]").textContent).toBe("Passou: Palmeiras · decidido nos pênaltis");
     expect(dom.$("[data-atual=true]").textContent).toContain("Quartas");
     // as setas
     await dom.click(dom.$("[aria-label='Próxima fase']"));
@@ -115,8 +122,8 @@ describe("regras da página", () => {
   });
 
   it("a rodada aberta é a primeira com jogo por acontecer, ou a última quando todas acabaram", () => {
-    const done = (r: number) => ({ round: r, phase: null, matches: [match({ status: "finished" })] });
-    const open = (r: number) => ({ round: r, phase: null, matches: [match()] });
+    const done = (r: number) => ({ round: r, phase: null, matches: [match({ status: "finished" })], ties: [] });
+    const open = (r: number) => ({ round: r, phase: null, matches: [match()], ties: [] });
     expect(currentStageIndex([done(1), open(2), open(3)])).toBe(1);
     expect(currentStageIndex([done(1), done(2)])).toBe(1);
     expect(currentStageIndex([])).toBe(0);

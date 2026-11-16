@@ -39,11 +39,30 @@ export const competitionMatchSchema = z.strictObject({
 });
 export type CompetitionMatch = z.infer<typeof competitionMatchSchema>;
 
-/** Uma rodada (campeonatos) ou uma fase (copas), com os jogos do mais cedo ao mais tarde. */
+/**
+ * Um confronto de copa: os dois clubes e os jogos entre eles na fase (ida e volta, ou jogo único). O mandante e o visitante do
+ * confronto são os do primeiro jogo. O placar agregado soma os gols dos dois jogos quando todos acabaram.
+ */
+export const competitionTieSchema = z.strictObject({
+  home: competitionClubSchema,
+  away: competitionClubSchema,
+  legs: z.array(z.strictObject({ leg: z.enum(["ida", "volta", "unico"]), match: competitionMatchSchema })),
+  /** A soma dos gols (do mandante e do visitante do confronto), quando todos os jogos acabaram. */
+  aggregate: z.strictObject({ home: z.number().int(), away: z.number().int() }).nullable(),
+  /** Quem passou, quando o confronto está decidido. */
+  advanced: z.enum(["home", "away"]).nullable(),
+  /** Decidido nos pênaltis: o agregado empatou e alguém passou. O placar da disputa não está nos dados da temporada. */
+  penalties: z.boolean(),
+});
+export type CompetitionTie = z.infer<typeof competitionTieSchema>;
+
+/** Uma rodada (campeonatos) ou uma fase (copas), com os jogos do mais cedo ao mais tarde; nas copas, também agrupados em confrontos. */
 export const competitionStageSchema = z.strictObject({
   round: z.number().int().nullable(),
   phase: z.string().nullable(),
   matches: z.array(competitionMatchSchema),
+  /** Os confrontos da fase (só nas copas; nos campeonatos, vazia), pelo primeiro jogo. */
+  ties: z.array(competitionTieSchema),
 });
 export type CompetitionStage = z.infer<typeof competitionStageSchema>;
 

@@ -1,6 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import type { CompetitionMatch, CompetitionStage, CompetitionView, StandingRow } from "@futbolsa/contracts";
+import type { CompetitionMatch, CompetitionStage, CompetitionTie, CompetitionView, StandingRow } from "@futbolsa/contracts";
 import type { Database, DrizzleTx } from "../../../infra/db/index.js";
 import { clubs, matches, seasonClubs, standings } from "../../../infra/db/schema/index.js";
 
@@ -52,13 +52,27 @@ export async function competitionView(db: Db, seasonId: number, competition: Com
     inPlay: r.status === "scheduled" && new Date(r.kickoff).getTime() <= now.getTime(),
   });
 
+  const isLeague = competition === "brasileirao-a" || competition === "brasileirao-b";
   // rodadas (campeonatos) ou fases (copas), cada uma com os jogos do mais cedo ao mais tarde
   const stages = new Map<string, CompetitionStage>();
+  const tieRows = new Map<string, Array<(typeof rows)[number]>>();
   for (const r of rows) {
     const key = r.round !== null ? `r${r.round}` : `p${r.phase ?? ""}`;
     let stage = stages.get(key);
-    if (!stage) stages.set(key, (stage = { round: r.round, phase: r.round === null ? r.phase : null, matches: [] }));
+    if (!stage) stages.set(key, (stage = { round: r.round, phase: r.round === null ? r.phase : null, matches: [], ties: [] }));
     stage.matches.push(view(r));
+    // nas copas, os jogos entre os mesmos dois clubes na mesma fase são um confronto (ida e volta)
+    if (!isLeague) {
+      const tieKey = `${key}|${Math.min(r.homeId, r.awayId)}|${Math.max(r.homeId, r.awayId)}`;
+      tieRows.set(tieKey, [...(tieRows.get(tieKey) ?? []), r]);
+      if (tieRows.get(tieKey)!.length === 1) stage.ties.push(null as never); // guarda o lugar do confronto, pelo primeiro jogo
+    }
+  }
+  for (const [key, legs] of tieRows) {
+    const stageKey = key.split("|")[0]!;
+    const stage = stages.get(stageKey)!;
+    const slot = stage.ties.findIndex((t) => t === null);
+    stage.ties[slot] = tieOf(legs, club, view);
   }
   const ordered = [...stages.values()].sort((a, b) => (a.round !== null && b.round !== null ? a.round - b.round : phaseIndex(a.phase) - phaseIndex(b.phase)));
 
@@ -84,9 +98,32 @@ export async function competitionView(db: Db, seasonId: number, competition: Com
     tally(r.homeId, r.homeGoals, r.awayGoals);
     tally(r.awayId, r.awayGoals, r.homeGoals);
   }
-  const isLeague = competition === "brasileirao-a" || competition === "brasileirao-b";
   const standingRows: StandingRow[] = isLeague
     ? table.map((t) => ({ position: t.position, club: club(t.clubId, t.name), points: t.points, ...(stat.get(t.clubId) ?? empty()) }))
     : [];
   return { competition, standings: standingRows, stages: ordered };
+}
+
+type Row = { homeId: number; awayId: number; homeName: string; awayName: string; homeGoals: number | null; awayGoals: number | null; status: string; advancedId: number | null; kickoff: Date };
+
+/** Um confronto de copa a partir dos jogos entre os dois clubes na fase (já em ordem de horário). */
+function tieOf(legs: Row[], club: (id: number, name: string) => { ticker: string | null; name: string }, view: (r: never) => CompetitionMatch): CompetitionTie {
+  const first = legs[0]!;
+  const home = club(first.homeId, first.homeName);
+  const away = club(first.awayId, first.awayName);
+  const done = legs.every((l) => l.status === "finished" && l.homeGoals !== null && l.awayGoals !== null);
+  const aggregate = done
+    ? legs.reduce((a, l) => (l.homeId === first.homeId ? { home: a.home + l.homeGoals!, away: a.away + l.awayGoals! } : { home: a.home + l.awayGoals!, away: a.away + l.homeGoals! }), { home: 0, away: 0 })
+    : null;
+  // quem passou: o que a fonte marcou (no jogo que decidiu) ou, sem marca, quem fez mais gols no agregado
+  const marked = [...legs].reverse().find((l) => l.advancedId !== null)?.advancedId ?? null;
+  const advanced: "home" | "away" | null = marked !== null ? (marked === first.homeId ? "home" : "away") : aggregate && aggregate.home !== aggregate.away ? (aggregate.home > aggregate.away ? "home" : "away") : null;
+  return {
+    home,
+    away,
+    legs: legs.map((l, i) => ({ leg: legs.length === 1 ? "unico" : i === 0 ? "ida" : "volta", match: view(l as never) })),
+    aggregate,
+    advanced,
+    penalties: aggregate !== null && aggregate.home === aggregate.away && advanced !== null,
+  };
 }
