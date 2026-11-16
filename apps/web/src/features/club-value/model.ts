@@ -112,7 +112,3 @@ export function simulate(view: ClubValueView, displayedPrice: number, form: BetF
   }
 }
 
-/** Pontos-base em percentual, `10,94`. */
-export function formatBp(bp: number): string {
-  return (Math.abs(bp) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}

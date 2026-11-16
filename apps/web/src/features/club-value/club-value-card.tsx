@@ -10,7 +10,6 @@ import {
   CUP_NAMES,
   cupOptions,
   cupStateText,
-  formatBp,
   initialForm,
   MAX_POINTS,
   POSITIONS,
@@ -151,6 +150,12 @@ function Loaded({ view, name, price, title }: { view: ClubValueView; name: strin
   );
 }
 
+/** A frase do simulador (critério 38): o preço agora contra o preço da conta, medido a partir do preço. */
+export function outlookText(price: number, o: { kind: "upside" | "downside" | "even"; percent: number }): string {
+  if (o.kind === "even") return "O preço agora está igual à sua conta.";
+  return `O preço agora (${formatCents(price)}) tem um ${o.kind} de ${o.percent}% até o preço da sua conta.`;
+}
+
 function Account({ view, sim, price, multiple }: { view: ClubValueView; sim: NonNullable<ReturnType<typeof simulate> extends infer S ? S extends { ok: true; result: infer R } ? R extends { simulation: infer M } ? M : never : never : never>; price: number; multiple: string }) {
   const { missing } = sim;
   const lines: Array<[string, number]> = [];
@@ -159,7 +164,7 @@ function Account({ view, sim, price, multiple }: { view: ClubValueView; sim: Non
   }
   for (const cup of view.cups) if (cup.currentPhase !== null) lines.push([CUP_NAMES[cup.competition] ?? cup.competition, missing.cups[cup.competition] ?? 0]);
   lines.push(["A receber (já fechado)", missing.toReceive]);
-  const gap = sim.priceGapBp;
+  const outlook = sim.outlook;
   return (
     <>
       <div className="stack-s" style={{ gap: 0 }} data-testid="sim-conta">
@@ -173,11 +178,11 @@ function Account({ view, sim, price, multiple }: { view: ClubValueView; sim: Non
       <div className="card card-b stack-s" style={{ gap: 4, background: "var(--panel2)" }}>
         <span className="kpi-l">Valor por ação para você (dividendos que faltam + recompra)</span>
         <span className="disp num" style={{ fontSize: 38, fontWeight: 700, lineHeight: 1 }} data-testid="sim-valor">{formatCents(sim.value)}</span>
-        {gap === null ? (
+        {outlook === null ? (
           <span className="small b muted" data-testid="sim-comparacao">Sem dividendos na conta, não há comparação com o preço.</span>
         ) : (
-          <span className={`small b ${gap >= 0 ? "down" : "up"}`} data-testid="sim-comparacao">
-            O preço agora ({formatCents(price)}) está {formatBp(gap)}% {gap >= 0 ? "acima" : "abaixo"} da sua conta.
+          <span className={`small b ${outlook.kind === "downside" ? "down" : outlook.kind === "upside" ? "up" : "muted"}`} data-testid="sim-comparacao">
+            {outlookText(price, outlook)}
           </span>
         )}
       </div>
