@@ -80,6 +80,17 @@ describe("tela do relógio da partida", () => {
     expect(dom.text()).toContain("O relógio está andando: 1 dia");
   });
 
+  it("18: com um salto andando a tela mostra o alvo e deixa pausar (o salto para ao fim da parada)", async () => {
+    const pedidos: PedidoDoRelogio[] = [];
+    await mostrar(api({ ...parado, ocupado: "avançando até 23/07, fim da rodada 19" }, pedidos));
+    expect(dom.text()).toContain("O relógio está andando: avançando até 23/07, fim da rodada 19");
+    expect(botao("1 dia")?.disabled).toBe(true);
+    expect(botao("Pausar")?.disabled).toBe(false);
+    botao("Pausar")!.click();
+    await dom.settle();
+    expect(pedidos).toEqual([{ acao: "pausar" }]);
+  });
+
   it("10: a recusa da API aparece na tela ('o relógio já está andando')", async () => {
     await mostrar(api(parado, [], "o relógio já está andando"));
     botao("1 dia")!.click();

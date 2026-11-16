@@ -88,6 +88,45 @@ describe("relógio da partida: saltos", () => {
     expect(r.mensagem).toContain("até a próxima rodada");
   });
 
+  it("18: a rodada com jogo remarcado para semanas depois não segura o salto: 'até a próxima rodada' para no fim dos jogos dentro da janela, e a tela diz o alvo", async () => {
+    const m = montar("2026-04-01T12:00:00Z");
+    const agora = Date.parse("2026-04-01T12:00:00Z");
+    const fim = (n: number) => Math.max(...rodada(m.fonte, n).map(finishTime));
+    const n = [...new Set(m.fonte.matchesOf("brasileirao-a").map((x) => x.round!))].sort((a, b) => a - b).find((r) => fim(r) > agora)!;
+    // o último jogo dessa rodada é remarcado para 60 dias depois (ainda agendado, sem o aviso de adiado)
+    const ultimo = rodada(m.fonte, n).reduce((a, b) => (finishTime(a) >= finishTime(b) ? a : b));
+    const remarcado: Match = { ...ultimo, kickoff: new Date(Date.parse(ultimo.kickoff) + 60 * DIA).toISOString(), finishedAt: undefined, status: "scheduled" };
+    const dados = Object.fromEntries(
+      (["brasileirao-a", "brasileirao-b", "copa-do-brasil", "libertadores", "sulamericana"] as const).map((c) => [c, m.fonte.matchesOf(c).map((x) => (x === ultimo ? remarcado : x))]),
+    );
+    m.fonte.trocarDados(dados);
+    const outros = rodada(m.fonte, n).filter((x) => x !== remarcado && x.kickoff !== remarcado.kickoff);
+    const esperado = Math.max(...outros.map(finishTime)) + MARGEM_DO_FECHAMENTO;
+    const r = await m.relogio.pedir({ acao: "rodada" });
+    expect(Date.parse(r.estado.instante)).toBe(esperado);
+    expect(Date.parse(r.estado.instante)).toBeLessThan(Date.parse(remarcado.kickoff));
+  });
+
+  it("18: o alvo do salto aparece na tela enquanto ele corre, e 'pausar' interrompe o salto ao fim da parada atual", async () => {
+    const m = montar("2026-04-01T12:00:00Z");
+    let soltar!: () => void;
+    m.segurar.portao = new Promise<void>((ok) => (soltar = ok));
+    const salto = m.relogio.pedir({ acao: "dia" });
+    await new Promise((ok) => setTimeout(ok, 20));
+    expect(m.relogio.estado().ocupado).toBe("avançando até 02/04");
+    const pausa = m.relogio.pedir({ acao: "pausar" }); // antes respondia "ocupado"
+    m.segurar.portao = null;
+    soltar();
+    const [resposta] = await Promise.all([salto, pausa]);
+    expect(resposta.mensagem).toContain("interrompido");
+    const agora = m.clock.now().getTime();
+    expect(agora).toBeGreaterThan(Date.parse("2026-04-01T12:00:00Z"));
+    expect(agora).toBeLessThan(Date.parse("2026-04-02T12:00:00Z")); // parou no meio do dia
+    expect(m.relogio.estado()).toMatchObject({ ocupado: null, modo: "pausado" });
+    // e o relógio anda de novo depois
+    expect((await m.relogio.pedir({ acao: "dia" })).avancou).toBe(true);
+  });
+
   it("6: 'até X' para em X às 00:00 de Brasília; data no passado ou além do limite é recusada com a razão", async () => {
     const m = montar("2026-04-01T12:00:00Z");
     await expect(m.relogio.pedir({ acao: "ate", data: "2026-03-30" })).rejects.toMatchObject({ code: "data_no_passado", status: 422 });
@@ -170,7 +209,7 @@ describe("relógio da partida: um pedido por vez", () => {
     m.segurar.portao = new Promise<void>((ok) => (soltar = ok));
     const primeiro = m.relogio.pedir({ acao: "dia" });
     await new Promise((ok) => setTimeout(ok, 20));
-    expect(m.relogio.estado().ocupado).toBe("1 dia");
+    expect(m.relogio.estado().ocupado).toBe("avançando até 02/04");
     await expect(m.relogio.pedir({ acao: "dia" })).rejects.toMatchObject({ code: "relogio_ocupado", status: 409, message: "o relógio já está andando" });
     await expect(m.relogio.pedir({ acao: "atualizar" })).rejects.toMatchObject({ code: "relogio_ocupado" });
     m.segurar.portao = null;

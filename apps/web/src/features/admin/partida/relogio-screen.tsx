@@ -13,6 +13,8 @@ import type { PedidoDoRelogio } from "./schemas";
 export function RelogioScreen({ admin }: { admin: AdminApi }) {
   const loader = useLoader(() => admin.partida());
   const action = useAction();
+  // pausar tem o próprio estado: com um salto andando, o pedido do salto segura `action` e a pausa não pode esperar por ele
+  const pausa = useAction();
   const [data, setData] = useState("");
   const [mensagem, setMensagem] = useState<string | null>(null);
 
@@ -36,6 +38,16 @@ export function RelogioScreen({ admin }: { admin: AdminApi }) {
     await loader.reload();
   };
   const ocupado = action.busy || r.ocupado !== null;
+  const pausar = async () => {
+    setMensagem(null);
+    await pausa.run(async () => {
+      const resposta = await admin.partidaRelogio({ acao: "pausar" });
+      setMensagem(resposta.mensagem);
+    });
+    await loader.reload();
+  };
+  // um salto andando (ou o tempo real) pode ser pausado; o "atualizar" não
+  const podePausar = r.modo === "tempo-real" || (r.ocupado !== null && r.ocupado !== "atualizar");
 
   return (
     <div className="stack">
@@ -52,7 +64,7 @@ export function RelogioScreen({ admin }: { admin: AdminApi }) {
             O relógio vai até {r.limite ? formatInstant(r.limite) : "—"} (fim do último jogo terminado nos dados{r.dadosDe ? `, baixados em ${formatInstant(r.dadosDe)}` : ""}).
           </p>
         )}
-        {r.ocupado && <p className="muted small" role="status">O relógio está andando: {r.ocupado}…</p>}
+        {r.ocupado && <p className="muted small" role="status" data-testid="relogio-ocupado">O relógio está andando: {r.ocupado}…</p>}
       </Card>
 
       <Card title="Avançar o tempo">
@@ -81,8 +93,8 @@ export function RelogioScreen({ admin }: { admin: AdminApi }) {
 
       <Card title="Ritmo e dados">
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-          {r.modo === "tempo-real" ? (
-            <button type="button" className="btn" disabled={ocupado} onClick={() => void pedir({ acao: "pausar" })}>Pausar</button>
+          {podePausar ? (
+            <button type="button" className="btn" disabled={pausa.busy} onClick={() => void pausar()}>Pausar</button>
           ) : (
             <button type="button" className="btn" disabled={ocupado || r.aguardando} onClick={() => void pedir({ acao: "tempo-real" })}>Ligar o tempo real</button>
           )}
