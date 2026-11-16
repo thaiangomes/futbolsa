@@ -146,9 +146,9 @@ async function rebuildPrice(tx: Tx, club: LockedClub, at: Date): Promise<LockedC
   const lastTradeAt = last?.at ?? null;
   await tx.db
     .update(seasonClubs)
-    .set({ lastPrice, lastTradeAt })
+    .set({ lastPrice, lastTradeAt, referencePrice: null })
     .where(and(eq(seasonClubs.seasonId, club.seasonId), eq(seasonClubs.clubId, club.clubId)));
-  return { ...club, lastPrice, lastTradeAt };
+  return { ...club, lastPrice, lastTradeAt, referencePrice: null };
 }
 
 /**

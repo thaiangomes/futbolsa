@@ -23,6 +23,7 @@ import {
   type RefreshResult,
   type RefreshWakeUp,
 } from "../../src/modules/market/index.js";
+import { setClubPrice } from "../../src/modules/market/book/book-repo.js";
 import { SeasonValuesService } from "../../src/modules/dividends/season-values/season-values.service.js";
 import { PortfolioLedger } from "../../src/modules/portfolio/index.js";
 import { createTestApp } from "../support/app.js";
@@ -42,6 +43,7 @@ import {
   openTreasury,
   orderInputs,
   orderRow,
+  rejected,
   rolledBack,
   setTunnelState,
   syncTotalShares,
@@ -190,6 +192,57 @@ describe("reposição da casa", () => {
       ]);
       expect((await orderRow(db, first.bid!.order.id)).cancelReason).toBe("house_refresh");
       expect((await row("FLA3")).mmRefreshedAt).toEqual(kickoff);
+    }),
+  );
+
+  it(
+    "referência que decai (rodada Z): 2 dias e 1 hora sem negócio, preço de R$ 30,00 e justo de R$ 16,00, a referência vira R$ 27,00, o túnel vai com ela e a casa cota a partir dela",
+    scene(async () => {
+      await stock(RICH, { FLA3: 600 });
+      await holder("FLA3", 2_400);
+      const bia = await player();
+      await ready();
+      const lastTrade = later(NOW, -(48 * HOUR + HOUR));
+      await setTunnelState(db, seasonId, club("FLA3"), { lastPrice: 3000, lastTradeAt: lastTrade, tunnelRef: 3000, tunnelRefDay: TODAY });
+
+      refreshed(await refresh("FLA3", 1600));
+      const after = await row("FLA3");
+      expect(after.referencePrice).toBe(2700);
+      expect(after.lastPrice).toBe(3000);
+      expect(after.tunnelRef).toBe(2700);
+      // compra a 95% do justo (R$ 15,20); venda presa a 95% da referência (R$ 25,65), não a 95% de R$ 30,00
+      expect((await houseQuotes("FLA3")).map(([side, , price]) => [side, price])).toEqual([
+        ["buy", 1520],
+        ["sell", 2565],
+      ]);
+      // a faixa de 20% passa a ser a da referência (R$ 21,60 a R$ 32,40)
+      accepted(await service.place(o.buyLimit(bia, "FLA3", 1, 2160)));
+      expect(rejected(await service.place(o.buyLimit(bia, "FLA3", 1, 2159))).code).toBe("price_out_of_band");
+    }),
+  );
+
+  it(
+    "referência que decai: com menos de 2 dias sem negócio, ou com o preço a até 20% do justo, a referência fica vazia; um negócio apaga a que existia",
+    scene(async () => {
+      await stock(RICH, { FLA3: 600 });
+      await holder("FLA3", 2_400);
+      await ready();
+      // 1 dia sem negócio: carência
+      await setTunnelState(db, seasonId, club("FLA3"), { lastPrice: 3000, lastTradeAt: later(NOW, -24 * HOUR), tunnelRef: 3000, tunnelRefDay: TODAY });
+      refreshed(await refresh("FLA3", 1600));
+      expect((await row("FLA3")).referencePrice).toBeNull();
+      // 5 dias sem negócio, mas o preço está a 12,5% do justo
+      await setTunnelState(db, seasonId, club("FLA3"), { lastPrice: 1800, lastTradeAt: later(NOW, -120 * HOUR) });
+      refreshed(await refresh("FLA3", 1600));
+      expect((await row("FLA3")).referencePrice).toBeNull();
+      // longe do justo e parado há 5 dias: decai; um negócio apaga
+      await setTunnelState(db, seasonId, club("FLA3"), { lastPrice: 3000, lastTradeAt: later(NOW, -120 * HOUR) });
+      refreshed(await refresh("FLA3", 1600));
+      expect((await row("FLA3")).referencePrice).toBe(1969);
+      await withTransaction(db, (tx) => setClubPrice(tx, seasonId, club("FLA3"), 2000, NOW));
+      const traded = await row("FLA3");
+      expect(traded.referencePrice).toBeNull();
+      expect(traded.lastPrice).toBe(2000);
     }),
   );
 

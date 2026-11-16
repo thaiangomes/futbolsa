@@ -17,6 +17,7 @@ import { mmLot } from "../engine/ipoPlan.js";
 import { DEFAULT_MARKET_MAKER, MarketMaker, quoteSize, type MarketMakerConfig } from "../engine/marketMaker.js";
 import type { Cents } from "../engine/money.js";
 import { Exchange, type Trade } from "../engine/orderbook.js";
+import { nextReference, staleDays } from "../engine/reference.js";
 import { finishTime, kickoffTime, type Match } from "../engine/types.js";
 import type { SeasonFile } from "../data/season.js";
 import { createBot, FanBot, PROFILES, TraderBot, type Bot, type BotProfile } from "./bots.js";
@@ -64,6 +65,15 @@ export interface SimConfig {
    * faixa de 20% para os bots. Desligada (padrão), a simulação é a da Fase 0.
    */
   gameRules?: boolean;
+  /**
+   * Rodada Z: a referência da faixa de 20% e da margem da casa anda do último preço ao valor justo, 10% por dia
+   * depois de 2 dias sem negócio (`nextReference`). Sem ela, a referência é o preço exibido.
+   */
+  referenceDecay?: boolean;
+  /** Rodada Z: a margem da casa cresce esta fração por dia sem negócio (0,025 = 2,5 pontos por dia), até 10%. */
+  marginGrowth?: number;
+  /** Rodada Z: cenário em que um clube de cada três abre com o preço neste múltiplo do que o IPO fechou. */
+  startPremium?: number;
 }
 
 /** Valores do jogo (iguais aos padrões de `seasons`). */
@@ -146,6 +156,8 @@ export interface SimResult {
 export interface SimHooks {
   /** Chamado a cada negócio, na ordem em que sai. */
   onTrade?: (trade: Trade) => void;
+  /** Chamado ao fim de cada passo, depois dos bots (só para medir). */
+  onStep?: (t: number, view: MarketView, clubIds: readonly string[]) => void;
 }
 
 export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, hooks: SimHooks = {}): SimResult {
@@ -171,6 +183,17 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
   view.cupHype = config.fanCupHype;
   view.enforceBand = config.gameRules === true;
   const clubShares = new Map<string, number>();
+  const lastTradeAt = new Map<string, number>(clubIds.map((id) => [id, 0]));
+  exchange.onTrade((trade) => lastTradeAt.set(trade.clubId, trade.at));
+  const staleOf = (id: string) => (lastTradeAt.get(id) ? staleDays(lastTradeAt.get(id)!, exchange.now) : 0);
+  // A mesma regra da API (`nextReference`): carência de 2 dias, só com o preço a mais de 20% do justo.
+  const reference = config.referenceDecay
+    ? (id: string) =>
+        nextReference({ lastPrice: exchange.price(id) ?? 0, lastTradeAt: lastTradeAt.get(id) || null, fair: Math.max(50, view.fairValue(id)), now: exchange.now }) ??
+        exchange.price(id) ?? 0
+    : undefined;
+  if (reference) view.reference = reference;
+  const growth = config.marginGrowth;
   const maker = new MarketMaker(
     exchange,
     ledger,
@@ -182,6 +205,14 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
           inMatch
             ? quoteSize(clubShares.get(id)!, GAME_RULES.matchQuantityBp, GAME_RULES.matchMinSideQty)
             : quoteSize(clubShares.get(id)!, GAME_RULES.quantityBp, GAME_RULES.minSideQty)
+      : undefined,
+    reference || growth
+      ? {
+          reference,
+          margin: growth
+            ? (id) => Math.min(0.1, (config.marketMaker.marketMargin ?? 0.05) + growth * staleOf(id))
+            : undefined,
+        }
       : undefined,
   );
 
@@ -235,7 +266,8 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
     const lot = config.gameRules ? mmLot(offer, GAME_RULES.lotBp) : 0;
     if (lot > 0) ledger.adjustShares(TREASURY, clubId, lot);
     clubShares.set(clubId, offer + lot);
-    exchange.setReferencePrice(clubId, result.price);
+    const premium = config.startPremium && clubIds.indexOf(clubId) % 3 === 0 ? config.startPremium : 1;
+    exchange.setReferencePrice(clubId, Math.round(result.price * premium));
   }
   const treasuryStartCash = ledger.get(TREASURY).cash;
 
@@ -348,6 +380,7 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
       mm.min = Math.min(mm.min, p);
       mm.max = Math.max(mm.max, p);
     }
+    hooks.onStep?.(t, view, clubIds);
     const day = Math.floor(t / DAY_MS);
     if (day !== lastDay) {
       lastDay = day;

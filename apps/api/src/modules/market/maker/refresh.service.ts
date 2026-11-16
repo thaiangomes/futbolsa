@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
-import type { Cents, Quote } from "@futbolsa/engine";
+import { dayStart, nextReference, type Cents, type Quote } from "@futbolsa/engine";
 import { Clock } from "../../../infra/clock/index.js";
 import { DB, type Database, lockClubs, lockWallets, type TransactionOptions, type Tx, withTransaction } from "../../../infra/db/index.js";
 import { clubs, marketRefreshRequests, seasonClubs, seasons } from "../../../infra/db/schema/index.js";
@@ -18,7 +18,7 @@ import { instantOf } from "../matching/postgres-matching-engine.js";
 import { CancelService } from "../orders/cancel.service.js";
 import { OrderService } from "../orders/order.service.js";
 import { MarketEvents } from "../realtime/events.js";
-import { displayedPriceOf } from "../state/displayed-price.js";
+import { displayedPriceOf, referencePriceOf } from "../state/displayed-price.js";
 import { tradingGate } from "../state/gate.js";
 import { inMatch } from "../state/match-mode.js";
 import { AuctionCloser, auctionExpired, auctionOf, isInAuction } from "../state/tunnel-state.js";
@@ -293,8 +293,23 @@ export class RefreshService {
     // 2. Os preços, sem caixa nem ações: só o valor justo, o modo de jogo e o preço exibido da linha travada.
     const treasury = await treasuryWalletId(tx.db, seasonId);
     const inAuction = isInAuction(club);
-    const displayedPrice = displayedPriceOf(club);
     const reference = quoteReference(r.fairValue);
+    // A referência que decai (rodada Z): sem negócio e longe do valor justo, a faixa de 20%, o túnel e a margem da
+    // casa passam a olhar um preço que anda em direção a ele. Em leilão não muda nada: o clube espera o preço único.
+    if (!inAuction) {
+      const decayed = nextReference({ lastPrice: displayedPriceOf(club), lastTradeAt: club.lastTradeAt?.getTime() ?? null, fair: reference, now: at.getTime() });
+      if (decayed !== club.referencePrice) {
+        // o túnel acompanha a referência (e volta ao preço exibido quando ela some): a cotação da casa não pode abrir leilão só por isso
+        await tx.db
+          .update(seasonClubs)
+          .set({ referencePrice: decayed, tunnelRef: decayed ?? displayedPriceOf(club), tunnelRefDay: new Date(dayStart(at.getTime())) })
+          .where(and(eq(seasonClubs.seasonId, seasonId), eq(seasonClubs.clubId, club.clubId)));
+        club.referencePrice = decayed;
+        club.tunnelRef = decayed ?? displayedPriceOf(club);
+        club.tunnelRefDay = new Date(dayStart(at.getTime()));
+      }
+    }
+    const displayedPrice = referencePriceOf(club);
     const size = houseQuoteSize(season, club.totalShares, r.inMatch);
     const prices = quotePrices(reference, r.inMatch, displayedPrice);
 

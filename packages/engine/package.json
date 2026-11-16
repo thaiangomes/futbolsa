@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "sim": "tsx src/sim/run.ts",
     "sim:lote": "tsx src/sim/lote.ts",
+    "sim:travamento": "tsx src/sim/travamento.ts",
     "data:convert": "tsx scripts/convert-openfootball.ts",
     "data:fetch": "tsx scripts/fetch-results.ts",
     "data:convert-copa": "tsx scripts/convert-openfootball-copa.ts",

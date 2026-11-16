@@ -149,7 +149,7 @@ export async function setTunnelState(
   db: Database,
   seasonId: number,
   clubId: number,
-  state: Partial<{ tunnelRef: number | null; tunnelRefDay: Date | null; auctionOpenedAt: Date | null; auctionUntil: Date | null; lastPrice: number; ipoPrice: number }>,
+  state: Partial<{ tunnelRef: number | null; tunnelRefDay: Date | null; auctionOpenedAt: Date | null; auctionUntil: Date | null; lastPrice: number; ipoPrice: number; lastTradeAt: Date | null; referencePrice: number | null }>,
 ): Promise<void> {
   await db.update(seasonClubs).set(state).where(and(eq(seasonClubs.seasonId, seasonId), eq(seasonClubs.clubId, clubId)));
 }

@@ -21,7 +21,7 @@ import type { OrderCancelReason, OrderStatus } from "../../../infra/db/schema/in
 import { PortfolioLedger } from "../../portfolio/index.js";
 import type { PostResult } from "../../portfolio/ledger/index.js";
 import { insertOrderRow, myOpenOrdersInClub, readOppositeSide, setClubPrice, type BookOrder } from "../book/book-repo.js";
-import { displayedPriceOf } from "../state/displayed-price.js";
+import { displayedPriceOf, referencePriceOf } from "../state/displayed-price.js";
 import { tradingGate } from "../state/gate.js";
 import { auctionExpired, auctionOf, isInAuction, openAuction, rollTunnel } from "../state/tunnel-state.js";
 import {
@@ -137,8 +137,10 @@ export class PostgresMatchingEngine extends MatchingEngine {
     const displayedPrice = displayedPriceOf(club);
     const myOpenOrders = await myOpenOrdersInClub(tx.db, input.walletId, club.clubId);
     const before = await this.readAccount(tx, input, club.clubId);
+    // A faixa de 20% olha a referência que decai; o preço exibido (`displayedPrice`) segue sendo o do último negócio.
+    const bandPrice = referencePriceOf(club);
     const state = (account: Account): OrderState => ({
-      displayedPrice,
+      displayedPrice: bandPrice,
       cash: account.wallet.cash,
       availableCash: account.wallet.cash - account.wallet.reservedCash,
       availableShares: account.shares - account.reservedShares,

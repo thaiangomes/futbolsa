@@ -42,3 +42,4 @@ export * from "./sim/market.js";
 export * from "./sim/rng.js";
 export * from "./engine/seasonClose.js";
 export { COMPETICOES_ESPN, converterEspn, urlDoPlacar, type EspnEvent, type ResumoDaConversao } from "./data/espn.js";
+export * from "./engine/reference.js";
