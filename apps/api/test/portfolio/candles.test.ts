@@ -78,7 +78,7 @@ describe("GET /clubs/:ticker/candles", () => {
     expect(res).toMatchObject({ range: "today", interval: "15m", ipoPrice: 4000, from: "2027-04-06T03:00:00.000Z" });
     const byStart = new Map(res.candles.map((c) => [c.start, c]));
     // das 0h às 10h: nenhum negócio hoje, vale o fechamento de ontem (R$ 43,00)
-    expect(res.candles[0]).toMatchObject({ start: "2027-04-06T03:00:00.000Z", close: 4300, volume: 0 });
+    expect(res.candles[0]).toMatchObject({ start: "2027-04-06T03:00:00.000Z", close: 4300, volume: 0, turnover: 0 });
     expect(byStart.get("2027-04-06T13:00:00.000Z")).toMatchObject({ open: 4100, high: 4200, low: 4100, close: 4200, volume: 15 });
     expect(byStart.get("2027-04-06T14:00:00.000Z")).toMatchObject({ open: 4150, close: 4150, volume: 2 });
     // depois do último negócio repete R$ 41,50 com volume zero, até agora (15h de Brasília = 18h UTC)

@@ -2,9 +2,9 @@
 
 import type { ChartCandle } from "@futbolsa/contracts";
 import { useEffect, useRef, useState } from "react";
-import { formatChartClock, formatChartDateTime, formatChartDay } from "../format";
+import { formatChartClock, formatChartDateTime, formatChartDay, formatMoney, formatShares } from "../format";
 import type { ChartMarker, MarkerTone } from "./markers";
-import { candleData, lineData, volumeData } from "./series";
+import { candleData, formatShortMoney, lineData, toSeconds, volumeData } from "./series";
 
 type Lib = typeof import("lightweight-charts");
 type Handle = {
@@ -42,6 +42,9 @@ export function readChartColors(el: HTMLElement): ChartColors {
   };
 }
 
+/** O preço no eixo dos preços (R$ com duas casas). É por série, e não global, para o painel do volume ter o formato curto dele. */
+const PRICE_FORMAT = { type: "custom" as const, minMove: 0.01, formatter: (p: number) => p.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) };
+
 const toneColor = (colors: ChartColors, tone: MarkerTone): string =>
   tone === "up" ? colors.up : tone === "down" ? colors.down : tone === "dividend" ? colors.dividend : tone === "amber" ? colors.amber : colors.neutral;
 
@@ -69,6 +72,11 @@ export function ChartCanvas({ candles, interval, mode, markers, ipoPrice, averag
   const [handle, setHandle] = useState<Handle | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  // o período sob o cursor (ou o toque): a legenda mostra o volume financeiro e a quantidade de ações dele
+  const [hover, setHover] = useState<number | null>(null);
+  const onHoverRef = useRef(setHover);
+  onHoverRef.current = setHover;
+  const hovered = hover === null ? undefined : candles.find((c) => toSeconds(c.start) === hover);
 
   // o gráfico nasce (e é refeito) só quando o modo ou o intervalo mudam
   useEffect(() => {
@@ -90,14 +98,25 @@ export function ChartCanvas({ candles, interval, mode, markers, ipoPrice, averag
           secondsVisible: false,
           tickMarkFormatter: (time: unknown) => (interval === "15m" ? formatChartClock(time as number) : formatChartDay(time as number)),
         },
-        localization: { timeFormatter: (time: unknown) => formatChartDateTime(time as number), priceFormatter: (p: number) => p.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
+        localization: { timeFormatter: (time: unknown) => formatChartDateTime(time as number) },
       });
       const price =
         mode === "line"
-          ? chart.addSeries(lib.LineSeries, { color: colors.amber, lineWidth: 2, priceLineVisible: true })
-          : chart.addSeries(lib.CandlestickSeries, { upColor: colors.up, downColor: colors.down, borderUpColor: colors.up, borderDownColor: colors.down, wickUpColor: colors.up, wickDownColor: colors.down });
-      const volume = chart.addSeries(lib.HistogramSeries, { priceFormat: { type: "volume" }, priceScaleId: "" });
-      volume.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+          ? chart.addSeries(lib.LineSeries, { color: colors.amber, lineWidth: 2, priceLineVisible: true, priceFormat: PRICE_FORMAT })
+          : chart.addSeries(lib.CandlestickSeries, { priceFormat: PRICE_FORMAT, upColor: colors.up, downColor: colors.down, borderUpColor: colors.up, borderDownColor: colors.down, wickUpColor: colors.up, wickDownColor: colors.down });
+      // o volume financeiro (R$) num painel próprio abaixo dos preços, com eixo curto ("R$ 2,4 mil"): o eixo de preços fica só com preço
+      const volume = chart.addSeries(
+        lib.HistogramSeries,
+        { priceFormat: { type: "custom", formatter: (v: number) => formatShortMoney(v), minMove: 0.01 }, priceLineVisible: false, lastValueVisible: false },
+        1,
+      );
+      const panes = chart.panes();
+      panes[0]?.setStretchFactor(3);
+      panes[1]?.setStretchFactor(1);
+      chart.subscribeCrosshairMove((param) => {
+        const time = (param as { time?: unknown }).time;
+        onHoverRef.current(typeof time === "number" ? time : null);
+      });
       const markersApi = lib.createSeriesMarkers(price, []);
       chart.subscribeClick((param) => {
         const id = (param as { hoveredObjectId?: unknown }).hoveredObjectId;
@@ -132,5 +151,14 @@ export function ChartCanvas({ candles, interval, mode, markers, ipoPrice, averag
     handle.chart.timeScale().fitContent();
   }, [handle, candles, markers, mode, ipoPrice, averagePrice]);
 
-  return <div ref={container} className={short ? "chart-box short" : "chart-box"} data-testid="grafico" role="img" aria-label="Gráfico de preço do clube; a lista de marcadores está logo abaixo" />;
+  return (
+    <>
+      <div ref={container} className={short ? "chart-box short" : "chart-box"} data-testid="grafico" role="img" aria-label="Gráfico de preço do clube, com o volume financeiro num painel abaixo; a lista de marcadores está logo abaixo" />
+      <p className="xs muted m0" data-testid="volume-info" aria-live="polite">
+        {hovered
+          ? `Volume em ${interval === "15m" ? formatChartDateTime(toSeconds(hovered.start)) : formatChartDay(toSeconds(hovered.start))}: ${formatMoney(hovered.turnover)} · ${formatShares(hovered.volume)} ${hovered.volume === 1 ? "ação" : "ações"}`
+          : "Volume em reais no painel de baixo; passe o mouse ou toque nas barras para ver o valor e a quantidade de ações."}
+      </p>
+    </>
+  );
 }

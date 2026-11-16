@@ -50,6 +50,20 @@ test.describe.serial("jornada 3: mercado", () => {
     expect(textoDoLivro).not.toMatch(/ana|bia|semeador/i);
   });
 
+  test("e2e livro 46, 49, 50 e 51: o Mercado mostra o selo e o próximo jogo de cada clube, e a tela do clube os próximos jogos e a situação nas competições", async ({ page }) => {
+    await entrarComo(page, "ana");
+    await page.goto("/mercado");
+    const linha = page.locator(`[data-ticker="${TICKER}"]`);
+    await expect(linha.getByTestId("selo").first()).toBeVisible();
+    await expect(linha.getByTestId("proximo-jogo")).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Próximo jogo" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Você tem" })).toBeVisible();
+    await linha.getByTestId("link-clube").click();
+    await expect(page.getByTestId("proximos-jogos")).toBeVisible();
+    await expect(page.getByTestId("situacao-liga")).toContainText("Brasileirão");
+    await expect(page.getByTestId("selo").first()).toBeVisible();
+  });
+
   test("e2e livro 6 e 14: a boleta recusa preço fora da faixa e quantidade ou preço que não existem", async ({ page }) => {
     await entrarComo(page, "ana");
     await page.goto(`/clube?t=${TICKER}`);

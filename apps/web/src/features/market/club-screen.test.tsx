@@ -66,6 +66,27 @@ describe("tela do clube", () => {
     expect(dom.$$("[data-testid=nivel-venda]")).toHaveLength(0);
   });
 
+  it("livro 46: mostra quantas ações do clube o jogador tem, com o preço médio e as que estão em ordens", async () => {
+    await dom.render(createElement(ClubView, { ticker: "FLA3", api: api(view({ me: null })), logged: true, position: { shares: 1200, inOrders: 100, averagePrice: 3700 } }));
+    await dom.settle();
+    const linha = dom.$("[data-testid=minha-posicao]").textContent!;
+    expect(linha).toContain("Você tem 1.200 FLA3");
+    expect(linha).toContain("preço médio R$ 37,00");
+    expect(linha).toContain("100 em ordens");
+  });
+
+  it("sem ações do clube, a linha diz que o jogador não tem; sem a posição lida, não aparece", async () => {
+    await dom.render(createElement(ClubView, { ticker: "FLA3", api: api(view({ me: null })), logged: true, position: { shares: 0, inOrders: 0, averagePrice: 0 } }));
+    await dom.settle();
+    expect(dom.$("[data-testid=minha-posicao]").textContent).toContain("não tem ações do FLA3");
+  });
+
+  it("sem a posição lida (visitante ou carteira ainda carregando), a linha não aparece", async () => {
+    await dom.render(createElement(ClubView, { ticker: "FLA3", api: api(view({ me: null })), logged: false }));
+    await dom.settle();
+    expect(dom.$("[data-testid=minha-posicao]")).toBeNull();
+  });
+
   it("visitante vê o livro e os negócios, mas nem a boleta nem as ordens, e não assina o canal da conta", async () => {
     await dom.render(createElement(ClubView, { ticker: "FLA3", api: api(view({ me: null })), logged: false }));
     await dom.settle();
@@ -121,7 +142,7 @@ describe("tela do clube", () => {
   it("livro 38: a tela do clube no computador traz o cartão Quanto vale para você, com a recompra e o preço do livro", async () => {
     const dividends = vi.fn(async () => ({
       ticker: "FLA3", league: "brasileirao-a" as const, leagueRules: { perPoint: 10, placement: [500, 450, 400] }, leagueOpen: true,
-      points: 20, position: 5, paid: 270, toReceive: 30, buybackMultipleBp: 15_000, cups: [],
+      points: 20, position: 5, played: 9, paid: 270, toReceive: 30, buybackMultipleBp: 15_000, cups: [],
     }));
     await dom.render(createElement(ClubView, { ticker: "FLA3", api: { ...api(view({ me: null })), dividends } as unknown as MarketApi, logged: false }));
     await dom.settle();

@@ -10,6 +10,8 @@ export class FakeSeries {
   constructor(
     readonly kind: string,
     readonly options: Record<string, unknown>,
+    /** O painel em que a série foi desenhada (0 = o dos preços). */
+    readonly paneIndex = 0,
   ) {}
   setData(data: unknown[]): void {
     this.data = data;
@@ -34,10 +36,24 @@ export class FakeChart {
     readonly el: HTMLElement,
     readonly options: Record<string, unknown>,
   ) {}
-  addSeries(definition: { kind: string }, options: Record<string, unknown> = {}): FakeSeries {
-    const series = new FakeSeries(definition.kind, options);
+  stretch: number[] = [];
+  crosshair: ((param: { time?: unknown }) => void) | null = null;
+  addSeries(definition: { kind: string }, options: Record<string, unknown> = {}, paneIndex = 0): FakeSeries {
+    const series = new FakeSeries(definition.kind, options, paneIndex);
     this.series.push(series);
     return series;
+  }
+  /** Os painéis existentes (o dos preços e, se houver série nele, o do volume), com o fator de altura que a tela pediu. */
+  panes() {
+    const count = Math.max(1, ...this.series.map((s) => s.paneIndex + 1));
+    return Array.from({ length: count }, (_, i) => ({
+      setStretchFactor: (factor: number) => {
+        this.stretch[i] = factor;
+      },
+    }));
+  }
+  subscribeCrosshairMove(callback: (param: { time?: unknown }) => void): void {
+    this.crosshair = callback;
   }
   timeScale() {
     return { fitContent: () => undefined };

@@ -246,7 +246,7 @@ export async function assertCandlesMatchTrades(db: Database, seasonId: number): 
                    (array_agg(t.price order by t.at, t.id))[1] as open,
                    max(t.price) as high, min(t.price) as low,
                    (array_agg(t.price order by t.at desc, t.id desc))[1] as close,
-                   sum(t.quantity) as volume
+                   sum(t.quantity) as volume, sum(t.price::numeric * t.quantity) as turnover
             from futbolsa.trades t
             where t.season_id = ${seasonId}
               and not exists (select 1 from futbolsa.trade_annulments ta where ta.trade_id = t.id)
@@ -254,12 +254,12 @@ export async function assertCandlesMatchTrades(db: Database, seasonId: number): 
           )
           select coalesce(a.club_id, c.club_id) as club_id, ${interval}::text as interval, coalesce(a.start, c.start) as start,
                  a.open as trades_open, c.open as candle_open, a.close as trades_close, c.close as candle_close,
-                 a.volume as trades_volume, c.volume as candle_volume
+                 a.volume as trades_volume, c.volume as candle_volume, a.turnover as trades_turnover, c.turnover as candle_turnover
           from agg a
           full join (select * from futbolsa.candles where interval = ${interval} and club_id in (select club_id from futbolsa.season_clubs where season_id = ${seasonId})) c
             on c.club_id = a.club_id and c.start = a.start
           where a.club_id is null or c.club_id is null
-             or a.open <> c.open or a.high <> c.high or a.low <> c.low or a.close <> c.close or a.volume <> c.volume`,
+             or a.open <> c.open or a.high <> c.high or a.low <> c.low or a.close <> c.close or a.volume <> c.volume or a.turnover <> c.turnover`,
       )),
     );
   }

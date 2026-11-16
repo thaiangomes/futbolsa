@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type CupMatch, cupPhaseOf } from "../../src/modules/dividends/club-value/cup-status.js";
+import { type CupMatch, cupOutcomeOf, cupPhaseOf } from "../../src/modules/dividends/club-value/cup-status.js";
 
 const CDB = ["1a-fase", "2a-fase", "3a-fase", "oitavas", "quartas", "semifinal", "final"];
 const LIB = ["grupos", "oitavas", "quartas", "semifinal", "final"];
@@ -70,6 +70,26 @@ describe("cupPhaseOf: onde o clube está numa copa (T12)", () => {
   it("fase de grupos acabada e ele já está na fase seguinte: está nela", () => {
     const jogos = [jogo("grupos", FLA, PAL, "finished"), jogo("oitavas", FLA, OUT, "scheduled")];
     expect(cupPhaseOf(jogos, FLA, LIB)).toBe("oitavas");
+  });
+
+  describe("cupOutcomeOf: disputando, eliminado ou campeão (item 10 da fila da partida de teste)", () => {
+    it("com jogo por disputar, está disputando; sem jogo na copa, não a disputa", () => {
+      expect(cupOutcomeOf([jogo("oitavas", FLA, PAL, "scheduled")], FLA, CDB)).toBe("playing");
+      expect(cupOutcomeOf([jogo("oitavas", PAL, OUT, "scheduled")], FLA, CDB)).toBeUndefined();
+    });
+    it("perdeu o mata-mata: eliminado; passou de fase: disputando", () => {
+      expect(cupOutcomeOf([jogo("oitavas", FLA, PAL, "finished", PAL)], FLA, CDB)).toBe("eliminated");
+      expect(cupOutcomeOf([jogo("oitavas", FLA, PAL, "finished", FLA)], FLA, CDB)).toBe("playing");
+    });
+    it("ganhou a final: campeão; perdeu a final: eliminado (vice)", () => {
+      expect(cupOutcomeOf([jogo("final", FLA, PAL, "finished", FLA)], FLA, CDB)).toBe("champion");
+      expect(cupOutcomeOf([jogo("final", FLA, PAL, "finished", PAL)], FLA, CDB)).toBe("eliminated");
+    });
+    it("final sem o campo de quem passou: vale o placar", () => {
+      const final = { ...jogo("final", FLA, PAL, "finished"), homeGoals: 2, awayGoals: 1 };
+      expect(cupOutcomeOf([final], FLA, CDB)).toBe("champion");
+      expect(cupOutcomeOf([final], PAL, CDB)).toBe("eliminated");
+    });
   });
 
   it("jogo cancelado não conta, nem fase que a tabela da copa não conhece", () => {

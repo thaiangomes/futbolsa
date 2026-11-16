@@ -11,7 +11,7 @@ vi.mock("lightweight-charts", async () => (await import("../../../test-support/f
 
 // T13: o gráfico do clube (Carteira e gráficos 22 a 28, 34).
 
-const candle = (start: string, o: number, h: number, l: number, c: number, v: number): ChartCandle => ({ start, open: o, high: h, low: l, close: c, volume: v });
+const candle = (start: string, o: number, h: number, l: number, c: number, v: number): ChartCandle => ({ start, open: o, high: h, low: l, close: c, volume: v, turnover: v * 100 });
 const response = (over: Partial<CandlesResponse> = {}): CandlesResponse => ({
   seq: 3,
   range: "today",
@@ -66,6 +66,30 @@ describe("ClubChart", () => {
     expect(dom.text()).toContain("IPO: R$ 35,00");
   });
 
+  it("livro 48: o volume fica num painel próprio abaixo dos preços (eixo em R$ curto, sem rótulo de preço) e a legenda mostra o financeiro e as ações do período sob o cursor", async () => {
+    await dom.render(createElement(ClubChart, { ticker: "FLA3", api: fakeApi(), logged: true }));
+    await flush();
+    const chart = live().at(-1)!;
+    expect(chart.price()!.paneIndex).toBe(0);
+    expect(chart.volume()!.paneIndex).toBe(1);
+    expect(chart.stretch).toEqual([3, 1]);
+    const options = chart.volume()!.options as { priceFormat: { type: string; formatter: (v: number) => string }; lastValueVisible: boolean };
+    expect(options.priceFormat.type).toBe("custom");
+    expect(options.priceFormat.formatter(2407)).toBe("R$ 2,4 mil");
+    expect(options.lastValueVisible).toBe(false);
+    // o eixo de preços fica só com preço: nenhuma série de volume desenhada na escala dele
+    expect((chart.price()!.options as { priceFormat: { formatter: (v: number) => string } }).priceFormat.formatter(38.23)).toBe("38,23");
+    expect(chart.options.localization).not.toHaveProperty("priceFormatter");
+    // sem cursor, a legenda explica; com o cursor num período, mostra o valor negociado e a quantidade
+    expect(dom.$("[data-testid=volume-info]").textContent).toContain("passe o mouse ou toque");
+    const first = (chart.volume()!.data[0] as { time: number }).time;
+    const { act } = await import("react");
+    await act(async () => chart.crosshair!({ time: first }));
+    expect(dom.$("[data-testid=volume-info]").textContent).toMatch(/Volume em .*: R\$ .* · .* ações?/);
+    await act(async () => chart.crosshair!({}));
+    expect(dom.$("[data-testid=volume-info]").textContent).toContain("passe o mouse ou toque");
+  });
+
   it("carteira 28: sem login não pede os meus negócios e a linha do preço médio some; sem ações só a do IPO", async () => {
     const api = fakeApi({ myTrades: vi.fn(async () => ({ ...mine, trades: [], averagePrice: null })) as never });
     await dom.render(createElement(ClubChart, { ticker: "FLA3", api, logged: true }));
@@ -94,7 +118,7 @@ describe("ClubChart", () => {
     const api = fakeApi();
     await dom.render(createElement(ClubChart, { ticker: "FLA3", api, logged: false }));
     await flush();
-    const event = { interval: "15m", start: "2027-04-06T13:30:00.000Z", open: 4150, high: 4300, low: 4150, close: 4300, volume: 7 };
+    const event = { interval: "15m", start: "2027-04-06T13:30:00.000Z", open: 4150, high: 4300, low: 4150, close: 4300, volume: 7, turnover: 30_100 };
     await dom.realtime.emit("club:FLA3", "candle", event, 4);
     await flush();
     const line = live().at(-1)!.price()!.data as { value: number }[];

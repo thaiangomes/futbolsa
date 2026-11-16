@@ -53,7 +53,7 @@ export class EntriesService {
       filters.push(sql`(e.at, e.id) < (${cursor.at.toISOString()}::timestamptz, ${cursor.id})`);
     }
     const result = await this.db.execute(sql`
-      select e.id::bigint as id, e.at, e.kind, c.ticker, c.name as club_name, c.badge_abbr, c.color_primary, c.color_secondary,
+      select e.id::bigint as id, e.at, e.kind, c.ticker, c.name as club_name, c.badge_abbr, c.color_primary, c.color_secondary, c.badge_pattern, c.badge_ink, c.badge_extra,
              e.cash_delta::bigint as cash_delta, e.shares_delta, e.price::bigint as price, e.realized::bigint as realized,
              e.cash_after::bigint as cash_after, e.reason,
              pe.reason as event_reason, pe.per_share::bigint as per_share, h.shares as holding_shares,

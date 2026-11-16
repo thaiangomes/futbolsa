@@ -115,6 +115,8 @@ export const candles = futbolsa.table(
     low: money("low").notNull(),
     close: money("close").notNull(),
     volume: bigId("volume").notNull().default(0),
+    /** O valor negociado no período, em centavos: a soma de preço × quantidade dos negócios (o volume financeiro do gráfico). */
+    turnover: bigId("turnover").notNull().default(0),
   },
   (t) => [
     primaryKey({ columns: [t.clubId, t.interval, t.start] }),

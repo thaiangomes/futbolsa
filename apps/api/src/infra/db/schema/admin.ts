@@ -39,6 +39,10 @@ export const clubs = futbolsa.table("clubs", {
   colorPrimary: text("color_primary"),
   colorSecondary: text("color_secondary"),
   badgeAbbr: text("badge_abbr"),
+  /** O padrão do selo (`solido`, `listras`, `aros`…), a cor da sigla e a segunda cor do padrão tricolor (`CLUB_BADGES` do motor). */
+  badgePattern: text("badge_pattern"),
+  badgeInk: text("badge_ink"),
+  badgeExtra: text("badge_extra"),
   /** Ids do clube em cada fonte de resultados, por exemplo `{ "football-data": 1783 }`. */
   externalIds: jsonb("external_ids").$type<Record<string, string | number>>().notNull().default({}),
 });

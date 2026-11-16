@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, eq, inArray, lte, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, lte, ne, or, sql } from "drizzle-orm";
 import type { ClubValueCup, ClubValueView } from "@futbolsa/contracts";
 import { Clock } from "../../../infra/clock/index.js";
 import { DB, type Database } from "../../../infra/db/index.js";
@@ -8,7 +8,7 @@ import { CUP_COMPETITIONS } from "../../../infra/db/schema/values.js";
 import { DomainError } from "../../../infra/http/index.js";
 import { currentSeason } from "../../admin/current-season.js";
 import { SeasonValuesService } from "../season-values/season-values.service.js";
-import { cupPhaseOf } from "./cup-status.js";
+import { cupOutcomeOf, cupPhaseOf } from "./cup-status.js";
 
 const notListed = () => new DomainError("club_not_listed", 404, "Este clube não está listado na temporada.");
 
@@ -57,6 +57,7 @@ export class ClubValueService {
       leagueOpen: await this.leagueOpen(season.id, league),
       points: standing?.points ?? 0,
       position: standing?.position ?? null,
+      played: await this.played(season.id, club.clubId, league),
       paid: totals.paid,
       toReceive: totals.toReceive,
       buybackMultipleBp: await this.buybackMultiple(season.id),
@@ -92,6 +93,15 @@ export class ClubValueService {
     return { paid: by.get("approved") ?? 0, toReceive: by.get("pending") ?? 0 };
   }
 
+  /** Os jogos já disputados do clube no campeonato. */
+  private async played(seasonId: number, clubId: number, league: string): Promise<number> {
+    const [row] = await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(matches)
+      .where(and(eq(matches.seasonId, seasonId), eq(matches.competition, league), eq(matches.status, "finished"), or(eq(matches.homeClubId, clubId), eq(matches.awayClubId, clubId))));
+    return row?.n ?? 0;
+  }
+
   /** O campeonato está aberto enquanto há jogo por disputar; sem nenhum jogo (antes da estreia), também. */
   private async leagueOpen(seasonId: number, league: string): Promise<boolean> {
     const [row] = await this.db
@@ -113,6 +123,8 @@ export class ClubValueService {
         homeClubId: matches.homeClubId,
         awayClubId: matches.awayClubId,
         advancedClubId: matches.advancedClubId,
+        homeGoals: matches.homeGoals,
+        awayGoals: matches.awayGoals,
         kickoff: matches.kickoff,
       })
       .from(matches)
@@ -121,12 +133,10 @@ export class ClubValueService {
     for (const competition of CUP_COMPETITIONS) {
       const rules = values.cups[competition];
       if (!rules) continue;
-      const current = cupPhaseOf(
-        rows.filter((r) => r.competition === competition),
-        clubId,
-        rules.phases,
-      );
+      const ofCup = rows.filter((r) => r.competition === competition);
+      const current = cupPhaseOf(ofCup, clubId, rules.phases);
       if (current === undefined) continue; // o clube não disputa esta copa
+      const outcome = cupOutcomeOf(ofCup, clubId, rules.phases) ?? "playing";
       cups.push({
         competition,
         phases: rules.phases,
@@ -134,6 +144,7 @@ export class ClubValueService {
         ...(rules.advanceTo ? { advanceTo: rules.advanceTo } : {}),
         title: rules.title,
         currentPhase: current,
+        outcome,
       });
     }
     return cups;

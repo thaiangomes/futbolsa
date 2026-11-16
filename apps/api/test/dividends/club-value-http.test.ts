@@ -61,7 +61,7 @@ describe("GET /clubs/:ticker/dividends (T12)", () => {
   });
   afterAll(() => app.close());
 
-  it("é pública e devolve o pago, o a receber, os pontos, a colocação, a fase atual de cada copa e os valores da temporada", async () => {
+  it("livro 51: é pública e devolve o pago, o a receber, os pontos, a colocação, os jogos, a fase e o resultado de cada copa e os valores da temporada", async () => {
     const res = await get("/clubs/FLA3/dividends");
     expect(res.statusCode).toBe(200);
     const view = clubValueViewSchema.parse(res.json());
@@ -71,15 +71,16 @@ describe("GET /clubs/:ticker/dividends (T12)", () => {
       leagueOpen: true,
       points: 20,
       position: 5,
+      played: 0,
       paid: 270,
       toReceive: 30,
       buybackMultipleBp: 15_000,
       leagueRules: { perPoint: 10 },
     });
     expect(view.leagueRules.placement.slice(0, 3)).toEqual([500, 450, 400]);
-    expect(view.cups.map((c) => [c.competition, c.currentPhase])).toEqual([
-      ["copa-do-brasil", "oitavas"],
-      ["libertadores", "grupos"],
+    expect(view.cups.map((c) => [c.competition, c.currentPhase, c.outcome])).toEqual([
+      ["copa-do-brasil", "oitavas", "playing"],
+      ["libertadores", "grupos", "playing"],
     ]);
     expect(view.cups[0]!.advance).toMatchObject({ oitavas: 150, quartas: 250 });
     expect(view.cups[0]!.title).toBe(800);
@@ -129,5 +130,6 @@ describe("GET /clubs/:ticker/dividends (T12)", () => {
     await database.db.update(matches).set({ status: "finished", homeGoals: 1, awayGoals: 0, finishedAt: new Date("2027-06-21T00:00:00Z") }).where(eq(matches.competition, "brasileirao-a"));
     const view = clubValueViewSchema.parse((await get("/clubs/FLA3/dividends")).json());
     expect(view.leagueOpen).toBe(false);
+    expect(view.played).toBe(1); // o jogo do Brasileirão que acabou (FLA3 x PAL3)
   });
 });

@@ -15,7 +15,10 @@ export const chartCandleSchema = z.strictObject({
   high: z.number().int(),
   low: z.number().int(),
   close: z.number().int(),
+  /** Ações negociadas no período. */
   volume: z.number().int(),
+  /** Valor negociado no período, em centavos (preço × quantidade somados): o volume financeiro do gráfico. */
+  turnover: z.number().int().nonnegative(),
 });
 export type ChartCandle = z.infer<typeof chartCandleSchema>;
 

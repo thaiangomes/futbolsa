@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CLUBS, ipoDates, kickoffTime, type Match } from "@futbolsa/engine";
+import { badgeColumns } from "../src/infra/db/club-badge.js";
 import { clubs } from "../src/infra/db/schema/index.js";
 import { type ContaEnsaio, criarConta } from "./contas.js";
 import type { ServidorEnsaio } from "./servidor.js";
@@ -59,7 +60,7 @@ export async function carregarTemporada(servidor: ServidorEnsaio, opcoes: Opcoes
   const arquivo = opcoes.arquivo ?? (JSON.parse(readFileSync(join(DATA_DIR, `brasileirao-${ano}.json`), "utf8")) as ArquivoDaSerieA);
   await db
     .insert(clubs)
-    .values(CLUBS.map((c) => ({ ticker: c.id, name: c.name })))
+    .values(CLUBS.map((c) => ({ ticker: c.id, name: c.name, ...badgeColumns(c.id) })))
     .onConflictDoNothing({ target: clubs.ticker });
   const linhas = await db.select({ id: clubs.id, ticker: clubs.ticker }).from(clubs);
   const clubIds = new Map(linhas.map((c) => [c.ticker!, c.id]));

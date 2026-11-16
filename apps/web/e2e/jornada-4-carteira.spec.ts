@@ -40,6 +40,11 @@ test.describe.serial("jornada 4: carteira e gráficos", () => {
     const patrimonio = limpo(await page.getByTestId("patrimonio").innerText());
     expect(patrimonio).toMatch(/^R\$ (99|100)\.\d{3},\d{2}$/);
     await expect(page.getByTestId("rentabilidade")).toContainText("na temporada");
+    // o atalho Negociar leva à tela do clube, que mostra quantas ações ela tem dele (20, 8 em ordens)
+    await linha.getByTestId("negociar").click();
+    await expect(page).toHaveURL(new RegExp(`/clube\\?t=${TICKER}`));
+    await expect(page.getByTestId("minha-posicao")).toContainText(`Você tem 20 ${TICKER}`);
+    await expect(page.getByTestId("minha-posicao")).toContainText("8 em ordens");
   });
 
   test("e2e carteira 33: a carteira aberta mostra a compra nova sem recarregar a página", async ({ page }) => {

@@ -12,7 +12,7 @@ vi.mock("lightweight-charts", async () => (await import("../../../test-support/f
 
 // T15, T17 e T23: a página da carteira (Carteira e gráficos 1 a 5, 9 a 14, 17 a 19, 33, 34, 38 e 45).
 
-const club = (ticker: string, name: string) => ({ ticker, name, badgeAbbr: null, colorPrimary: null, colorSecondary: null });
+const club = (ticker: string, name: string) => ({ ticker, name, badgeAbbr: null, colorPrimary: null, colorSecondary: null, badgePattern: null, badgeInk: null, badgeExtra: null });
 const FLA = club("FLA3", "Flamengo");
 
 const view = (over: Partial<WalletView> = {}): WalletView => ({
@@ -155,6 +155,14 @@ describe("página da carteira", () => {
     expect(row.textContent).toContain("47,5%");
     expect(dom.$("[data-testid=resultado]").textContent).toContain("+R$ 2.400,00");
     expect(dom.$("[data-testid=resultado]").textContent).toContain("+R$ 11.160,00");
+  });
+
+  it("livro 47: cada posição tem o atalho Negociar para a tela do clube dela", async () => {
+    await open();
+    const row = dom.$("[data-testid=posicao]");
+    const link = dom.$("[data-testid=posicao] [data-testid=negociar]");
+    expect(link.getAttribute("href")).toBe(`/clube?t=${row.getAttribute("data-ticker")}`);
+    expect(link.getAttribute("aria-label")).toMatch(/^Negociar /);
   });
 
   it("carteira 33: wallet.changed no canal me atualiza a tela sem recarregar a página", async () => {

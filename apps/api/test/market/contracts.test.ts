@@ -150,9 +150,9 @@ describe("contratos: livro e eventos do mercado", () => {
     expect(priceEventSchema.safeParse({ ticker: "FLA3", price: 4200, changeBp: 500, auction: null }).success).toBe(true);
     expect(matchModeEventSchema.safeParse({ active: true }).success).toBe(true);
     expect(
-      candleEventSchema.safeParse({ interval: "15m", start: "2027-04-05T13:00:00.000Z", open: 4300, high: 4430, low: 4300, close: 4430, volume: 100 }).success,
+      candleEventSchema.safeParse({ interval: "15m", start: "2027-04-05T13:00:00.000Z", open: 4300, high: 4430, low: 4300, close: 4430, volume: 100, turnover: 432_500 }).success,
     ).toBe(true);
-    expect(candleEventSchema.safeParse({ interval: "1h", start: "2027-04-05T13:00:00.000Z", open: 1, high: 1, low: 1, close: 1, volume: 1 }).success).toBe(false);
+    expect(candleEventSchema.safeParse({ interval: "1h", start: "2027-04-05T13:00:00.000Z", open: 1, high: 1, low: 1, close: 1, volume: 1, turnover: 1 }).success).toBe(false);
     expect(
       orderUpdatedEventSchema.safeParse({
         id: 12,

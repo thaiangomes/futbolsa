@@ -34,6 +34,8 @@ export const candleEventSchema = z.strictObject({
   low: z.number().int(),
   close: z.number().int(),
   volume: z.number().int(),
+  /** Valor negociado no período, em centavos. */
+  turnover: z.number().int().nonnegative(),
 });
 export type CandleEvent = z.infer<typeof candleEventSchema>;
 

@@ -90,7 +90,7 @@ describe("tela do clube no celular", () => {
     phone();
     const dividends = vi.fn(async () => ({
       ticker: "FLA3", league: "brasileirao-a" as const, leagueRules: { perPoint: 10, placement: [500, 450, 400] }, leagueOpen: true,
-      points: 20, position: 5, paid: 270, toReceive: 30, buybackMultipleBp: 15_000, cups: [],
+      points: 20, position: 5, played: 9, paid: 270, toReceive: 30, buybackMultipleBp: 15_000, cups: [],
     }));
     await dom.render(createElement(ClubView, { ticker: "FLA3", api: { ...api(view()), dividends } as unknown as MarketApi, logged: false }));
     await dom.settle();

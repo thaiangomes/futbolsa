@@ -37,7 +37,7 @@ describe("recordTrade (candles)", () => {
     const changed = await record(flaId, "2027-04-05T13:05:00Z", 4000, 10);
     expect(changed.map((c) => c.interval)).toEqual(["15m", "1d"]);
     const m15 = changed[0]!;
-    expect(m15).toMatchObject({ open: 4000, high: 4000, low: 4000, close: 4000, volume: 10 });
+    expect(m15).toMatchObject({ open: 4000, high: 4000, low: 4000, close: 4000, volume: 10, turnover: 40_000 });
     expect(m15.start.toISOString()).toBe("2027-04-05T13:00:00.000Z");
     // o dia é de 0h a 24h de Brasília: 0h de 5/4 em Brasília = 03h UTC
     expect(changed[1]!.start.toISOString()).toBe("2027-04-05T03:00:00.000Z");

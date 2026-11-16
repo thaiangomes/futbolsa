@@ -5,6 +5,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useChannel } from "../../realtime/react";
 import { formatCents } from "../../lib/format";
 import type { MarketApi } from "./api";
+import { competitionName, formatKickoffShort } from "../club-games";
+import { ClubBadgeMark } from "../portfolio/club-badge";
+import { formatShares } from "../portfolio/format";
+import type { MyPositions } from "../portfolio/use-positions";
 import { auctionNotice, changeClass, formatChange } from "./format";
 
 /** Aplica um evento `price` (valor absoluto) ao clube da lista. Evento de clube desconhecido não muda nada. */
@@ -80,7 +84,7 @@ export function useClubList(api: MarketApi): { list: ClubList | null; error: boo
  * A lista de clubes (`/mercado`, decisão D6 do plano): ticker, nome, preço, variação do dia e os avisos "em jogo agora",
  * "em leilão até 15h40" e "suspenso", com link para a tela do clube.
  */
-export function ClubList({ api }: { api: MarketApi }) {
+export function ClubList({ api, positions }: { api: MarketApi; positions?: MyPositions | null }) {
   const { list, error } = useClubList(api);
   if (!list) {
     return error ? (
@@ -101,17 +105,40 @@ export function ClubList({ api }: { api: MarketApi }) {
       <div className="scroll-x">
         <table className="tbl">
           <thead>
-            <tr><th>Clube</th><th className="r">Preço</th><th className="r">Variação</th><th>Estado</th></tr>
+            <tr><th>Clube</th><th className="r">Preço</th><th className="r">Variação</th>{positions && <th className="r">Você tem</th>}<th>Próximo jogo</th><th>Estado</th></tr>
           </thead>
           <tbody>
             {list.clubs.map((c) => (
               <tr key={c.ticker} data-testid="clube" data-ticker={c.ticker}>
                 <td>
-                  <a href={`/clube?t=${c.ticker}`} className="b" data-testid="link-clube">{c.ticker}</a>
-                  <span className="xs muted"> {c.name}</span>
+                  <span className="cb">
+                    <ClubBadgeMark club={c} size={26} />
+                    <span>
+                      <a href={`/clube?t=${c.ticker}`} className="b" data-testid="link-clube">{c.ticker}</a>
+                      <span className="xs muted"> {c.name}</span>
+                    </span>
+                  </span>
                 </td>
                 <td className="r b num">{formatCents(c.price)}</td>
                 <td className={`r ${changeClass(c.changeBp)} num`}>{formatChange(c.changeBp)}</td>
+                {positions && (
+                  <td className="r num" data-testid="minha-posicao">
+                    {(positions.get(c.ticker)?.shares ?? 0) > 0 ? formatShares(positions.get(c.ticker)!.shares) : <span className="muted">—</span>}
+                  </td>
+                )}
+                <td data-testid="proximo-jogo">
+                  {c.nextMatch ? (
+                    <span className="cb" style={{ gap: 6 }}>
+                      <ClubBadgeMark club={{ ticker: c.nextMatch.opponent.ticker ?? "", name: c.nextMatch.opponent.name, badgeAbbr: c.nextMatch.opponent.ticker ? undefined : c.nextMatch.opponent.name.slice(0, 3).toUpperCase() }} size={22} />
+                      <span>
+                        <span className="small b">{c.nextMatch.opponent.ticker ?? c.nextMatch.opponent.name} <span className="muted">({c.nextMatch.home ? "casa" : "fora"})</span></span>
+                        <span className="xs muted" style={{ display: "block" }}>{c.nextMatch.inPlay ? "agora" : formatKickoffShort(c.nextMatch.kickoff)} · {competitionName(c.nextMatch.competition)}</span>
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </td>
                 <td>
                   {c.suspended && <span className="chip chip-down" title={c.suspended.reason}>Suspenso</span>}
                   {!c.suspended && c.auction && <span className="chip chip-live" data-testid="estado-leilao"><span className="dot-live" />{auctionNotice(c.auction)}</span>}

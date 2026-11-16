@@ -23,6 +23,8 @@ export const clubValueCupSchema = z.strictObject({
   title: centsSchema,
   /** A fase em que o clube está; `null` quando já caiu ou a copa acabou para ele. */
   currentPhase: z.string().nullable(),
+  /** A situação do clube na copa: disputando, eliminado ou campeão (com `currentPhase` nulo, o clube já saiu dela). */
+  outcome: z.enum(["playing", "eliminated", "champion"]),
 });
 export type ClubValueCup = z.infer<typeof clubValueCupSchema>;
 
@@ -37,6 +39,8 @@ export const clubValueViewSchema = z.strictObject({
   /** Pontos e colocação agora (0 e `null` antes da primeira rodada). */
   points: z.number().int().nonnegative(),
   position: z.number().int().positive().nullable(),
+  /** Jogos já disputados no campeonato. */
+  played: z.number().int().nonnegative(),
   /** Dividendos por ação já pagos (aprovados) e a receber (fechados, ainda sem aprovação), em centavos. */
   paid: centsSchema,
   toReceive: centsSchema,

@@ -78,9 +78,19 @@ export class CandlesService {
       .limit(1);
     const toEngine = (c: typeof candles.$inferSelect): Candle => ({ start: c.start.getTime(), open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume });
     const series = fillGaps([...(earlier ? [toEngine(earlier)] : []), ...rows.map(toEngine)], window.interval, window.from, window.to, startPrice);
+    // o valor negociado não é do motor: vem do banco, e período sem negócio (preenchido) é zero
+    const turnoverOf = new Map([...(earlier ? [earlier] : []), ...rows].map((c) => [c.start.getTime(), c.turnover]));
     return {
       ...base,
-      candles: series.map((c) => ({ start: new Date(c.start).toISOString(), open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume })),
+      candles: series.map((c) => ({
+        start: new Date(c.start).toISOString(),
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+        volume: c.volume,
+        turnover: c.volume === 0 ? 0 : (turnoverOf.get(c.start) ?? 0),
+      })),
     };
   }
 }

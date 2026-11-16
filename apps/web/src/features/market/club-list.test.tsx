@@ -17,6 +17,7 @@ const item = (ticker: string, over: Record<string, unknown> = {}) => ({
   matchMode: false,
   auction: null,
   suspended: null,
+  nextMatch: null,
   ...over,
 });
 const list = (over: Partial<ClubListData> = {}): ClubListData => ({
@@ -49,6 +50,42 @@ describe("lista de clubes (tela)", () => {
     expect(row.textContent).toContain("R$ 44,30");
     expect(row.textContent).toContain("▲ +3,02%");
     expect(dom.$("[data-testid=link-clube]").getAttribute("href")).toBe("/clube?t=FLA3");
+  });
+
+  it("livro 46: com a carteira lida, mostra a coluna Você tem com as ações de cada clube (e traço onde não tem)", async () => {
+    const positions = new Map([["FLA3", { shares: 1200, inOrders: 0, averagePrice: 3700 }]]);
+    await dom.render(createElement(ClubList, { api: api(list()), positions }));
+    await dom.settle();
+    expect(dom.$$("[data-testid=minha-posicao]").map((c) => c.textContent)).toEqual(["1.200", "—"]);
+    expect(dom.text()).toContain("Você tem");
+  });
+
+  it("a coluna Próximo jogo mostra o adversário com selo, o mando, a data e a hora de Brasília e a competição (ou traço sem jogo marcado)", async () => {
+    const nextMatch = { kickoff: "2027-04-18T19:00:00.000Z", competition: "brasileirao-a" as const, round: 12, phase: null, home: true, opponent: { ticker: "PAL3", name: "Palmeiras" }, inPlay: false };
+    await dom.render(createElement(ClubList, { api: api(list({ clubs: [item("FLA3", { nextMatch }), item("PAL3")] })) }));
+    await dom.settle();
+    const [fla, pal] = dom.$$("[data-testid=proximo-jogo]");
+    expect(fla!.textContent).toContain("PAL3 (casa)");
+    expect(fla!.textContent).toContain("18/04 16h00 · Brasileirão");
+    expect(fla!.querySelector("[data-testid=selo]")!.getAttribute("aria-label")).toBe("Selo PAL3, Palmeiras");
+    expect(pal!.textContent).toBe("—");
+    expect(dom.text()).toContain("Próximo jogo");
+  });
+
+  it("o jogo que já começou aparece como agora na coluna, e o adversário de fora da lista pelo nome", async () => {
+    const nextMatch = { kickoff: "2027-04-18T19:00:00.000Z", competition: "sulamericana" as const, round: null, phase: "oitavas", home: false, opponent: { ticker: null, name: "Clube de Fora" }, inPlay: true };
+    await dom.render(createElement(ClubList, { api: api(list({ clubs: [item("FLA3", { nextMatch })] })) }));
+    await dom.settle();
+    const cell = dom.$("[data-testid=proximo-jogo]").textContent!;
+    expect(cell).toContain("Clube de Fora (fora)");
+    expect(cell).toContain("agora · Sul-Americana");
+  });
+
+  it("sem a carteira (visitante), a lista não tem a coluna Você tem", async () => {
+    await dom.render(createElement(ClubList, { api: api(list()) }));
+    await dom.settle();
+    expect(dom.$("[data-testid=minha-posicao]")).toBeNull();
+    expect(dom.text()).not.toContain("Você tem");
   });
 
   it("mostra \"em jogo agora\", \"em leilão até 15h40\" e \"suspenso\" nos clubes certos", async () => {

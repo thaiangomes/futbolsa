@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, eq } from "drizzle-orm";
-import { clubChannel, type BookView, type ClubList, type MarketState } from "@futbolsa/contracts";
+import { clubChannel, type BookView, type ClubFixtures, type ClubList, type MarketState } from "@futbolsa/contracts";
 import { dayStart, tradingBand } from "@futbolsa/engine";
 import { Clock } from "../../../infra/clock/index.js";
 import { DB, type Database } from "../../../infra/db/index.js";
@@ -12,6 +12,7 @@ import { auctionStateOf } from "../state/auction-states.js";
 import { changeBp, dayOpenPrice, displayedPriceOf, displayedPrices, referencePriceOf } from "../state/displayed-price.js";
 import { tradingGate } from "../state/gate.js";
 import { clubsInMatch, inMatch } from "../state/match-mode.js";
+import { clubFixtures, nextFixtures } from "./fixtures-repo.js";
 import { readBookLevels, readRecentTrades } from "./book-repo.js";
 
 type SeasonRow = NonNullable<Awaited<ReturnType<typeof currentSeason>>>;
@@ -87,6 +88,20 @@ export class BookReadService {
     return { freeCash: wallet.cash - wallet.reserved, freeShares: position ? position.shares - position.reserved : 0 };
   }
 
+  /** Os próximos jogos agendados do clube, em todas as competições (item 9 da fila da partida de teste). Público. */
+  async fixtures(ticker: string, limit = 8): Promise<ClubFixtures> {
+    const now = this.clock.now();
+    const season = await currentSeason(this.db);
+    if (!season) throw notListed();
+    const [club] = await this.db
+      .select({ clubId: seasonClubs.clubId })
+      .from(seasonClubs)
+      .innerJoin(clubs, eq(clubs.id, seasonClubs.clubId))
+      .where(and(eq(seasonClubs.seasonId, season.id), eq(clubs.ticker, ticker)));
+    if (!club) throw notListed();
+    return { ticker, fixtures: await clubFixtures(this.db, season.id, club.clubId, now, limit) };
+  }
+
   /** A lista dos clubes da temporada com preço, variação do dia, jogo, leilão e suspensão. */
   async list(): Promise<ClubList> {
     const seq = this.bus.currentSeq("prices");
@@ -100,6 +115,7 @@ export class BookReadService {
       .where(eq(seasonClubs.seasonId, season.id));
     const opens = await displayedPrices(this.db, season.id, new Date(dayStart(now.getTime())));
     const playing = new Set(await clubsInMatch(this.db, season.id, now));
+    const next = await nextFixtures(this.db, season.id, now);
     return {
       seq,
       market: marketStateOf(season, { suspendedReason: null }, now),
@@ -116,6 +132,7 @@ export class BookReadService {
             matchMode: playing.has(r.clubId),
             auction: auctionStateOf(r),
             suspended: suspended === null ? null : { reason: suspended },
+            nextMatch: next.get(r.clubId) ?? null,
           };
         })
         .sort((a, b) => a.ticker.localeCompare(b.ticker)),
