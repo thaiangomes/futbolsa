@@ -185,6 +185,20 @@ describe("coluna Sua projeção (critério 55)", () => {
     expect(dom.$("[data-testid=minha-projecao]").textContent).toBe("revisar");
   });
 
+  it("livro 55: projeção com uma copa de que o clube já foi eliminado também mostra revisar (e uma sem essa copa mostra o valor)", async () => {
+    const data = list({ clubs: [item("FLA3", { price: 6000 })] });
+    const eliminado = view({ cups: [{ ...view().cups[0]!, currentPhase: null, outcome: "eliminated" as const }] });
+    await dom.render(createElement(ClubList, { api: withDividends(data, eliminado), projections: new Map([["FLA3", bet]]) }));
+    await dom.settle();
+    await dom.settle();
+    expect(dom.$("[data-testid=minha-projecao]").textContent).toBe("revisar");
+    // revisada e salva de novo, já sem a copa: volta a ter valor
+    await dom.render(createElement(ClubList, { api: withDividends(data, eliminado), projections: new Map([["FLA3", { ...bet, cups: {} }]]) }));
+    await dom.settle();
+    await dom.settle();
+    expect(dom.$("[data-testid=minha-projecao]").textContent).toMatch(/^R\$ \d+,\d{2} · (downside|upside) \d+%$/);
+  });
+
   it("livro 55: sem login (sem projeções), a coluna nem aparece", async () => {
     await dom.render(createElement(ClubList, { api: api(list()) }));
     await dom.settle();
