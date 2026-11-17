@@ -21,6 +21,8 @@ export interface ChartMarker {
   lines: string[];
   /** A categoria, para a lista textual. */
   kind: "game" | "payout" | "trade";
+  /** A competição, só nos marcadores de jogo (o filtro por competição do botão Marcadores). */
+  competition?: string;
 }
 
 export interface AggregatedTrade {
@@ -85,6 +87,7 @@ export function buildMarkers({ ticker, interval, window, games, payouts, trades 
       title: gameContext(g),
       lines: [`${scoreLine(ticker, g)}${live ? "" : ` · ${resultText(g)}`}`, live ? "Em andamento" : formatChartDateTime(Date.parse(g.at) / 1000)],
       kind: "game",
+      competition: g.competition,
     });
   });
 

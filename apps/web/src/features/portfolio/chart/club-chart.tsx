@@ -9,6 +9,8 @@ import { useIsNarrow } from "../../market/mobile-club";
 import { ChartCanvas } from "./chart-canvas";
 import { RANGE_LABELS } from "./labels";
 import { MarkerBalloon } from "./marker-balloon";
+import { MarkerMenu } from "./marker-menu";
+import { filterMarkers, useMarkerPrefs } from "./marker-prefs";
 import { buildMarkers, type ChartMarker } from "./markers";
 import { toSeconds } from "./series";
 import { useClubChart } from "./use-club-chart";
@@ -25,7 +27,8 @@ export function ClubChart({ ticker, api, logged, short = false }: { ticker: stri
   const data = useClubChart(api, ticker, range, logged);
   const narrow = useIsNarrow();
 
-  const markers: ChartMarker[] = useMemo(() => {
+  const [prefs] = useMarkerPrefs();
+  const allMarkers: ChartMarker[] = useMemo(() => {
     if (!data.candles || data.candles.candles.length === 0) return [];
     const list = data.candles.candles;
     return buildMarkers({
@@ -37,6 +40,10 @@ export function ClubChart({ ticker, api, logged, short = false }: { ticker: stri
       trades: data.mine?.trades ?? [],
     });
   }, [data.candles, data.markers, data.mine, ticker]);
+  // o que o jogador desligou no botão Marcadores (critérios 46 e 47) sai do gráfico e da lista
+  const markers = useMemo(() => filterMarkers(allMarkers, prefs), [allMarkers, prefs]);
+  // as competições com jogo no período, na ordem em que aparecem
+  const competitions = useMemo(() => [...new Set(allMarkers.flatMap((m) => (m.kind === "game" && m.competition ? [m.competition] : [])))], [allMarkers]);
 
   const picked = markers.find((m) => m.id === selected) ?? null;
   const resp = data.candles;
@@ -52,6 +59,7 @@ export function ClubChart({ ticker, api, logged, short = false }: { ticker: stri
               <button key={r} type="button" aria-pressed={range === r} onClick={() => { setRange(r); setSelected(null); }}>{RANGE_LABELS[r]}</button>
             ))}
           </div>
+          <MarkerMenu competitions={competitions} showTrades={logged} />
           <div className="seg" role="group" aria-label="Tipo de gráfico">
             <button type="button" aria-pressed={mode === "line"} onClick={() => setMode("line")}>Linha</button>
             <button type="button" aria-pressed={mode === "candles"} onClick={() => setMode("candles")}>Candles</button>

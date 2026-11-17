@@ -3,6 +3,8 @@
 import type { EquityResponse } from "@futbolsa/contracts";
 import { useEffect, useMemo, useRef } from "react";
 import { readChartColors } from "../chart/chart-canvas";
+import { MarkerMenu } from "../chart/marker-menu";
+import { useMarkerPrefs } from "../chart/marker-prefs";
 import { formatChartDateTime, formatChartDay, formatMoney } from "../format";
 import { equitySeries } from "./equity-series";
 
@@ -13,6 +15,9 @@ import { equitySeries } from "./equity-series";
 export function EquityChart({ data, short = false }: { data: EquityResponse; short?: boolean }) {
   const container = useRef<HTMLDivElement>(null);
   const series = useMemo(() => equitySeries(data), [data]);
+  // o botão Marcadores é o mesmo do gráfico do clube: aqui só há dividendos (critério 47)
+  const [prefs] = useMarkerPrefs();
+  const shown = prefs.payout ? series.markers : [];
 
   useEffect(() => {
     const el = container.current;
@@ -35,7 +40,7 @@ export function EquityChart({ data, short = false }: { data: EquityResponse; sho
       line.createPriceLine({ price: series.base, color: colors.neutral, lineStyle: lib.LineStyle.Dashed, lineWidth: 1, axisLabelVisible: true, title: "R$ 100.000" });
       lib.createSeriesMarkers(
         line,
-        series.markers.map((m) => ({ time: m.time as never, position: "belowBar" as const, shape: "square" as const, color: colors.amber, text: m.text })),
+        shown.map((m) => ({ time: m.time as never, position: "belowBar" as const, shape: "square" as const, color: colors.amber, text: m.text })),
       );
       chart.timeScale().fitContent();
       remove = () => chart.remove();
@@ -44,14 +49,17 @@ export function EquityChart({ data, short = false }: { data: EquityResponse; sho
       disposed = true;
       remove?.();
     };
-  }, [series]);
+  }, [series, shown]);
 
   return (
     <div>
+      <div className="row" style={{ justifyContent: "flex-end", marginBottom: 6 }}>
+        <MarkerMenu only="payout" />
+      </div>
       <div ref={container} className={short ? "chart-box short" : "chart-box"} data-testid="grafico-patrimonio" role="img" aria-label={`Gráfico do patrimônio; valor atual ${formatMoney(data.current.equity)}`} />
-      {series.markers.length > 0 && (
+      {shown.length > 0 && (
         <ul className="sr-list" data-testid="dias-com-dividendo" style={{ marginTop: 8 }}>
-          {series.markers.map((m) => (
+          {shown.map((m) => (
             <li key={m.time} className="xs muted">{formatChartDay(m.time)}: dividendos de {m.text}</li>
           ))}
         </ul>
