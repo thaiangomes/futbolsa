@@ -5,7 +5,7 @@ import { useSession } from "../session-provider";
 import { Logo, Wordmark } from "./brand";
 
 /** As telas do jogador que o menu liga. `perfil` é a Conta (avatar no computador, última aba no celular). */
-export type PlayerPage = "mercado" | "carteira" | "ipo" | "rankings" | "competicoes" | "perfil";
+export type PlayerPage = "mercado" | "carteira" | "ipo" | "rankings" | "competicoes" | "ordens" | "perfil";
 
 interface Item {
   id: Exclude<PlayerPage, "perfil">;
@@ -23,6 +23,7 @@ export const PLAYER_MENU: readonly Item[] = [
   { id: "ipo", label: "IPO", href: "/ipo", icon: <><path d="M12 3v4M5 8l2.5 2.5M19 8l-2.5 2.5" /><rect x="6" y="12" width="12" height="8" rx="2" /></> },
   { id: "rankings", label: "Rankings", href: "/rankings", icon: <><path d="M8 4h8v5a4 4 0 0 1-8 0z" /><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20h7" /></> },
   { id: "competicoes", label: "Competições", href: "/competicoes", icon: <><circle cx="12" cy="12" r="9" /><path d="M12 3v18M3 12h18" /></> },
+  { id: "ordens", label: "Ordens", href: "/ordens", icon: <><path d="M5 6h14M5 12h14M5 18h9" /><path d="M17 16l2 2 3-4" /></> },
 ];
 
 const current = (active: PlayerPage, id: PlayerPage) => (active === id ? ("page" as const) : undefined);

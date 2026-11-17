@@ -89,7 +89,7 @@ export function ClubView({ ticker, api, logged, chart = null, position }: { tick
 
   if (narrow) {
     return (
-      <MobileClub state={view} orders={orders} logged={logged} api={api} position={position} onSent={() => void mine.reload()} onCancel={(id) => void cancel(id)} busyId={busy} cancelError={cancelError} />
+      <MobileClub state={view} orders={orders} logged={logged} api={api} position={position} onSent={() => void mine.reload()} onChanged={() => void mine.reload()} onCancel={(id) => void cancel(id)} busyId={busy} cancelError={cancelError} />
     );
   }
 
@@ -107,7 +107,7 @@ export function ClubView({ ticker, api, logged, chart = null, position }: { tick
         </div>
         <div className="stack">
           <OrderTicket state={view} myOrders={orders} api={api} preset={preset} onSent={() => void mine.reload()} />
-          {logged && <MyOrders orders={orders} ticker={ticker} onCancel={(id) => void cancel(id)} busyId={busy} error={cancelError} />}
+          {logged && <MyOrders orders={orders} ticker={ticker} onCancel={(id) => void cancel(id)} busyId={busy} error={cancelError} api={api} onChanged={() => void mine.reload()} />}
         </div>
       </div>
       <NextGamesCard ticker={ticker} api={api} />

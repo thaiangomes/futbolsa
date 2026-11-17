@@ -46,6 +46,7 @@ export function MobileClub({
   logged,
   api,
   onSent,
+  onChanged,
   onCancel,
   busyId,
   cancelError,
@@ -56,6 +57,8 @@ export function MobileClub({
   logged: boolean;
   api: MarketApi;
   onSent: (result: PlaceOrderResponse) => void;
+  /** Uma ordem foi editada: relê as ordens abertas. */
+  onChanged: () => void;
   onCancel: (id: number) => void;
   busyId: number | null;
   cancelError: string | null;
@@ -89,7 +92,7 @@ export function MobileClub({
           <ClubValueCard ticker={state.ticker} price={state.price.displayed} api={api} logged={logged} />
         </>
       )}
-      {tab === "minhas" && logged && <MyOrders orders={orders} ticker={state.ticker} onCancel={onCancel} busyId={busyId} error={cancelError} />}
+      {tab === "minhas" && logged && <MyOrders orders={orders} ticker={state.ticker} onCancel={onCancel} busyId={busyId} error={cancelError} api={api} onChanged={onChanged} />}
 
       <div className="row" style={{ padding: "12px 0", gap: 10, flexWrap: "nowrap", position: "sticky", bottom: "var(--altura-abas, 0px)", background: "var(--bg)" }}>
         <button type="button" className="btn btn-buy btn-lg grow" onClick={() => openSheet("buy")}>Comprar</button>

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Headers, Param, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Headers, Param, Post, Put, Query } from "@nestjs/common";
 import { z } from "zod";
 import {
   type CancelOrderResponse,
@@ -7,6 +7,9 @@ import {
   type PlaceOrderBody,
   placeOrderBodySchema,
   type PlaceOrderResponse,
+  type ReplaceOrderBody,
+  replaceOrderBodySchema,
+  type ReplaceOrderResponse,
 } from "@futbolsa/contracts";
 import { CurrentUser, type ResolvedUser } from "../../../infra/auth-adapter/index.js";
 import { RateLimit, ZodValidationPipe } from "../../../infra/http/index.js";
@@ -41,6 +44,17 @@ export class OrdersController {
   @Get()
   list(@CurrentUser() user: ResolvedUser, @Query(new ZodValidationPipe(listOrdersQuerySchema)) _query: unknown): Promise<ListOrdersResponse> {
     return this.orders.listOpen(user.id);
+  }
+
+  /** Edita o preço e a quantidade de uma ordem limitada aberta: troca atômica (cancela e cria a nova na mesma transação). */
+  @Put(":id")
+  replace(
+    @CurrentUser() user: ResolvedUser,
+    @Param("id", orderIdPipe) id: number,
+    @Body(new ZodValidationPipe(replaceOrderBodySchema)) body: ReplaceOrderBody,
+    @Headers("idempotency-key") idempotencyKey: unknown,
+  ): Promise<ReplaceOrderResponse> {
+    return this.orders.replace(user.id, id, body, parseIdempotencyKey(idempotencyKey));
   }
 
   /** Cancela uma ordem aberta do próprio jogador e devolve a reserva. */

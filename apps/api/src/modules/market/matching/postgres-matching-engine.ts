@@ -276,6 +276,19 @@ export class PostgresMatchingEngine extends MatchingEngine {
     };
   }
 
+  /** Os donos das ordens do outro lado que uma limitada alcançaria (a mesma leitura e o mesmo casamento do passo 5 e 6 do `place`). */
+  override async reachOwners(tx: Tx, input: PlaceOrderInput): Promise<number[]> {
+    if (input.type !== "limit" || !Number.isInteger(input.limitPrice) || !Number.isInteger(input.quantity) || input.quantity < 1 || (input.limitPrice ?? 0) < 1) return [];
+    const club = (await lockClubs(tx, input.seasonId, [input.ticker]))[0]!;
+    if (isInAuction(club)) return [];
+    const request = requestOf(input);
+    const reach = await this.readReach(tx, club.clubId, request, undefined);
+    const incoming: IncomingOrder = { id: INCOMING_ID, accountId: String(input.walletId), ...request };
+    const widest = matchOrder(reach.resting, incoming, { selfTrade: "reject", availableCash: NO_CASH_LIMIT, marketPriceLimit: undefined });
+    if (widest.status === "rejected") return [];
+    return [...new Set(widest.fills.map((fill) => reach.byId.get(fill.restingId)!.walletId))];
+  }
+
   /** O passo 8: grava a ordem e o que o casamento decidiu. */
   private async record(
     tx: Tx,

@@ -23,6 +23,17 @@ export abstract class MatchingEngine {
    * termina a transação, fecha o leilão numa transação própria e manda a ordem de novo (P10 do plano).
    */
   abstract place(tx: Tx, input: PlaceOrderInput, hooks?: MatchingHooks): Promise<PlaceOrderAttempt>;
+
+  /**
+   * As carteiras (ids) dos donos das ordens que uma ordem limitada nova alcançaria agora, para quem precisa travá-las
+   * junto com a própria antes de fazer outra coisa na mesma transação (a troca atômica da edição, critérios 57 a 59: o
+   * motor trava as carteiras em ordem de id e recusa travar uma de id menor depois de uma de id maior). Chamar com o
+   * clube travado. Ordem inválida, em leilão ou que cruzaria com a própria dona devolve vazio: o `place` a recusa ou a
+   * guarda sem casar e não trava nenhuma contraparte. O padrão não alcança ninguém (os motores de teste não precisam).
+   */
+  async reachOwners(_tx: Tx, _input: PlaceOrderInput): Promise<number[]> {
+    return [];
+  }
 }
 
 /**

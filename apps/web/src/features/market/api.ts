@@ -8,6 +8,9 @@ import {
   type PlaceOrderBody,
   placeOrderBodySchema,
   placeOrderResponseSchema,
+  type ReplaceOrderBody,
+  replaceOrderBodySchema,
+  replaceOrderResponseSchema,
   type ProjectionBody,
   projectionBodySchema,
   projectionListSchema,
@@ -38,6 +41,13 @@ export function marketApi(api: ApiClient) {
     /** Salva (ou troca) a projeção do jogador para o clube. */
     saveProjection: (ticker: string, body: ProjectionBody) =>
       api.request(projectionSchema, `/me/projections/${encodeURIComponent(ticker)}`, { method: "PUT", body: projectionBodySchema.parse(body) }),
+    /** Edita o preço e a quantidade de uma ordem limitada aberta: troca atômica (critérios 57 a 59). A chave vale por edição. */
+    replaceOrder: (id: number, body: ReplaceOrderBody, idempotencyKey: string) =>
+      api.request(replaceOrderResponseSchema, `/orders/${id}`, {
+        method: "PUT",
+        body: replaceOrderBodySchema.parse(body),
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
     cancelOrder: (id: number) => api.request(cancelOrderResponseSchema, `/orders/${id}`, { method: "DELETE" }),
     openOrders: () => api.request(listOrdersResponseSchema, "/orders?status=open"),
   };

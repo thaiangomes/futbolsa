@@ -53,6 +53,11 @@ export class OrderService {
     return result;
   }
 
+  /** Os donos das ordens que uma limitada nova alcançaria, para travar as carteiras antes (veja `MatchingEngine.reachOwners`). */
+  reachOwners(tx: Tx, input: PlaceOrderInput): Promise<number[]> {
+    return this.engine.reachOwners(tx, input);
+  }
+
   /**
    * Uma ordem nova na transação dela (`withTransaction`, que repete se o Postgres abortar por *deadlock*). A ordem
    * que encontra o leilão do clube vencido fecha o leilão antes e é mandada de novo, uma vez (P10): quem chega 2
