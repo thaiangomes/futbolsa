@@ -163,6 +163,8 @@ export class PlayerOrdersService {
    * preço e a quantidade pedidos, entra pelo mesmo caminho de qualquer ordem: reserva recalculada, executa o que cruzar,
    * o resto vai para o fim da fila daquele preço. Se a nova for recusada, a transação é desfeita e a antiga fica inteira.
    * Aceita a `Idempotency-Key`, como o `POST`. Leilão vencido: igual ao `POST` (fecha o leilão e repete uma vez).
+   * Diferença do `POST`: a recusa desfaz a transação inteira, chave inclusive; repetir a chave depois de uma recusa refaz a
+   * tentativa (sem efeito colateral, porque nada foi gravado), em vez de repetir a resposta guardada.
    */
   async replace(userId: string, orderId: number, body: ReplaceOrderBody, idempotencyKey?: string): Promise<ReplaceOrderResponse> {
     const now = this.clock.now();
@@ -212,14 +214,26 @@ export class PlayerOrdersService {
     const [row] = await tx.db.select().from(orders).where(eq(orders.id, orderId));
     if (!row || row.walletId !== found.walletId) throw marketError("order_not_found");
     if (row.status !== "open" || row.type !== "limit") throw marketError("order_not_open");
-    await lockWallets(tx, [row.walletId]);
+    const input: PlaceOrderInput = {
+      seasonId: found.seasonId,
+      ticker: found.ticker,
+      walletId: found.walletId,
+      actor: "player",
+      side: row.side as "buy" | "sell",
+      type: "limit",
+      quantity: body.quantity,
+      limitPrice: body.limitPrice,
+      now,
+    };
+    // As carteiras entram juntas, em ordem de id: a do jogador e as dos donos das ordens que a nova alcança. O motor
+    // trava nessa ordem e recusa travar uma de id menor depois de uma de id maior (seria deadlock); travar a do jogador
+    // sozinha aqui e as contrapartes depois, dentro do `place`, falharia contra quem tem carteira de id menor. O livro
+    // do outro lado não muda com o clube travado, e o cancelamento só tira uma ordem do mesmo lado: o alcance de agora
+    // é o que o `place` vai achar, e o `lockWallets` dele já não trava nada novo.
+    await lockWallets(tx, [row.walletId, ...(await this.orders.reachOwners(tx, input))]);
     const { order: replaced } = await this.cancels.cancelLocked(tx, row, found.ticker, "player", now);
 
-    const result = await this.orders.placeOrder(
-      tx,
-      { seasonId: found.seasonId, ticker: found.ticker, walletId: found.walletId, actor: "player", side: row.side as "buy" | "sell", type: "limit", quantity: body.quantity, limitPrice: body.limitPrice, now },
-      { afterWalletsLocked: (t, w) => refuseInactive(t, w) },
-    );
+    const result = await this.orders.placeOrder(tx, input, { afterWalletsLocked: (t, w) => refuseInactive(t, w) });
     if (isAuctionExpired(result)) throw new AuctionExpiredRollback(result);
     if (!result.ok) throw new ReplaceRefused(result.code, result.reason);
     const placed = toStoredResponse(result);

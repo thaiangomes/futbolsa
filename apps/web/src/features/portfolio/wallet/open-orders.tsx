@@ -68,7 +68,7 @@ export function OpenOrders({
                 </div>
                 <div className="row-s">
                   {api && o.limitPrice !== null && (
-                    <button type="button" className="btn btn-sm" aria-expanded={editing === o.id} data-testid="editar" onClick={() => setEditing(editing === o.id ? null : o.id)}>Editar</button>
+                    <button type="button" className="btn btn-sm" aria-expanded={editing === o.id} aria-controls={`editar-ordem-${o.id}`} data-testid="editar" onClick={() => setEditing(editing === o.id ? null : o.id)}>Editar</button>
                   )}
                   <button type="button" className="btn btn-sm" disabled={busyId === o.id} onClick={() => onCancel(o.id)}>Cancelar</button>
                 </div>

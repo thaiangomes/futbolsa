@@ -1,7 +1,7 @@
 "use client";
 
 import type { MyOrder } from "@futbolsa/contracts";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "../../lib/api";
 import { formatCents, formatInt } from "../../lib/format";
 import { reaisField } from "../ipo/forms";
@@ -22,11 +22,21 @@ import { useClubBook } from "./use-club-book";
  */
 export function EditOrderHost(props: { order: MyOrder; orders: readonly MyOrder[]; api: MarketApi; onClose: () => void; onSaved: () => void }) {
   const narrow = useIsNarrow();
+  const { onClose } = props;
+  // a folha do celular fecha com Esc (teclado externo) e é modal para quem usa leitor de tela
+  useEffect(() => {
+    if (!narrow) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [narrow, onClose]);
   if (!narrow) return <EditOrderPanel {...props} />;
   return (
     <>
       <div className="scrim" onClick={props.onClose} />
-      <div className="sheet" role="dialog" aria-label={`Editar ordem · ${props.order.ticker}`} data-testid="folha-edicao" style={{ paddingLeft: 16, paddingRight: 16, maxHeight: "88vh", overflowY: "auto" }}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label={`Editar ordem · ${props.order.ticker}`} data-testid="folha-edicao" style={{ paddingLeft: 16, paddingRight: 16, maxHeight: "88vh", overflowY: "auto" }}>
         <div className="grab" />
         <EditOrderPanel {...props} />
       </div>
@@ -85,6 +95,11 @@ export function EditOrderPanel({ order, orders, api, onClose, onSaved }: { order
       key.current = null;
       onSaved();
     } catch (e) {
+      // a ordem já executou ou foi cancelada (outra aba, ou a troca anterior gravou e a resposta se perdeu): a lista relê e o painel fecha
+      if (e instanceof ApiError && (e.code === "order_not_open" || e.code === "order_not_found")) {
+        onSaved();
+        return;
+      }
       setError(e instanceof ApiError ? (e.code === "club_suspended" ? e.message : marketErrorMessage(e.code)) : marketErrorMessage(""));
       if (e instanceof ApiError) key.current = null;
       setPhase("editing");
@@ -92,7 +107,7 @@ export function EditOrderPanel({ order, orders, api, onClose, onSaved }: { order
   };
 
   return (
-    <section className="card" aria-labelledby={`t-editar-${order.id}`} data-testid="editar-ordem" style={{ marginTop: 8 }}>
+    <section className="card" id={`editar-ordem-${order.id}`} aria-labelledby={`t-editar-${order.id}`} data-testid="editar-ordem" style={{ marginTop: 8 }}>
       <div className="card-h">
         <h3 className="card-t" id={`t-editar-${order.id}`}>{`Editar ordem · ${order.ticker}`}</h3>
         <span className={buying ? "chip chip-up" : "chip chip-down"}>{buying ? "Compra" : "Venda"}</span>

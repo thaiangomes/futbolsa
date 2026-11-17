@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { listOrdersResponseSchema, MARKET_ERROR_MESSAGES, replaceOrderResponseSchema } from "@futbolsa/contracts";
 import { FixedClock } from "../../src/infra/clock/index.js";
-import { orders } from "../../src/infra/db/schema/index.js";
+import { orders, users } from "../../src/infra/db/schema/index.js";
 import { createAccount, type TestAccount } from "../support/accounts.js";
 import { createTestApp } from "../support/app.js";
 import { bearer, withTestAuth } from "../support/auth.js";
@@ -31,6 +31,8 @@ describe("PUT /orders/:id: editar uma ordem aberta (troca atômica)", () => {
   type Player = { account: TestAccount; walletId: number };
   const buyers: Player[] = [];
   const sellers: Player[] = [];
+  /** Criados antes de todos os outros: carteiras de id menor que as dos compradores e vendedores acima. */
+  const early: Player[] = [];
 
   const makePlayer = async (shares = false): Promise<Player> => {
     const account = await createAccount(database.db);
@@ -55,6 +57,7 @@ describe("PUT /orders/:id: editar uma ordem aberta (troca atômica)", () => {
   beforeAll(async () => {
     app = await createTestApp({ db: database.db, clock, override: withTestAuth(clock) });
     s = await marketSeason(database.db);
+    for (let i = 0; i < 2; i++) early.push(await makePlayer(true));
     for (let i = 0; i < 8; i++) buyers.push(await makePlayer());
     for (let i = 0; i < 3; i++) sellers.push(await makePlayer(true));
     await syncTotalShares(database.db, s.seasonId);
@@ -182,6 +185,49 @@ describe("PUT /orders/:id: editar uma ordem aberta (troca atômica)", () => {
     expect(body.replaced).toMatchObject({ id, filled: 40, status: "cancelled" });
     expect(body.order).toMatchObject({ quantity: 30, filled: 0, reservedCash: 30 * 4000 });
     await del(hugo, body.order.id);
+  });
+
+  it("livro 59: a edição que cruza contra uma carteira de id MENOR (compra e venda) executa, sem 500 de ordem de travas", async () => {
+    const [vendedorAntigo, compradorAntigo] = early as [Player, Player];
+    // compra de Ana (carteira nova) sobe até a venda de uma carteira mais antiga
+    const ana = buyers[0]!;
+    expect((await post(vendedorAntigo, order("PAL3", "sell", 50, 4300))).statusCode).toBe(201);
+    const compra = await idOf(await post(ana, order("PAL3", "buy", 50, 4000)));
+    const a = await put(ana, compra, { quantity: 50, limitPrice: 4300 });
+    expect(a.statusCode).toBe(200);
+    expect(replaceOrderResponseSchema.parse(a.json()).trades).toEqual([expect.objectContaining({ price: 4300, quantity: 50 })]);
+    // venda de um vendedor novo desce até a compra de uma carteira mais antiga
+    const vendedor = sellers[0]!;
+    expect((await post(compradorAntigo, order("SPT3", "buy", 30, 4300))).statusCode).toBe(201);
+    const venda = await idOf(await post(vendedor, order("SPT3", "sell", 30, 4400)));
+    const b = await put(vendedor, venda, { quantity: 30, limitPrice: 4300 });
+    expect(b.statusCode).toBe(200);
+    expect(replaceOrderResponseSchema.parse(b.json()).trades).toEqual([expect.objectContaining({ price: 4300, quantity: 30 })]);
+  });
+
+  it("livro 58: edição que cruzaria com a própria venda é recusada (self_trade) e a ordem antiga fica", async () => {
+    const seller = sellers[2]!;
+    const sellId = await idOf(await post(seller, order("COR3", "sell", 100, 4500)));
+    const buyId = await idOf(await post(seller, order("COR3", "buy", 10, 3500)));
+    const res = await put(seller, buyId, { quantity: 10, limitPrice: 4500 });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("self_trade");
+    expect((await open(seller)).filter((o) => o.ticker === "COR3").map((o) => o.id).sort()).toEqual([sellId, buyId].sort());
+    expect(await row(buyId)).toMatchObject({ status: "open", limitPrice: 3500 });
+    await del(seller, sellId);
+    await del(seller, buyId);
+  });
+
+  it("livro 58: conta bloqueada não edita (403 account_blocked) e a ordem antiga fica como estava", async () => {
+    const dora = buyers[3]!;
+    const id = await idOf(await post(dora, order("FLA3", "buy", 10, 3700)));
+    await database.db.update(users).set({ status: "blocked" }).where(eq(users.id, dora.account.id));
+    const res = await put(dora, id, { quantity: 10, limitPrice: 3750 });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("account_blocked");
+    expect(await row(id)).toMatchObject({ status: "open", limitPrice: 3700 });
+    await database.db.update(users).set({ status: "active" }).where(eq(users.id, dora.account.id));
+    await del(dora, id);
   });
 
   it("a mesma Idempotency-Key repete a resposta sem trocar de novo; com outro corpo dá idempotency_conflict", async () => {
