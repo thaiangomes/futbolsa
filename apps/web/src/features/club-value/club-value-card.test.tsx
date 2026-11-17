@@ -242,6 +242,52 @@ describe("minha projeção no cartão (critérios 54 e 55)", () => {
     expect(api.projections).not.toHaveBeenCalled();
   });
 
+  // O Vasco do print do Thaian: projeção salva quando o clube ainda estava na Sul-Americana; depois ele foi eliminado dela.
+  const vasco: ClubValueView = {
+    ...fla3,
+    ticker: "VAS3",
+    points: 35,
+    position: 15,
+    cups: [
+      { ...fla3.cups[0]!, currentPhase: "semifinal", outcome: "playing" as const },
+      {
+        competition: "sulamericana",
+        phases: ["grupos", "playoffs", "oitavas", "quartas", "semifinal", "final"],
+        advance: { grupos: 100, playoffs: 150, oitavas: 200, quartas: 300, semifinal: 500 },
+        title: 1000,
+        currentPhase: null,
+        outcome: "eliminated" as const,
+      },
+    ],
+  };
+  const salvaDoVasco = { ticker: "VAS3", points: 54, position: 9, cups: { "copa-do-brasil": "semifinal", sulamericana: "quartas" }, updatedAt: "2027-06-10T18:00:00.000Z" };
+
+  it("livro 55: projeção salva com uma copa de que o clube já foi eliminado (Vasco na Sul-Americana) abre desatualizada, mas dá para revisar e salvar de novo", async () => {
+    const api = {
+      dividends: vi.fn(async () => vasco),
+      projections: vi.fn(async () => ({ projections: [salvaDoVasco] })),
+      saveProjection: vi.fn(async (_t: string, body: object) => ({ ...salvaDoVasco, ...body })),
+    };
+    await dom.render(createElement(ClubValueCard, { ticker: "VAS3", name: "Vasco da Gama", price: 4430, api, logged: true }));
+    await dom.settle();
+    await dom.settle();
+    await dom.settle();
+    // o cartão avisa que a projeção ficou desatualizada, e a Sul-Americana não tem campo (o clube já caiu dela)
+    expect(dom.$("[data-testid=projecao-desatualizada]")).not.toBeNull();
+    expect(dom.$("#sim-copa-sulamericana")).toBeNull();
+
+    // o jogador revisa a aposta, como o aviso pede: a conta tem de funcionar e o botão de salvar, destravar
+    await dom.type("#sim-pontos", "55");
+    expect(dom.$("[data-testid=sim-erro]")?.textContent ?? null).toBeNull();
+    expect((dom.$("[data-testid=salvar-projecao]") as HTMLButtonElement).disabled).toBe(false);
+
+    // e o que se salva não leva a copa de que o clube já saiu
+    await dom.click(dom.$("[data-testid=salvar-projecao]"));
+    await dom.settle();
+    expect(api.saveProjection).toHaveBeenCalledWith("VAS3", { points: 55, position: 9, cups: { "copa-do-brasil": "semifinal" } });
+    expect(dom.$("[data-testid=projecao-salva]")).not.toBeNull();
+  });
+
   it("falha ao salvar mostra aviso calmo", async () => {
     const api = apiWith(null);
     api.saveProjection.mockRejectedValueOnce(new Error("fora"));

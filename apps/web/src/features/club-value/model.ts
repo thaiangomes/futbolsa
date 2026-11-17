@@ -88,6 +88,16 @@ export function cupStateText(cup: ClubValueCup): string {
   return `está ${PHASES[cup.currentPhase]?.at ?? `na ${cup.currentPhase}`}`;
 }
 
+/**
+ * As apostas por copa que ainda valem: só as copas em que o clube ainda está (`currentPhase` não nulo). A copa de que o clube
+ * já saiu não tem campo na tela e o motor recusa apostar nela ("o clube já caiu dessa copa"); sem isto, uma projeção salva
+ * antes da eliminação travava a tela do jogador, que não tinha como tirar essa copa da aposta.
+ */
+export function liveCups(view: ClubValueView, cups: Readonly<Record<string, string>>): Record<string, string> {
+  const playing = new Set(view.cups.filter((c) => c.currentPhase !== null).map((c) => c.competition));
+  return Object.fromEntries(Object.entries(cups).filter(([competition, phase]) => phase !== "" && playing.has(competition as never)));
+}
+
 export type Simulation = { ok: true; result: ClubValueResult } | { ok: false; message: string };
 
 /** Roda o motor com o que o jogador pôs no formulário. Aposta que não faz sentido volta com o motivo, em português. */
@@ -103,7 +113,7 @@ export function simulate(view: ClubValueView, displayedPrice: number, form: BetF
     points = Number(text);
     position = Number(form.position);
   }
-  const bet: ClubBet = { points, position, cups: Object.fromEntries(Object.entries(form.cups).filter(([, v]) => v !== "")) };
+  const bet: ClubBet = { points, position, cups: liveCups(view, form.cups) };
   try {
     return { ok: true, result: clubValue(input, bet) };
   } catch (error) {
@@ -124,7 +134,7 @@ export function projectionFromForm(view: ClubValueView, form: BetForm): Projecti
   return {
     points: open ? Number(form.points) : view.points,
     position: open ? Number(form.position) : (view.position ?? 1),
-    cups: Object.fromEntries(Object.entries(form.cups).filter(([, v]) => v !== "")),
+    cups: liveCups(view, form.cups),
   };
 }
 
@@ -133,8 +143,18 @@ export type ProjectedValue =
   | { status: "ok"; value: number; outlook: { kind: "upside" | "downside" | "even"; percent: number } | null }
   | { status: "stale" };
 
+/**
+ * A projeção salva ficou desatualizada (critério 55): o clube já passou do que ela apostou (menos pontos que os de hoje, uma fase
+ * que ele já ultrapassou) ou já saiu de uma copa que ela apostou. Continua assim até o jogador revisar e salvar de novo.
+ */
+export function projectionStale(view: ClubValueView, price: number, p: Pick<Projection, "points" | "position" | "cups">): boolean {
+  if (Object.keys(p.cups).some((c) => !(c in liveCups(view, p.cups)))) return true;
+  return !simulate(view, price, formFromProjection(p)).ok;
+}
+
 /** Refaz o valor da projeção salva com os dividendos e as fases de agora; premissa que o clube já ultrapassou deixa a projeção desatualizada. */
 export function projectedValue(view: ClubValueView, price: number, p: Pick<Projection, "points" | "position" | "cups">): ProjectedValue {
+  if (projectionStale(view, price, p)) return { status: "stale" };
   const sim = simulate(view, price, formFromProjection(p));
   if (!sim.ok || !sim.result.simulation) return { status: "stale" };
   return { status: "ok", value: sim.result.simulation.value, outlook: sim.result.simulation.outlook };

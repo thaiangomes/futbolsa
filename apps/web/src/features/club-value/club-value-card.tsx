@@ -15,6 +15,7 @@ import {
   MAX_POINTS,
   POSITIONS,
   projectionFromForm,
+  projectionStale,
   simulate,
 } from "./model";
 
@@ -98,7 +99,7 @@ function Loaded({ view, name, price, title, ticker, api, canSave, saved }: { vie
   // abre com a projeção salva (critério 54), mesmo desatualizada: o aviso pede para revisar; sem ela, o clube como está
   const [form, setForm] = useState<BetForm>(() => (saved ? formFromProjection(saved) : initialForm(view)));
   const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const staleSaved = saved !== null && !simulate(view, price, formFromProjection(saved)).ok;
+  const staleSaved = saved !== null && projectionStale(view, price, saved);
   const sim = useMemo(() => simulate(view, price, form), [view, price, form]);
   const buybackNow = buybackIfEndedNow(view.paid, view.toReceive, view.buybackMultipleBp);
   const multiple = (view.buybackMultipleBp / 10_000).toLocaleString("pt-BR");
@@ -136,7 +137,7 @@ function Loaded({ view, name, price, title, ticker, api, canSave, saved }: { vie
         <div className="g-2" style={{ gap: 24 }}>
           <div className="stack" style={{ gap: 12 }}>
             <span className="lbl">O que você acha que vai acontecer até o fim da temporada?</span>
-            {staleSaved && (
+            {staleSaved && saving !== "saved" && (
               <div className="note note-err" role="status" data-testid="projecao-desatualizada">
                 <div>Sua projeção salva ficou desatualizada: o clube já passou de algo que você apostou. Revise e salve de novo.</div>
               </div>
