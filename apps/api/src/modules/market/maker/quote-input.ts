@@ -65,7 +65,7 @@ export function houseQuoteSize(settings: MakerSettings, totalShares: number, inM
  * exibido (critérios 12, 36 e 37).
  */
 export function quotePrices(reference: Cents, inMatch: boolean, displayedPrice: Cents): { bid: Cents; ask: Cents } {
-  const quote = computeQuote(reference, inMatch, UNLIMITED, UNLIMITED, DEFAULT_MARKET_MAKER, { quantity: 1, displayedPrice });
+  const quote = computeQuote(reference, inMatch, UNLIMITED, UNLIMITED, DEFAULT_MARKET_MAKER, { quantity: 1, displayedPrice, bandCap: true });
   return { bid: quote.bid!.price, ask: quote.ask!.price };
 }
 
@@ -77,6 +77,7 @@ export function houseQuote(q: { reference: Cents; inMatch: boolean; displayedPri
   return computeQuote(q.reference, q.inMatch, q.funds.freeCash, q.funds.freeShares, DEFAULT_MARKET_MAKER, {
     quantity: q.size,
     displayedPrice: q.displayedPrice,
+    bandCap: true,
   });
 }
 

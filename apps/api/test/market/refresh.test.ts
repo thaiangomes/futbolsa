@@ -210,9 +210,9 @@ describe("reposição da casa", () => {
       expect(after.referencePrice).toBe(2700);
       expect(after.lastPrice).toBe(3000);
       expect(after.tunnelRef).toBe(2700);
-      // compra a 95% do justo (R$ 15,20); venda presa a 95% da referência (R$ 25,65), não a 95% de R$ 30,00
+      // compra no piso da faixa da referência (R$ 21,60, acima dos 95% do justo, R$ 15,20); venda presa a 95% da referência (R$ 25,65), não a 95% de R$ 30,00
       expect((await houseQuotes("FLA3")).map(([side, , price]) => [side, price])).toEqual([
-        ["buy", 1520],
+        ["buy", 2160],
         ["sell", 2565],
       ]);
       // a faixa de 20% passa a ser a da referência (R$ 21,60 a R$ 32,40)
@@ -222,7 +222,7 @@ describe("reposição da casa", () => {
   );
 
   it(
-    "referência que decai: com menos de 2 dias sem negócio, ou com o preço a até 20% do justo, a referência fica vazia; um negócio apaga a que existia",
+    "referência que decai: com menos de 2 dias sem negócio, ou com o preço a até 10% do justo, a referência fica vazia; um negócio apaga a que existia",
     scene(async () => {
       await stock(RICH, { FLA3: 600 });
       await holder("FLA3", 2_400);
@@ -231,8 +231,8 @@ describe("reposição da casa", () => {
       await setTunnelState(db, seasonId, club("FLA3"), { lastPrice: 3000, lastTradeAt: later(NOW, -24 * HOUR), tunnelRef: 3000, tunnelRefDay: TODAY });
       refreshed(await refresh("FLA3", 1600));
       expect((await row("FLA3")).referencePrice).toBeNull();
-      // 5 dias sem negócio, mas o preço está a 12,5% do justo
-      await setTunnelState(db, seasonId, club("FLA3"), { lastPrice: 1800, lastTradeAt: later(NOW, -120 * HOUR) });
+      // 5 dias sem negócio, mas o preço está a 6,25% do justo
+      await setTunnelState(db, seasonId, club("FLA3"), { lastPrice: 1700, lastTradeAt: later(NOW, -120 * HOUR) });
       refreshed(await refresh("FLA3", 1600));
       expect((await row("FLA3")).referencePrice).toBeNull();
       // longe do justo e parado há 5 dias: decai; um negócio apaga
@@ -243,6 +243,31 @@ describe("reposição da casa", () => {
       const traded = await row("FLA3");
       expect(traded.referencePrice).toBeNull();
       expect(traded.lastPrice).toBe(2000);
+    }),
+  );
+
+  it(
+    "cotação na faixa (PAL3): com preço de R$ 59,32 e valor justo de R$ 68,79 a venda da casa não passa do teto de R$ 71,18, com e sem a referência que decai",
+    scene(async () => {
+      await stock(RICH, { FLA3: 600 });
+      await holder("FLA3", 2_400);
+      await ready();
+      // negócio há 1 hora: carência, sem referência; a venda seria R$ 72,23 e fica no teto da faixa do preço exibido
+      await setTunnelState(db, seasonId, club("FLA3"), { lastPrice: 5932, lastTradeAt: later(NOW, -HOUR), tunnelRef: 5932, tunnelRefDay: TODAY });
+      refreshed(await refresh("FLA3", 6879));
+      expect((await row("FLA3")).referencePrice).toBeNull();
+      expect((await houseQuotes("FLA3")).map(([side, , price]) => [side, price])).toEqual([
+        ["buy", 6228],
+        ["sell", 7118],
+      ]);
+      // 3 dias sem negócio: a referência sobe 10% por dia (6.591 no 1º dia decaído, 6.879 no 2º); a venda volta ao valor justo × 1,05
+      await setTunnelState(db, seasonId, club("FLA3"), { lastPrice: 5932, lastTradeAt: later(NOW, -(72 * HOUR)) });
+      refreshed(await refresh("FLA3", 6879));
+      expect((await row("FLA3")).referencePrice).toBe(6879);
+      const [buy, sell] = (await houseQuotes("FLA3")).map(([, , price]) => price);
+      expect(sell).toBe(7223);
+      expect(Number(sell)).toBeLessThanOrEqual(Math.floor((6879 * 6) / 5));
+      expect(Number(buy)).toBeLessThanOrEqual(Number(sell));
     }),
   );
 
@@ -277,9 +302,10 @@ describe("reposição da casa", () => {
       await ready();
       await priceAt("FLA3", 6000);
 
+      // a compra de R$ 28,50 fica no piso da faixa de 20% (R$ 48,00): a casa nunca cota fora do alcance dos jogadores
       refreshed(await refresh("FLA3", 3000));
       expect(await houseQuotes("FLA3")).toEqual([
-        ["buy", 10, 2850],
+        ["buy", 10, 4800],
         ["sell", 10, 5700],
       ]);
 
@@ -289,7 +315,7 @@ describe("reposição da casa", () => {
 
       refreshed(await refresh("FLA3", 3000, later(NOW, 2 * HOUR)));
       expect(await houseQuotes("FLA3")).toEqual([
-        ["buy", 10, 2850],
+        ["buy", 10, 4560],
         ["sell", 10, 5415],
       ]);
     }),
@@ -304,9 +330,10 @@ describe("reposição da casa", () => {
       await priceAt("PAL3", 2000);
 
       refreshed(await refresh("PAL3", 4000));
+      // a venda de R$ 42,00 fica no teto da faixa de 20% (R$ 24,00)
       expect(await houseQuotes("PAL3")).toEqual([
         ["buy", 10, 2100],
-        ["sell", 10, 4200],
+        ["sell", 10, 2400],
       ]);
       const sale = accepted(await service.place(o.sellMarket(bruno, "PAL3", 10, undefined, { now: later(NOW, 60_000) })));
       expect(sale.trades.map((x) => [x.price, x.quantity, x.withHouse, x.buyerWalletId])).toEqual([[2100, 10, true, treasury]]);
@@ -325,7 +352,7 @@ describe("reposição da casa", () => {
       const r = refreshed(await refresh("FLA3", 3000, NOW, { inMatch: true }));
       expect(r).toMatchObject({ inMatch: true, size: 3 });
       expect(await houseQuotes("FLA3")).toEqual([
-        ["buy", 3, 2790],
+        ["buy", 3, 4800],
         ["sell", 3, 5700],
       ]);
     }),
@@ -600,7 +627,7 @@ describe("reposição da casa", () => {
       const fair = (await fairValues.compute(seasonId, NOW)).get("FLA3")!;
       const r = refreshed(await own.refreshClub(seasonId, "FLA3", NOW));
       expect(r.fairValue).toBe(fair);
-      expect(r.quote).toEqual(computeQuote(Math.max(50, fair), false, RICH, 600, DEFAULT_MARKET_MAKER, { quantity: 10, displayedPrice: 4000 }));
+      expect(r.quote).toEqual(computeQuote(Math.max(50, fair), false, RICH, 600, DEFAULT_MARKET_MAKER, { quantity: 10, displayedPrice: 4000, bandCap: true }));
     }),
   );
 });

@@ -1,6 +1,7 @@
 import type { Ledger } from "./ledger.js";
 import { MIN_PRICE, type Cents } from "./money.js";
 import type { Exchange } from "./orderbook.js";
+import { tradingBand } from "./orderRules.js";
 
 /**
  * Formador de mercado da casa: mantém uma oferta de compra e uma de venda em
@@ -80,6 +81,12 @@ export interface QuoteOptions {
   displayedPrice?: Cents;
   /** Margem desta cotação, no lugar de `config.marketMargin` (a margem que cresce com os dias sem negócio). */
   margin?: number;
+  /**
+   * A cotação nunca sai da faixa de 20% em volta de `displayedPrice` (a referência da faixa): a venda fica em no máximo
+   * ⌊preço × 1,2⌋ e a compra em pelo menos ⌈preço × 0,8⌉. Sem isso, com o valor justo longe do preço, a casa cota onde
+   * nenhum jogador consegue chegar (PAL3, rodada Z parte 3).
+   */
+  bandCap?: boolean;
 }
 
 /** Calcula a cotação sem tocar no livro (função pura, fácil de testar). */
@@ -113,6 +120,12 @@ export function computeQuote(
     bidPrice = Math.min(bidPrice, Math.floor((options.displayedPrice * (10_000 + m)) / 10_000));
   }
 
+  if (options.bandCap && options.displayedPrice !== undefined) {
+    const band = tradingBand(options.displayedPrice);
+    askPrice = Math.min(askPrice, band.max);
+    bidPrice = Math.max(bidPrice, band.min);
+  }
+
   const quote: Quote = {};
   const bidQty = Math.min(size, Math.floor(availableCash / bidPrice));
   if (bidQty > 0) quote.bid = { price: bidPrice, quantity: bidQty };
@@ -132,7 +145,7 @@ export class MarketMaker {
     /** Quantidade por lado de cada clube (`quoteSize`, regras do jogo); sem ela, vale a da configuração. */
     private readonly sizeFor?: (clubId: string, inMatch: boolean) => number,
     /** Referência do clube no lugar do preço exibido (a que decai) e margem própria dele (a que cresce). */
-    private readonly context?: { reference?: (clubId: string) => Cents; margin?: (clubId: string) => number | undefined },
+    private readonly context?: { reference?: (clubId: string) => Cents; margin?: (clubId: string) => number | undefined; bandCap?: boolean },
   ) {}
 
   /**
@@ -158,6 +171,7 @@ export class MarketMaker {
         displayedPrice: this.context?.reference?.(clubId) ?? this.exchange.price(clubId),
         quantity: this.sizeFor?.(clubId, inMatch),
         margin: this.context?.margin?.(clubId),
+        bandCap: this.context?.bandCap,
       },
     );
     if (quote.bid) {
