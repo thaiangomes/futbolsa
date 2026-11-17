@@ -5,7 +5,7 @@
   "description": "Motor do mercado do FutBolsa (regras puras) e simulação com bots",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "test": "vitest run",
