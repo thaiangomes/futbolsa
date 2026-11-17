@@ -108,3 +108,4 @@ Ideias para a próxima rodada de calibração: um valor de resgate da ação no 
 da temporada (por exemplo, a casa recompra pelo dividendo da colocação), venda a
 descoberto ou aluguel de ações, menos caixa livre (IPO maior ou mais ações por
 jogador) e dividendo por ponto de R$ 0,30 a R$ 0,50.
+
