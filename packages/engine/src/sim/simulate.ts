@@ -72,6 +72,10 @@ export interface SimConfig {
   referenceDecay?: boolean;
   /** Rodada Z: a margem da casa cresce esta fração por dia sem negócio (0,025 = 2,5 pontos por dia), até 10%. */
   marginGrowth?: number;
+  /** Rodada Z parte 3: distância mínima ao justo para a referência decair, em pontos-base (padrão `REFERENCE_MIN_GAP_BP`). */
+  referenceGapBp?: number;
+  /** Rodada Z parte 3: a cotação da casa fica dentro da faixa de 20% em volta da referência. */
+  bandCap?: boolean;
   /** Rodada Z: cenário em que um clube de cada três abre com o preço neste múltiplo do que o IPO fechou. */
   startPremium?: number;
 }
@@ -189,7 +193,7 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
   // A mesma regra da API (`nextReference`): carência de 2 dias, só com o preço a mais de 20% do justo.
   const reference = config.referenceDecay
     ? (id: string) =>
-        nextReference({ lastPrice: exchange.price(id) ?? 0, lastTradeAt: lastTradeAt.get(id) || null, fair: Math.max(50, view.fairValue(id)), now: exchange.now }) ??
+        nextReference({ lastPrice: exchange.price(id) ?? 0, lastTradeAt: lastTradeAt.get(id) || null, fair: Math.max(50, view.fairValue(id)), now: exchange.now, minGapBp: config.referenceGapBp }) ??
         exchange.price(id) ?? 0
     : undefined;
   if (reference) view.reference = reference;
@@ -206,9 +210,10 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
             ? quoteSize(clubShares.get(id)!, GAME_RULES.matchQuantityBp, GAME_RULES.matchMinSideQty)
             : quoteSize(clubShares.get(id)!, GAME_RULES.quantityBp, GAME_RULES.minSideQty)
       : undefined,
-    reference || growth
+    reference || growth || config.bandCap
       ? {
           reference,
+          bandCap: config.bandCap,
           margin: growth
             ? (id) => Math.min(0.1, (config.marketMaker.marketMargin ?? 0.05) + growth * staleOf(id))
             : undefined,

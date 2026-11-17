@@ -55,6 +55,8 @@ const config = (seed: number): Partial<SimConfig> => ({
   activity: Math.min(1, ((0.25 * stepHours) / 3) * slow),
   startPremium: Number(values.premio) > 1 ? Number(values.premio) : undefined,
   referenceDecay: variant.includes("decai"),
+  referenceGapBp: variant.includes("gap20") ? 2000 : undefined,
+  bandCap: variant.includes("cap"),
   marginGrowth: variant.includes("margem") ? Number(values.cresce) : undefined,
 });
 

@@ -16,8 +16,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const REFERENCE_DECAY_STEP_BP = 1000;
 /** Carência: só começa a decair depois de 2 dias inteiros sem negócio (tempo decorrido, não dia civil). */
 export const REFERENCE_GRACE_MS = 2 * DAY_MS;
-/** Só decai quando o último preço está a mais de 20% do valor justo, para qualquer lado. */
-export const REFERENCE_MIN_GAP_BP = 2000;
+/**
+ * Só decai quando o último preço está a mais de 10% do valor justo, para qualquer lado. Era 20% e deixava uma brecha:
+ * com o preço entre 14% e 20% abaixo do justo, a venda da casa (justo × 1,05) passava do teto da faixa e ninguém a alcançava
+ * (PAL3 na partida de teste, um mês parado, rodada Z parte 3).
+ */
+export const REFERENCE_MIN_GAP_BP = 1000;
 
 /** Dias inteiros sem negócio, por dia civil de Brasília (limitado a 60 para a conta ser curta). */
 export function staleDays(lastTradeAt: number, now: number): number {
@@ -47,19 +51,22 @@ export interface ReferenceInput {
   /** Valor justo da casa agora. */
   fair: Cents;
   now: number;
+  /** Distância mínima ao valor justo para decair, em pontos-base; sem ela, `REFERENCE_MIN_GAP_BP`. */
+  minGapBp?: number;
 }
 
 /**
  * A referência decaída do clube, ou `null` quando vale o preço exibido: menos de 2 dias sem negócio, clube sem
- * negócio ainda, ou preço a até 20% do valor justo. É função pura do estado: a API só a grava em `reference_price`
+ * negócio ainda, ou preço a até 10% do valor justo. É função pura do estado: a API só a grava em `reference_price`
  * a cada reposição da casa e a apaga a cada negócio.
  */
 export function nextReference(input: ReferenceInput): Cents | null {
   const { lastPrice, lastTradeAt, fair, now } = input;
+  const gap = input.minGapBp ?? REFERENCE_MIN_GAP_BP;
   if (lastTradeAt === null) return null;
   const idle = now - lastTradeAt;
   if (idle < REFERENCE_GRACE_MS) return null;
-  const near = lastPrice * 10_000 <= fair * (10_000 + REFERENCE_MIN_GAP_BP) && lastPrice * 10_000 >= fair * (10_000 - REFERENCE_MIN_GAP_BP);
+  const near = lastPrice * 10_000 <= fair * (10_000 + gap) && lastPrice * 10_000 >= fair * (10_000 - gap);
   if (near) return null;
   const days = Math.min(60, Math.floor((idle - REFERENCE_GRACE_MS) / DAY_MS) + 1);
   const reference = decayedReference(lastPrice, Math.max(MIN_PRICE, fair), days);

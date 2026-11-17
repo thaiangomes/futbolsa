@@ -166,6 +166,40 @@ describe("casa nunca melhor que o mercado", () => {
     expect(wrong.slice(0, 5)).toEqual([]);
   });
 
+  it("bandCap: com preço de R$ 59,32 e valor justo de R$ 68,79, a venda sai de R$ 72,23 para R$ 71,18 (teto da faixa) e a compra fica em R$ 62,28", () => {
+    const free = computeQuote(6_879, false, RICH, 1000, FAIR, { quantity: 1, displayedPrice: 5_932 });
+    expect(free.ask!.price).toBe(7_223);
+    const capped = computeQuote(6_879, false, RICH, 1000, FAIR, { quantity: 1, displayedPrice: 5_932, bandCap: true });
+    expect(capped.ask!.price).toBe(7_118);
+    expect(capped.bid!.price).toBe(free.bid!.price);
+  });
+
+  it("bandCap: com preço de R$ 30,00 e valor justo de R$ 16,00, a compra sobe de R$ 15,20 para R$ 24,00 (piso da faixa)", () => {
+    const free = computeQuote(1_600, false, RICH, 1000, FAIR, { quantity: 1, displayedPrice: 3_000 });
+    expect(free.bid!.price).toBe(1_520);
+    const capped = computeQuote(1_600, false, RICH, 1000, FAIR, { quantity: 1, displayedPrice: 3_000, bandCap: true });
+    expect(capped.bid!.price).toBe(2_400);
+  });
+
+  it("bandCap: perto do valor justo nada muda; sempre dentro da faixa, com a venda acima da compra", () => {
+    const rng = new Rng(21);
+    const wrong: unknown[] = [];
+    for (let i = 0; i < 20_000; i++) {
+      const fair = rng.int(50, 200_000);
+      const inMatch = rng.chance(0.3);
+      const displayed = Math.max(50, Math.round(fair * rng.uniform(0.2, 5)));
+      const band = tradingBand(displayed);
+      const q = computeQuote(fair, inMatch, RICH, 1000, FAIR, { quantity: 1, displayedPrice: displayed, bandCap: true });
+      if (!(q.ask!.price > q.bid!.price && q.bid!.price >= 50)) wrong.push({ m: "ordem", fair, displayed, q });
+      if (!(q.ask!.price <= band.max && q.bid!.price >= band.min)) wrong.push({ m: "faixa", fair, displayed, q, band });
+      const near = Math.max(50, Math.round(fair * rng.uniform(0.95, 1.05)));
+      const a = computeQuote(fair, inMatch, RICH, 1000, FAIR, { quantity: 1, displayedPrice: near });
+      const b = computeQuote(fair, inMatch, RICH, 1000, FAIR, { quantity: 1, displayedPrice: near, bandCap: true });
+      if (a.ask!.price !== b.ask!.price || a.bid!.price !== b.bid!.price) wrong.push({ m: "perto", fair, near, a, b });
+    }
+    expect(wrong.slice(0, 5)).toEqual([]);
+  });
+
   it("sem a margem na configuração (rodadas antigas), a cotação é só pelo valor justo", () => {
     const { marketMargin: _, ...noMargin } = FAIR;
     expect(computeQuote(3000, false, RICH, 1000, noMargin, { quantity: 7, displayedPrice: 6000 })).toEqual({

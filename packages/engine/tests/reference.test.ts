@@ -45,10 +45,21 @@ describe("nextReference", () => {
   it("para no valor justo", () => {
     expect(nextReference({ ...base, now: noon + 60 * DAY })).toBe(1_600);
   });
-  it("preço a até 20% do justo (para os dois lados) fica sem referência", () => {
-    expect(nextReference({ ...base, lastPrice: 1_920, now: noon + 10 * DAY })).toBeNull();
-    expect(nextReference({ ...base, lastPrice: 1_280, now: noon + 10 * DAY })).toBeNull();
-    expect(nextReference({ ...base, lastPrice: 1_921, now: noon + 10 * DAY })).not.toBeNull();
+  it("preço a até 10% do justo (para os dois lados) fica sem referência", () => {
+    expect(nextReference({ ...base, lastPrice: 1_760, now: noon + 10 * DAY })).toBeNull();
+    expect(nextReference({ ...base, lastPrice: 1_440, now: noon + 10 * DAY })).toBeNull();
+    expect(nextReference({ ...base, lastPrice: 1_761, now: noon + 10 * DAY })).not.toBeNull();
+    expect(nextReference({ ...base, lastPrice: 1_439, now: noon + 10 * DAY })).not.toBeNull();
+  });
+  it("minGapBp troca o limiar (20% era o antigo)", () => {
+    expect(nextReference({ ...base, lastPrice: 1_920, now: noon + 10 * DAY, minGapBp: 2000 })).toBeNull();
+    expect(nextReference({ ...base, lastPrice: 1_921, now: noon + 10 * DAY, minGapBp: 2000 })).not.toBeNull();
+  });
+  it("PAL3: R$ 59,32 contra valor justo de R$ 68,79 (14% abaixo) agora decai e sobe em direção ao justo", () => {
+    const pal = { lastPrice: 5_932, lastTradeAt: noon, fair: 6_879 };
+    expect(nextReference({ ...pal, now: noon + 2 * DAY - 1 })).toBeNull();
+    expect(nextReference({ ...pal, now: noon + 2 * DAY })).toBe(6_591);
+    expect(nextReference({ ...pal, now: noon + 3 * DAY })).toBe(6_879);
   });
   it("preço abaixo do justo sobe", () => {
     expect(nextReference({ ...base, lastPrice: 1_000, fair: 2_000, now: noon + 2 * DAY })).toBe(1_111);
