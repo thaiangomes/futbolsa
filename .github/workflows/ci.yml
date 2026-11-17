@@ -5,8 +5,89 @@ on:
   push:
     branches: [main]
 
+# Um commit novo no mesmo PR cancela o CI antigo; na main nada é cancelado
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
+  # Decide o que rodar. Em PR, olha as pastas que mudaram; na main, roda tudo.
+  # Raiz (package.json, package-lock.json, tsconfig.base.json, este arquivo) ou packages/*
+  # mexem em tudo: web e API dependem de engine e contracts.
+  mudancas:
+    runs-on: ubuntu-latest
+    outputs:
+      tipos: ${{ steps.decidir.outputs.tipos }}
+      motor: ${{ steps.decidir.outputs.motor }}
+      web: ${{ steps.decidir.outputs.web }}
+      api: ${{ steps.decidir.outputs.api }}
+      e2e: ${{ steps.decidir.outputs.e2e }}
+      conteiner: ${{ steps.decidir.outputs.conteiner }}
+    steps:
+      # só mudou documentação (.md)? então nada roda
+      - uses: dorny/paths-filter@v3
+        if: github.event_name == 'pull_request'
+        id: codigo
+        with:
+          predicate-quantifier: every
+          filters: |
+            codigo:
+              - '**'
+              - '!**/*.md'
+      - uses: dorny/paths-filter@v3
+        if: github.event_name == 'pull_request'
+        id: pastas
+        with:
+          filters: |
+            raiz:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'tsconfig.base.json'
+              - '.github/workflows/ci.yml'
+            libs:
+              - 'packages/**'
+            web:
+              - 'apps/web/**'
+            api:
+              - 'apps/api/**'
+              - 'docker-compose.yml'
+              - '.dockerignore'
+      - id: decidir
+        env:
+          EVENTO: ${{ github.event_name }}
+          CODIGO: ${{ steps.codigo.outputs.codigo }}
+          RAIZ: ${{ steps.pastas.outputs.raiz }}
+          LIBS: ${{ steps.pastas.outputs.libs }}
+          WEB: ${{ steps.pastas.outputs.web }}
+          API: ${{ steps.pastas.outputs.api }}
+        run: |
+          if [ "$EVENTO" != "pull_request" ]; then RAIZ=true; CODIGO=true; fi
+          # tudo: a raiz ou os pacotes compartilhados mudaram
+          tudo=false
+          if [ "$CODIGO" = "true" ] && { [ "$RAIZ" = "true" ] || [ "$LIBS" = "true" ]; }; then tudo=true; fi
+          # vale <mudou>: true se há código mudado e (é "tudo" ou a pasta pedida mudou)
+          vale() {
+            if [ "$CODIGO" = "true" ] && { [ "$tudo" = "true" ] || [ "$1" = "true" ]; }; then echo true; else echo false; fi
+          }
+          algum=false
+          if [ "$WEB" = "true" ] || [ "$API" = "true" ]; then algum=true; fi
+          {
+            echo "tipos=$(vale $algum)"
+            echo "motor=$(vale false)"
+            echo "web=$(vale $WEB)"
+            echo "api=$(vale $API)"
+            echo "e2e=$(vale $WEB)"
+            echo "conteiner=$(vale $API)"
+          } >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
   verificar:
+    needs: mudancas
+    if: needs.mudancas.outputs.tipos == 'true'
     runs-on: ubuntu-latest
     # Postgres de teste, como o do docker compose: os testes da API rodam contra ele
     services:
@@ -34,19 +115,33 @@ jobs:
       - run: npm ci
       - name: Tipos (todos os pacotes)
         run: npm run typecheck
-      - name: Testes (motor e API)
-        run: npm test
+      - name: Testes dos pacotes compartilhados e do motor
+        if: needs.mudancas.outputs.motor == 'true'
+        run: |
+          npm test -w @futbolsa/contracts --if-present
+          npm test -w @futbolsa/engine
+      - name: Testes do site
+        if: needs.mudancas.outputs.web == 'true'
+        run: npm test -w @futbolsa/web
+      - name: Testes da API
+        if: needs.mudancas.outputs.api == 'true'
+        run: npm test -w @futbolsa/api
       - name: Regressão da simulação (mesmos negócios com a mesma semente)
+        if: needs.mudancas.outputs.motor == 'true'
         run: npm run sim:regressao
       - name: Build da API
+        if: needs.mudancas.outputs.api == 'true'
         run: npm run build -w @futbolsa/api
       - name: Build do site
+        if: needs.mudancas.outputs.web == 'true'
         run: npm run build -w @futbolsa/web
 
   # T26 da F16 (Plano do ensaio, carga e testes no navegador): as jornadas do site no Chromium, contra a API de verdade, o
   # banco do próprio job e o site de teste (login falso só neste build). Um trabalhador só. O roteiro do Supabase de verdade
   # (`npm run e2e:supabase`) nunca roda aqui: usa segredos do projeto real.
   e2e:
+    needs: mudancas
+    if: needs.mudancas.outputs.e2e == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     services:
@@ -93,6 +188,8 @@ jobs:
   # T10 do Plano do banco: a imagem da API aplica as migrações antes de subir, e subir
   # de novo não aplica nada. Roda aqui porque o Docker fica desligado no computador do Thaian.
   conteiner:
+    needs: mudancas
+    if: needs.mudancas.outputs.conteiner == 'true'
     runs-on: ubuntu-latest
     env:
       PSQL: docker compose exec -T postgres-test psql -U futbolsa -d futbolsa_test -tAc
@@ -132,3 +229,21 @@ jobs:
       - name: Derruba tudo
         if: always()
         run: docker compose down -v
+
+  # Resumo, sempre presente: passa quando os jobs necessários passaram ou foram pulados e falha se algum
+  # falhou ou foi cancelado. Se a proteção da main passar a exigir checks, exija só este ("CI ok"):
+  # `verificar`, `e2e` e `conteiner` podem ser pulados e um check pulado nunca chegaria a existir.
+  ci-ok:
+    name: CI ok
+    needs: [mudancas, verificar, e2e, conteiner]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confere o resultado dos jobs
+        env:
+          RESULTADOS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "resultados: $RESULTADOS"
+          case " $RESULTADOS " in
+            *" failure "*|*" cancelled "*) exit 1 ;;
+          esac
