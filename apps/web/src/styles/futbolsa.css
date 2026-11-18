@@ -246,3 +246,7 @@ body{margin:0}
 }
 
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* Faixa dos jogos ao vivo (item 25): computador numa linha que rola; celular um jogo por vez, recolhível */
+.live-pc{display:flex}.live-cel{display:none}
+@media (max-width:760px){.live-pc{display:none}.live-cel{display:flex}}
