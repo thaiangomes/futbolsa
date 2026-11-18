@@ -98,10 +98,12 @@ export interface Convertido {
   resumo: ResumoDaConversao;
 }
 
-const estado = (nome: string): "finished" | "postponed" | "cancelled" | "scheduled" => {
+const estado = (nome: string): "finished" | "postponed" | "cancelled" | "live" | "scheduled" => {
   if (/^STATUS_(FULL_TIME|FINAL)/.test(nome)) return "finished";
   if (nome === "STATUS_POSTPONED") return "postponed";
   if (nome === "STATUS_CANCELED" || nome === "STATUS_ABANDONED") return "cancelled";
+  // jogo em andamento: continua agendado (sem placar final), mas o placar parcial é guardado
+  if (/^STATUS_(IN_PROGRESS|FIRST_HALF|SECOND_HALF|HALFTIME|END_PERIOD)$/.test(nome)) return "live";
   return "scheduled";
 };
 
@@ -233,6 +235,7 @@ export function converterEspn(chave: string, eventos: EspnEvent[], ano: number, 
       awayGoals: status === "finished" ? Number(i.awayC.score) : null,
       status,
     };
+    if (i.estado === "live" && i.homeC.score !== undefined && i.awayC.score !== undefined) m.parcial = { homeGoals: Number(i.homeC.score), awayGoals: Number(i.awayC.score) };
     // adiado sem data nova: continua agendado e marcado, e paga na rodada em que for disputado
     if (i.estado === "postponed") m.postponed = true;
     if (!liga) {

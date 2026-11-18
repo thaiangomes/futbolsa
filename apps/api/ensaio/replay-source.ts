@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CompetitionCode } from "@futbolsa/contracts";
-import { clubName, computeStandings, finishTime, kickoffTime, type Match } from "@futbolsa/engine";
+import { clubName, computeStandings, finishTime, gameMinute, kickoffTime, type LiveMatch, type Match } from "@futbolsa/engine";
 import type { DateRange, ResultSource, SourceMatch, SourceStanding } from "../src/modules/admin/results/sources/types.js";
 
 /**
@@ -108,6 +108,24 @@ export class ReplaySource implements ResultSource {
       }
     }
     return ultimo;
+  }
+
+  /**
+   * Os jogos do Brasileirão em andamento agora, com o placar parcial que a última baixa trouxe (item 23). Só os bots da
+   * partida usam isto; quem decide se o dado ainda vale (baixado há pouco, relógio na hora real) é a partida.
+   */
+  parciais(): LiveMatch[] {
+    const now = this.now().getTime();
+    const out: LiveMatch[] = [];
+    for (const c of ["brasileirao-a", "brasileirao-b"] as const) {
+      for (const m of this.matchesOf(c)) {
+        if (!m.parcial || m.status === "finished") continue;
+        const inicio = kickoffTime(m);
+        if (now < inicio || now > inicio + 3 * 3_600_000) continue;
+        out.push({ home: m.home, away: m.away, homeGoals: m.parcial.homeGoals, awayGoals: m.parcial.awayGoals, minute: gameMinute(now - inicio) });
+      }
+    }
+    return out;
   }
 
   /** O arquivo da competição: todos os jogos, na ordem do arquivo. */

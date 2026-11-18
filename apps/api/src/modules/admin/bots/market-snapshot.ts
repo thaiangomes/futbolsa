@@ -7,6 +7,7 @@ import { FairValueService } from "../../market/maker/fair-value.service.js";
 import { leagueViewsAt } from "../../market/maker/fair-value.js";
 import { displayedPriceOf } from "../../market/state/displayed-price.js";
 import type { BotSnapshot, BotWalletState } from "./live-view.js";
+import { PartialScores } from "./partial-scores.js";
 
 /**
  * A leitura do mercado para uma rodada da tarefa dos bots (F14, T11): uma vez por rodada, sem transação aberta e sem
@@ -18,11 +19,15 @@ export class BotSnapshotService {
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly fairValues: FairValueService,
+    private readonly partials: PartialScores,
   ) {}
 
   async load(seasonId: number, now: Date): Promise<BotSnapshot> {
     const data = await this.fairValues.load(seasonId, this.db);
     const leagues = leagueViewsAt(data, now.getTime());
+    // jogos em andamento: só os bots enxergam o placar parcial (o valor justo da casa e os dividendos não mudam)
+    const live = this.partials.at(now);
+    if (live.length > 0) for (const view of new Set(leagues.values())) view.setLive(live);
 
     const clubRows = await this.db
       .select({ id: seasonClubs.clubId, ticker: clubs.ticker, lastPrice: seasonClubs.lastPrice, ipoPrice: seasonClubs.ipoPrice })

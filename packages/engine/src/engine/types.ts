@@ -26,6 +26,11 @@ export interface Match {
   postponed?: boolean;
   /** Copas: clube que avançou/venceu no jogo que decide o confronto. */
   winner?: string;
+  /**
+   * Placar de um jogo em andamento quando os dados foram baixados (partida de teste, item 23). O jogo continua "agendado" e
+   * sem placar: só os bots da partida leem isto; nada de dividendo ou classificação.
+   */
+  parcial?: { homeGoals: number; awayGoals: number };
 }
 
 export interface Club {

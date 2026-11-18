@@ -1,11 +1,13 @@
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { BOT_PROFILE_NAMES } from "@futbolsa/contracts";
 import { FixedClock } from "../../src/infra/clock/index.js";
 import { withTransaction } from "../../src/infra/db/index.js";
 import { bots, clubs, ipoBids, matches, orders, seasonClubs, seasonRules, seasons, wallets } from "../../src/infra/db/schema/index.js";
 import { IpoBidsService } from "../../src/modules/ipo/bids.service.js";
+import { BotSnapshotService } from "../../src/modules/admin/bots/market-snapshot.js";
+import { PartialScores } from "../../src/modules/admin/bots/partial-scores.js";
 import { BotRunner, BotRunnerSettings } from "../../src/modules/admin/bots/runner.js";
 import { createTestApp } from "../support/app.js";
 import { useTestDatabase } from "../support/db.js";
@@ -149,5 +151,23 @@ describe("tarefa dos bots", () => {
     const report = await runner.runOnce(TUESDAY, () => 0);
     expect(report).toMatchObject({ acted: 0, placed: 0, bids: 0 });
     await setStatus("trading");
+  });
+
+  it("item 23: com um jogo em andamento a visão dos bots enxerga o placar parcial; sem ele, o valor justo é o de sempre", async () => {
+    const snapshots = app.get(BotSnapshotService);
+    const [, , c, d] = world.tickers as [string, string, string, string];
+    const normal = await snapshots.load(world.seasonId, TUESDAY);
+    const spy = vi.spyOn(app.get(PartialScores), "at").mockReturnValue([{ home: c, away: d, homeGoals: 2, awayGoals: 0, minute: 70 }]);
+    try {
+      const vivo = await snapshots.load(world.seasonId, TUESDAY);
+      expect(vivo.leagues.get(c)!.fairValue(c)).toBeGreaterThan(normal.leagues.get(c)!.fairValue(c));
+      expect(vivo.leagues.get(d)!.fairValue(d)).toBeLessThan(normal.leagues.get(d)!.fairValue(d));
+      const [a] = world.tickers as [string];
+      expect(vivo.leagues.get(a)!.fairValue(a)).toBe(normal.leagues.get(a)!.fairValue(a)); // quem não joga não muda
+    } finally {
+      spy.mockRestore();
+    }
+    const depois = await snapshots.load(world.seasonId, TUESDAY);
+    expect(depois.leagues.get(c)!.fairValue(c)).toBe(normal.leagues.get(c)!.fairValue(c));
   });
 });
