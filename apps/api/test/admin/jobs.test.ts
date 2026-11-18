@@ -139,6 +139,50 @@ describe("tarefas de resultados", () => {
     expect(range.to.getTime()).toBe(clock.now().getTime());
   });
 
+  it("admin 7 e 8 (item 24 das melhorias): o placar de um jogo adiado, jogado fora da janela da rodada, também é importado quando o fim previsto passa", async () => {
+    // Chapecoense x Vasco da rodada 21, adiado e jogado semanas depois do resto da rodada: o jogo fica marcado `out_of_window`
+    // (não conta para fechar a rodada), mas o placar dele tem de entrar quando acaba, senão fica `scheduled` sem placar.
+    const [{ clubIds }] = [await seedSeason(database.db)];
+    const kickoff = new Date(clock.now().getTime() - 3 * HOUR); // acabou há 1 hora (o fim previsto é kickoff + 2 horas)
+    await database.db.insert(matches).values({
+      seasonId,
+      competition: "brasileirao-a",
+      round: 21,
+      homeClubId: clubIds.get("FLA3")!,
+      awayClubId: clubIds.get("PAL3")!,
+      kickoff,
+      outOfWindow: true,
+      source: "fake",
+      sourceId: "adiado-r21",
+      sourceSnapshot: staleSnapshot(0.1),
+    });
+    source.results.set("brasileirao-a", [game("adiado-r21", "brasileirao-a", kickoff, { round: 21, status: "finished", homeGoals: 0, awayGoals: 2 })]);
+
+    await runner.runScores();
+
+    expect(source.matchCalls.map((c) => c.competition)).toEqual(["brasileirao-a"]);
+    const [row] = await database.db.select().from(matches).where(eq(matches.sourceId, "adiado-r21"));
+    expect(row).toMatchObject({ status: "finished", homeGoals: 0, awayGoals: 2 });
+  });
+
+  it("admin 7 e 8: o adiado fora da janela que a fonte nunca trouxe como jogado deixa de puxar a fonte depois de 2 dias (o calendário diário o corrige)", async () => {
+    const [{ clubIds }] = [await seedSeason(database.db)];
+    await database.db.insert(matches).values({
+      seasonId,
+      competition: "brasileirao-a",
+      round: 21,
+      homeClubId: clubIds.get("FLA3")!,
+      awayClubId: clubIds.get("PAL3")!,
+      kickoff: new Date(clock.now().getTime() - 5 * 24 * HOUR),
+      outOfWindow: true,
+      source: "fake",
+      sourceId: "adiado-velho",
+      sourceSnapshot: staleSnapshot(0.1),
+    });
+    await runner.runScores();
+    expect(source.matchCalls).toEqual([]);
+  });
+
   it("depois dos placares da Série A e da Série B, importa a classificação; as copas não têm", async () => {
     await seedDueMatch("brasileirao-a", 1, "a1");
     await seedDueMatch("copa-do-brasil", 1, "c1");
