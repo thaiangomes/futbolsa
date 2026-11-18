@@ -12,6 +12,8 @@ export const estadoDoRelogioSchema = z.object({
   ultimoResultado: z.string().nullable(),
   ocupado: z.string().nullable(),
   dadosDe: z.string().nullable(),
+  baixadoEm: z.string().nullable().default(null),
+  dadosFrescos: z.boolean().default(false),
 });
 export type EstadoDoRelogio = z.infer<typeof estadoDoRelogioSchema>;
 
@@ -20,4 +22,4 @@ export const partidaViewSchema = z.object({ partida: z.literal(true), relogio: e
 export const respostaDoRelogioSchema = z.object({ estado: estadoDoRelogioSchema, avancou: z.boolean(), mensagem: z.string() });
 export type RespostaDoRelogio = z.infer<typeof respostaDoRelogioSchema>;
 
-export type PedidoDoRelogio = { acao: "dia" } | { acao: "rodada" } | { acao: "ate"; data: string } | { acao: "atualizar" } | { acao: "pausar" } | { acao: "tempo-real" };
+export type PedidoDoRelogio = { acao: "agora" } | { acao: "dia" } | { acao: "rodada" } | { acao: "ate"; data: string } | { acao: "atualizar" } | { acao: "pausar" } | { acao: "tempo-real" };

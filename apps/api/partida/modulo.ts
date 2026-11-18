@@ -17,6 +17,7 @@ export class PorRelogio {
 }
 
 export const pedidoDoRelogioSchema = z.discriminatedUnion("acao", [
+  z.object({ acao: z.literal("agora") }).strict(),
   z.object({ acao: z.literal("dia") }).strict(),
   z.object({ acao: z.literal("rodada") }).strict(),
   z.object({ acao: z.literal("ate"), data: z.string() }).strict(),

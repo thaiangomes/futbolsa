@@ -1,12 +1,12 @@
 /**
  * `npm run partida:relogio -- <comando>`: o relógio da partida pelo terminal, na porta de controle local (a mesma lógica da tela do
- * admin). Comandos: `estado`, `dia`, `rodada`, `ate AAAA-MM-DD`, `atualizar`, `pausar`, `tempo-real`.
+ * admin). Comandos: `estado`, `agora`, `dia`, `rodada`, `ate AAAA-MM-DD`, `atualizar`, `pausar`, `tempo-real`.
  */
 import { PORTAS_DA_PARTIDA } from "./portas.js";
 
 const base = process.env.PARTIDA_CONTROLE ?? `http://127.0.0.1:${PORTAS_DA_PARTIDA.controle}`;
 const [acao, data] = process.argv.slice(2);
-const validas = ["estado", "dia", "rodada", "ate", "atualizar", "pausar", "tempo-real"];
+const validas = ["estado", "agora", "dia", "rodada", "ate", "atualizar", "pausar", "tempo-real"];
 if (!acao || !validas.includes(acao) || (acao === "ate" && !data)) {
   console.error(`Uso: npm run partida:relogio -- <${validas.join("|")}> [AAAA-MM-DD]`);
   process.exit(1);
