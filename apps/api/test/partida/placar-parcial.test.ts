@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Match } from "@futbolsa/engine";
-import { AgenteDaPartida, ATIVIDADE_DOS_SALTOS, ATIVIDADE_NO_TEMPO_REAL } from "../../partida/bots.js";
+import { AgenteDaPartida, ATIVIDADE_DOS_SALTOS, ATIVIDADE_NO_GOL, ATIVIDADE_NO_TEMPO_REAL } from "../../partida/bots.js";
 import { ReplaySource } from "../../ensaio/replay-source.js";
 import type { ServidorEnsaio } from "../../ensaio/servidor.js";
 
@@ -58,5 +58,34 @@ describe("ritmo dos bots da partida (item 23)", () => {
 
     await agente.agir(parada("2026-11-19T01:05:00Z")); // um salto de 3 horas
     expect(config).toEqual({ tickMinutes: 180, activityPer3h: ATIVIDADE_DOS_SALTOS });
+  });
+
+  it("a parada em que aparece um gol novo tem a rodada extra; sem gol novo volta ao ritmo normal", async () => {
+    const config = { tickMinutes: 15, activityPer3h: ATIVIDADE_DOS_SALTOS };
+    const relatorio = { skipped: false, placed: 0, cancelled: 0, bids: 0, wallets: 0, refused: {} };
+    const servidor = { app: { get: () => ({ runOnce: async () => relatorio }) } } as unknown as ServidorEnsaio;
+    let placar = [{ home: "REM3", away: "CHA3", homeGoals: 1, awayGoals: 0 }];
+    const agente = new AgenteDaPartida(servidor, config, () => placar);
+    const parada = (iso: string) => ({ em: new Date(iso), motivo: "grade", novoDia: false });
+
+    await agente.agir(parada("2026-11-18T23:00:00Z")); // primeira leitura: jogo já com 1 gol (partida reiniciada), não conta
+    await agente.agir(parada("2026-11-18T23:05:00Z"));
+    expect(config.activityPer3h).toBe(ATIVIDADE_NO_TEMPO_REAL);
+
+    placar = [{ home: "REM3", away: "CHA3", homeGoals: 2, awayGoals: 0 }];
+    await agente.agir(parada("2026-11-18T23:10:00Z"));
+    expect(config.activityPer3h).toBe(ATIVIDADE_NO_GOL);
+    expect(ATIVIDADE_NO_GOL).toBeGreaterThan(ATIVIDADE_NO_TEMPO_REAL);
+
+    await agente.agir(parada("2026-11-18T23:15:00Z")); // o mesmo placar: acabou a rajada
+    expect(config.activityPer3h).toBe(ATIVIDADE_NO_TEMPO_REAL);
+
+    placar = []; // o jogo acabou: gols que somem não são gol novo
+    await agente.agir(parada("2026-11-18T23:20:00Z"));
+    expect(config.activityPer3h).toBe(ATIVIDADE_NO_TEMPO_REAL);
+
+    placar = [{ home: "FLA3", away: "CAP3", homeGoals: 0, awayGoals: 1 }]; // jogo novo já com gol entre duas leituras
+    await agente.agir(parada("2026-11-18T23:25:00Z"));
+    expect(config.activityPer3h).toBe(ATIVIDADE_NO_GOL);
   });
 });
