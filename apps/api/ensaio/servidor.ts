@@ -8,6 +8,7 @@ import { connect, type DbConnection } from "../src/infra/db/client.js";
 import { createTestApp } from "../test/support/app.js";
 import { withTestAuth } from "../test/support/auth.js";
 import { PartialScores } from "../src/modules/admin/bots/partial-scores.js";
+import { LiveScores } from "../src/modules/market/book/live-scores.js";
 import { BotRunnerSettings } from "../src/modules/admin/bots/runner.js";
 import { ResultSourceRegistry } from "../src/modules/admin/results/sources/registry.js";
 import { ReplaySource } from "./replay-source.js";
@@ -84,6 +85,9 @@ export async function criarServidorEnsaio(opcoes: OpcoesServidor): Promise<Servi
           .overrideProvider(BotRunnerSettings)
           .useValue({ config: ritmo })
           .overrideProvider(PartialScores)
+          .useValue(opcoes.parciais ?? { at: () => [] })
+          // a faixa e a página dos jogos ao vivo leem o mesmo placar parcial dos bots (item 25)
+          .overrideProvider(LiveScores)
           .useValue(opcoes.parciais ?? { at: () => [] }),
     });
     await app.listen(opcoes.porta ?? 0, opcoes.host ?? "127.0.0.1");

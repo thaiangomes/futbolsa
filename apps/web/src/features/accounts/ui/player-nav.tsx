@@ -5,7 +5,7 @@ import { useSession } from "../session-provider";
 import { Logo, Wordmark } from "./brand";
 
 /** As telas do jogador que o menu liga. `perfil` é a Conta (avatar no computador, última aba no celular). */
-export type PlayerPage = "mercado" | "carteira" | "ipo" | "rankings" | "competicoes" | "ordens" | "perfil";
+export type PlayerPage = "mercado" | "carteira" | "ipo" | "rankings" | "competicoes" | "ordens" | "perfil" | "jogos";
 
 interface Item {
   id: Exclude<PlayerPage, "perfil">;

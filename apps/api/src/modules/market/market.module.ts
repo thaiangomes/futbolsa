@@ -10,6 +10,9 @@ import { MarketMakerAdminService } from "./admin/market-maker.service.js";
 import { CloseAuctionAdapter, CloseAuctionService } from "./auction/close-auction.js";
 import { BookController } from "./book/book.controller.js";
 import { CompetitionsController } from "./book/competitions.controller.js";
+import { LiveGamesController } from "./book/live-games.controller.js";
+import { LiveGamesService } from "./book/live-games.service.js";
+import { LiveScores, noLiveScores } from "./book/live-scores.js";
 import { BookReadService } from "./book/book-read.service.js";
 import { FairValueService } from "./maker/fair-value.service.js";
 import { RefreshJob } from "./maker/refresh.job.js";
@@ -57,7 +60,7 @@ import { TradeAnnulService } from "./annul/annul-trades.js";
  */
 @Module({
   imports: [PortfolioModule, AdminLogModule, RealtimeModule, DividendsModule],
-  controllers: [MarketMakerAdminController, BookController, CompetitionsController, OrdersController],
+  controllers: [MarketMakerAdminController, BookController, CompetitionsController, LiveGamesController, OrdersController],
   providers: [
     { provide: MatchingEngine, useClass: PostgresMatchingEngine },
     CloseAuctionService,
@@ -68,6 +71,8 @@ import { TradeAnnulService } from "./annul/annul-trades.js";
     MarketClosureHook,
     MarketMakerAdminService,
     BookReadService,
+    LiveGamesService,
+    { provide: LiveScores, useValue: noLiveScores },
     BookPublisher,
     MarketEvents,
     FairValueService,

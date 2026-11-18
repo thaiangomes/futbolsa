@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { SessionProvider } from "../features/accounts/session-provider";
 import { SuspensionBanner } from "../features/market/suspension-banner";
+import { LiveGamesProvider, LiveStrip } from "../features/live-games";
 import { AppRealtimeProvider } from "../realtime/app-provider";
 import "../styles/futbolsa.css";
 
@@ -25,7 +26,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <SessionProvider>
           <AppRealtimeProvider>
             <SuspensionBanner />
-            {children}
+            {/* A faixa dos jogos ao vivo (item 25): só aparece com jogo em andamento. */}
+            <LiveGamesProvider>
+              <LiveStrip />
+              {children}
+            </LiveGamesProvider>
           </AppRealtimeProvider>
         </SessionProvider>
       </body>
