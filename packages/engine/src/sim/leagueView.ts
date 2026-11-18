@@ -11,6 +11,7 @@ import {
   type LeagueProjection,
   type PreparedCup,
 } from "../engine/fairValue.js";
+import { livePointsDelta, type LiveMatch } from "../engine/liveScore.js";
 import type { Cents } from "../engine/money.js";
 import { finishTime, kickoffTime, type Match } from "../engine/types.js";
 
@@ -34,6 +35,8 @@ export class LeagueView {
   readonly cupPaid = new Map<string, number>();
   /** Torcedores compram o próprio time antes dos mata-matas de copa. */
   cupHype = false;
+  /** Jogos em andamento com o placar parcial (só para os bots da partida; o valor justo da casa não usa). */
+  private live: readonly LiveMatch[] = [];
   private cups: PreparedCup[] = [];
   private readonly gamesPerClub: number;
   /** Jogos de cada clube em ordem de início, e o índice do próximo a começar. */
@@ -107,6 +110,18 @@ export class LeagueView {
     return this.ppg(clubId) - this.ppg(opponent) + (home ? homeBonus : -homeBonus);
   }
 
+  /** Os jogos em andamento e o placar parcial de cada um (item 23). */
+  setLive(matches: readonly LiveMatch[]): void {
+    this.live = matches;
+  }
+
+  /** O que o placar parcial muda no valor justo do clube: pontos esperados a mais (ou a menos) vezes o dividendo por ponto. */
+  private liveAdjustment(clubId: string): Cents {
+    let points = 0;
+    for (const m of this.live) points += livePointsDelta(m, clubId);
+    return Math.round(points * this.rules.perPoint);
+  }
+
   setKnownMatches(matches: Match[]): void {
     this.known = matches;
     this.recompute();
@@ -151,7 +166,7 @@ export class LeagueView {
    * fechamento, então "pago" e "fechado" são o mesmo instante.
    */
   fairValue(clubId: string): Cents {
-    return fairValue(this.fairValueInput(clubId));
+    return Math.max(0, fairValue(this.fairValueInput(clubId)) + this.liveAdjustment(clubId));
   }
 
   /** Linha da tabela do clube com os jogos já encerrados. */
@@ -164,7 +179,7 @@ export class LeagueView {
    * (a mesma conta de `fairValue`, inclusive a colocação projetada com ela).
    */
   fairValueWith(clubId: string, ppg: (clubId: string) => number): Cents {
-    return fairValueWithPpg(this.fairValueInput(clubId), ppg);
+    return Math.max(0, fairValueWithPpg(this.fairValueInput(clubId), ppg) + this.liveAdjustment(clubId));
   }
 
   private fairValueInput(clubId: string): FairValueInput {

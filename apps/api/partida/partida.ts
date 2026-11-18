@@ -16,11 +16,12 @@ import { manipuladorDoSite } from "../ensaio/navegador.js";
 import { criarConta, type ContaEnsaio } from "../ensaio/contas.js";
 import { prepararBanco, criarTabelasDaPartida } from "./banco.js";
 import { ANO_DA_PARTIDA, arquivoDaSerieA, atualizarFotos, fotosMaisNovas, paraMemoria, semearFotos, type Baixador } from "./dados.js";
-import { AgenteDaPartida } from "./bots.js";
+import { PartialScores } from "../src/modules/admin/bots/partial-scores.js";
+import { AgenteDaPartida, ATIVIDADE_DOS_SALTOS } from "./bots.js";
 import { recusarAmbienteDaPartida, recusarEscutaForaDoLocal } from "./guardas.js";
 import { PORTAS_DA_PARTIDA } from "./portas.js";
 import { ModuloDaPartida, PorRelogio } from "./modulo.js";
-import { type Pedido, RelogioDaPartida, RelogioFlutuante } from "./relogio.js";
+import { type Pedido, PERTO_DA_HORA_REAL, RelogioDaPartida, RelogioFlutuante } from "./relogio.js";
 
 /**
  * A partida de teste (F17, T5): a API inteira com o relógio da partida, a fonte de reprodução de 2026 (dados no banco), os 9
@@ -127,7 +128,16 @@ export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
 
   const clock = new RelogioFlutuante(salvo?.instante ?? new Date(`${ANO_DA_PARTIDA}-01-01T12:00:00Z`), o.agoraReal);
   const fonte = new ReplaySource(() => clock.now(), undefined, { ano: ANO_DA_PARTIDA, dados: paraMemoria(fotos) });
-  const ritmo = { tickMinutes: 15, activityPer3h: 0.25 };
+  const ritmo = { tickMinutes: 15, activityPer3h: ATIVIDADE_DOS_SALTOS };
+  // o placar parcial só vale com os dados baixados há pouco e o relógio perto da hora real (a foto é de agora, não do passado)
+  const agoraReal = o.agoraReal ?? (() => Date.now());
+  let relogioDaPartida: RelogioDaPartida | undefined;
+  const parciais: PartialScores = {
+    at: (now) => {
+      if (!relogioDaPartida?.estado().dadosFrescos || agoraReal() - now.getTime() > PERTO_DA_HORA_REAL) return [];
+      return fonte.parciais();
+    },
+  };
   const servidor = await criarServidorEnsaio({
     databaseUrl: banco.url,
     inicio: clock.now(),
@@ -138,6 +148,7 @@ export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
     host: hostWeb,
     poolSize: 20,
     bots: ritmo,
+    parciais,
   });
   const db = servidor.conexao.db;
   const escala = o.escala ?? 0.2;
@@ -197,6 +208,7 @@ export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
     dadosDe: () => dadosDe,
   });
   servidor.app.get(PorRelogio, { strict: false }).atual = relogio;
+  relogioDaPartida = relogio;
 
   let site: Server | undefined;
   let controle: Server | undefined;

@@ -26,6 +26,7 @@ export * from "./engine/payoutDiff.js";
 export * from "./engine/matching.js";
 export * from "./engine/orderRules.js";
 export * from "./engine/fairValue.js";
+export * from "./engine/liveScore.js";
 export * from "./engine/tunnel.js";
 export * from "./engine/auction.js";
 export * from "./engine/fraud.js";

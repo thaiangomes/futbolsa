@@ -62,6 +62,24 @@ describe("conversão da ESPN", () => {
     expect(arquivo.matches.find((m) => m.home === "SAN3")).toMatchObject({ status: "scheduled", postponed: true, homeGoals: null });
   });
 
+  it("23: jogo em andamento fica agendado, sem placar final, e guarda o placar parcial", () => {
+    const eventos = [
+      evento({ data: "2026-11-18T22:30Z", casa: "Flamengo", fora: "Palmeiras", golsCasa: 1, golsFora: 0, estado: "STATUS_SECOND_HALF" }),
+      evento({ data: "2026-11-18T22:30Z", casa: "Santos", fora: "Bahia", golsCasa: 2, golsFora: 2, estado: "STATUS_HALFTIME" }),
+      evento({ data: "2026-11-19T22:30Z", casa: "Grêmio", fora: "Internacional", estado: "STATUS_SCHEDULED" }),
+      evento({ data: "2026-11-17T22:30Z", casa: "Fortaleza", fora: "Sport", golsCasa: 1, golsFora: 1 }),
+    ];
+    const { arquivo, resumo } = converterEspn("brasileirao-b", eventos, 2026, "2026-11-18");
+    const ms = arquivo.matches;
+    const fla = ms.find((m) => m.home === "FLA3")!;
+    expect(fla).toMatchObject({ status: "scheduled", homeGoals: null, awayGoals: null, parcial: { homeGoals: 1, awayGoals: 0 } });
+    expect(ms.find((m) => m.home === "SAN3")).toMatchObject({ status: "scheduled", parcial: { homeGoals: 2, awayGoals: 2 } });
+    // quem ainda não começou e quem acabou não têm placar parcial
+    expect(ms.find((m) => m.home === "GRE3")!.parcial).toBeUndefined();
+    expect(ms.find((m) => m.home === "FOR3")!.parcial).toBeUndefined();
+    expect(resumo).toMatchObject({ jogados: 1, porJogar: 3 });
+  });
+
   it("1: copa — fases, pênaltis e clube de fora", () => {
     const eventos = [
       evento({ data: "2026-05-01T22:00Z", casa: "Lanús", fora: "Flamengo", golsCasa: 1, golsFora: 1, estado: "STATUS_FINAL_PEN", vencedor: "away", fase: "round-of-16" }),

@@ -7,6 +7,7 @@ import { FixedClock } from "../src/infra/clock/index.js";
 import { connect, type DbConnection } from "../src/infra/db/client.js";
 import { createTestApp } from "../test/support/app.js";
 import { withTestAuth } from "../test/support/auth.js";
+import { PartialScores } from "../src/modules/admin/bots/partial-scores.js";
 import { BotRunnerSettings } from "../src/modules/admin/bots/runner.js";
 import { ResultSourceRegistry } from "../src/modules/admin/results/sources/registry.js";
 import { ReplaySource } from "./replay-source.js";
@@ -50,6 +51,8 @@ export interface OpcoesServidor {
   curta?: { rodadas: number };
   /** Ritmo dos bots (P12): padrão do ensaio comparável, a cada 180 minutos com chance 0,25. */
   bots?: { tickMinutes: number; activityPer3h: number };
+  /** Os placares parciais dos jogos em andamento, que os bots leem (a partida de teste); o padrão é nenhum. */
+  parciais?: PartialScores;
 }
 
 export async function criarServidorEnsaio(opcoes: OpcoesServidor): Promise<ServidorEnsaio> {
@@ -79,7 +82,9 @@ export async function criarServidorEnsaio(opcoes: OpcoesServidor): Promise<Servi
           .overrideProvider(ResultSourceRegistry)
           .useValue(new ResultSourceRegistry(() => fonte))
           .overrideProvider(BotRunnerSettings)
-          .useValue({ config: ritmo }),
+          .useValue({ config: ritmo })
+          .overrideProvider(PartialScores)
+          .useValue(opcoes.parciais ?? { at: () => [] }),
     });
     await app.listen(opcoes.porta ?? 0, opcoes.host ?? "127.0.0.1");
     servidor.app = app;

@@ -44,6 +44,14 @@ jogos (item 23):** com dados baixados há menos de 12 minutos, tudo o que termin
 sozinha a cada 5 minutos** e o relógio acompanha a hora de verdade, com jogo em andamento ou não. Se a ESPN falhar, os dados deixam de
 ser frescos em 12 minutos e o tempo real pausa em "aguardando resultados reais" (peça "atualizar" quando ela voltar).
 
+**Os bots durante os jogos (item 23):** no tempo real (paradas de 5 minutos) cada bot age com chance de 1 a cada 3 horas, uns 17
+movimentos por hora com 50 bots (nos saltos do relógio o ritmo continua 0,25 a cada 3 horas). Com dados baixados há pouco e o
+relógio perto da hora real, os bots também leem o **placar parcial** dos jogos do Brasileirão em andamento (a ESPN o traz nos
+dados; o jogo continua "agendado" e sem placar para dividendos e classificação). O valor justo que o bot enxerga muda pelos pontos
+esperados do clube: gols restantes como Poisson (mandante 1,45 e visitante 1,15 por jogo, na fração do jogo que falta), pontos
+esperados com o placar de agora menos os do apito inicial, vezes o dividendo por ponto. 1 a 0 aos 70 minutos vale bem mais que 1 a 0
+aos 10; 0 a 0 não muda nada. Copas, a colocação final e o valor justo da casa ficam de fora.
+
 **Deixar o relógio pronto para os jogos:** peça **agora** (botão "Alcançar a hora real e ligar o tempo real" na tela do admin, ou
 `npm run partida:relogio -- agora`). Ele baixa os dados, salta até a hora real (em um ou mais saltos; leva alguns minutos, passando
 pelos fechamentos e bots do meio) e liga o tempo real. Dali em diante é só jogar; "pausar" para quando quiser.
