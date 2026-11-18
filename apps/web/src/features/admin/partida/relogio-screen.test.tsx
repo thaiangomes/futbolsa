@@ -16,6 +16,8 @@ const parado: EstadoDoRelogio = {
   ultimoResultado: "2026-11-14T23:30:00.000Z",
   ocupado: null,
   dadosDe: "2026-11-15T03:00:00.000Z",
+  baixadoEm: null,
+  dadosFrescos: false,
 };
 
 function api(estado: EstadoDoRelogio, pedidos: PedidoDoRelogio[] = [], erro?: string) {
@@ -61,6 +63,21 @@ describe("tela do relógio da partida", () => {
     await dom.settle();
     expect(pedidos).toEqual([{ acao: "dia" }, { acao: "rodada" }, { acao: "atualizar" }, { acao: "tempo-real" }]);
     expect(dom.text()).toContain("avancei: 1 dia");
+  });
+
+  it("item 23: o botão da hora real pede 'agora', mesmo no limite", async () => {
+    const pedidos: PedidoDoRelogio[] = [];
+    await mostrar(api({ ...parado, aguardando: true, instante: parado.limite! }, pedidos));
+    expect(botao("Alcançar a hora real")?.disabled).toBe(false);
+    botao("Alcançar a hora real")!.click();
+    await dom.settle();
+    expect(pedidos).toEqual([{ acao: "agora" }]);
+  });
+
+  it("item 23: com dados frescos a tela diz que o relógio pode ir até a hora real", async () => {
+    await mostrar(api({ ...parado, dadosFrescos: true, baixadoEm: "2026-11-17T22:00:00.000Z", limite: "2026-11-17T22:00:00.000Z" }));
+    expect(dom.$("[data-testid=relogio-fresco]").textContent).toContain("o relógio pode ir até a hora real");
+    expect(dom.$("[data-testid=relogio-fresco]").textContent).toContain("a cada 5 minutos");
   });
 
   it("7: no limite mostra 'aguardando resultados reais' com a data do último resultado e não deixa avançar", async () => {

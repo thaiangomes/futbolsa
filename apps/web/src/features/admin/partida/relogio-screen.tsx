@@ -59,6 +59,10 @@ export function RelogioScreen({ admin }: { admin: AdminApi }) {
               Aguardando resultados reais{r.ultimoResultado ? ` (último resultado em ${formatInstant(r.ultimoResultado)})` : ""}. Peça “Atualizar dados” quando houver jogos novos.
             </div>
           </div>
+        ) : r.dadosFrescos ? (
+          <p className="muted small" data-testid="relogio-fresco">
+            Dados baixados há pouco ({r.baixadoEm ? formatInstant(r.baixadoEm) : "—"}): o relógio pode ir até a hora real. No tempo real, a partida baixa os dados sozinha a cada 5 minutos.
+          </p>
         ) : (
           <p className="muted small">
             O relógio vai até {r.limite ? formatInstant(r.limite) : "—"} (fim do último jogo terminado nos dados{r.dadosDe ? `, baixados em ${formatInstant(r.dadosDe)}` : ""}).
@@ -69,6 +73,7 @@ export function RelogioScreen({ admin }: { admin: AdminApi }) {
 
       <Card title="Avançar o tempo">
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+          <button type="button" className="btn btn-p" disabled={ocupado} data-testid="relogio-agora" onClick={() => void pedir({ acao: "agora" })}>Alcançar a hora real e ligar o tempo real</button>
           <button type="button" className="btn btn-p" disabled={ocupado || r.aguardando} onClick={() => void pedir({ acao: "dia" })}>1 dia</button>
           <button type="button" className="btn btn-p" disabled={ocupado || r.aguardando} onClick={() => void pedir({ acao: "rodada" })}>Até a próxima rodada</button>
         </div>

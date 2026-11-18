@@ -33,16 +33,26 @@ e mandam ordens normalmente.
 
 ## O relógio
 
-Dois estados: **pausado** (padrão ao ligar) e **tempo real** (um minuto de verdade é um minuto do jogo, com uma parada a cada 15 minutos do jogo).
+Dois estados: **pausado** (padrão ao ligar) e **tempo real** (um minuto de verdade é um minuto do jogo, com uma parada a cada 5 minutos do jogo: as passadas de produção e os bots reavaliam o mercado).
 Os saltos valem nos dois e depois o relógio volta ao estado em que estava: **1 dia**, **até a próxima rodada** (para quando termina o
 último jogo da rodada e o fechamento dela já rodou) e **até uma data** (00:00 de Brasília). Um pedido de cada vez (o segundo recebe
-"o relógio já está andando"). O relógio **nunca passa do último jogo terminado** nos dados: aparece "aguardando resultados reais", e
-**atualizar** baixa os jogos de novo da ESPN e acrescenta uma foto nova em `partida_dados`.
+"o relógio já está andando"). **Atualizar** baixa os jogos de novo da ESPN e acrescenta uma foto nova em `partida_dados`.
+
+O relógio **nunca passa do último jogo terminado** nos dados: aparece "aguardando resultados reais". **Exceção, para jogar durante os
+jogos (item 23):** com dados baixados há menos de 12 minutos, tudo o que terminou até agora já está neles, e o relógio pode ir até a
+**hora real** (nunca além dela). No tempo real, com o relógio a no máximo 30 minutos da hora real, a partida **baixa os dados da ESPN
+sozinha a cada 5 minutos** e o relógio acompanha a hora de verdade, com jogo em andamento ou não. Se a ESPN falhar, os dados deixam de
+ser frescos em 12 minutos e o tempo real pausa em "aguardando resultados reais" (peça "atualizar" quando ela voltar).
+
+**Deixar o relógio pronto para os jogos:** peça **agora** (botão "Alcançar a hora real e ligar o tempo real" na tela do admin, ou
+`npm run partida:relogio -- agora`). Ele baixa os dados, salta até a hora real (em um ou mais saltos; leva alguns minutos, passando
+pelos fechamentos e bots do meio) e liga o tempo real. Dali em diante é só jogar; "pausar" para quando quiser.
 
 Pela tela do admin (menu "Relógio da partida") ou pelo terminal, com a partida ligada:
 
 ```bash
 npm run partida:relogio -w @futbolsa/api -- estado
+npm run partida:relogio -w @futbolsa/api -- agora
 npm run partida:relogio -w @futbolsa/api -- dia
 npm run partida:relogio -w @futbolsa/api -- rodada
 npm run partida:relogio -w @futbolsa/api -- ate 2026-02-01
