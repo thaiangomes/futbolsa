@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { ADMIN_ERROR_MESSAGES, type CompetitionCode, type ImportKind, type RunImportBody } from "@futbolsa/contracts";
 import { Clock } from "../../../infra/clock/index.js";
 import { DB, type Database, withTransaction } from "../../../infra/db/index.js";
@@ -19,6 +19,12 @@ const DAY = 24 * HOUR;
 const CALENDAR_MAX_AGE = DAY;
 /** Placar devido há muito tempo não varre dias demais da fonte: no máximo estes dias para trás. */
 const SCORES_LOOKBACK = 14 * DAY;
+/**
+ * O jogo fora da janela da rodada (adiado e jogado semanas depois, `out_of_window`) não conta para fechar a rodada, mas o placar
+ * dele entra como o de qualquer outro: fica "devido" por este tempo depois do início. Passado isso, o adiado que a fonte nunca
+ * trouxe como jogado (data velha, sem remarcação) deixa de puxar a fonte a cada 15 minutos, e o calendário diário o corrige.
+ */
+const OUT_OF_WINDOW_DUE_FOR = 2 * DAY;
 /** "Importar na hora" dos placares olha os últimos dias. */
 const MANUAL_SCORES_WINDOW = 3 * DAY;
 
@@ -191,7 +197,8 @@ export class ImportRunner {
           eq(matches.seasonId, seasonId),
           eq(matches.status, "scheduled"),
           isNull(matches.homeGoals),
-          eq(matches.outOfWindow, false),
+          // o jogo fora da janela só entra na lista enquanto o fim dele é recente (Chapecoense x Vasco, item 24 das melhorias)
+          or(eq(matches.outOfWindow, false), sql`${matches.kickoff} >= ${new Date(now.getTime() - OUT_OF_WINDOW_DUE_FOR).toISOString()}::timestamptz`),
           sql`coalesce(${matches.finishedAt}, ${matches.kickoff} + interval '2 hours') <= ${now.toISOString()}::timestamptz`,
         ),
       )
