@@ -167,7 +167,7 @@ export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
   } else {
     carga = await reconstruirCarga(servidor, clock, adminApelido, fotos);
   }
-  const bots = new AgenteDaPartida(servidor, ritmo);
+  const bots = new AgenteDaPartida(servidor, ritmo, () => parciais.at(clock.now()));
   const condutor = new Condutor(servidor, carga, {
     aprovar: o.aprovarSozinho === true,
     liquidar: true,

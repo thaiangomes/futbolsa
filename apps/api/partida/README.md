@@ -51,6 +51,8 @@ dados; o jogo continua "agendado" e sem placar para dividendos e classificação
 esperados do clube: gols restantes como Poisson (mandante 1,45 e visitante 1,15 por jogo, na fração do jogo que falta), pontos
 esperados com o placar de agora menos os do apito inicial, vezes o dividendo por ponto. 1 a 0 aos 70 minutos vale bem mais que 1 a 0
 aos 10; 0 a 0 não muda nada. Copas, a colocação final e o valor justo da casa ficam de fora.
+Como um gol muda o valor justo só ~1% (R$ 0,10 por ponto), na parada em que aparece um **gol novo** os bots agem bem mais (6 por
+bot a cada 3 horas, uns 8 de 50 numa parada de 5 minutos), para o mercado reagir na hora; sem gol novo volta o ritmo normal.
 
 **Deixar o relógio pronto para os jogos:** peça **agora** (botão "Alcançar a hora real e ligar o tempo real" na tela do admin, ou
 `npm run partida:relogio -- agora`). Ele baixa os dados, salta até a hora real (em um ou mais saltos; leva alguns minutos, passando
