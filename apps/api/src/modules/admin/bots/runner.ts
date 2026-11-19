@@ -14,6 +14,10 @@ import { PortfolioLedger } from "../../portfolio/portfolio.module.js";
 import { currentSeason } from "../current-season.js";
 import { LiveBotView, type BotIntent } from "./live-view.js";
 import { BotSnapshotService } from "./market-snapshot.js";
+import { AttentionClubs } from "./partial-scores.js";
+
+/** Dos bots que agem numa rodada com clubes em foco (um gol acabou de sair), a parte que olha só para esses clubes. */
+export const FRACAO_COM_ATENCAO = 0.5;
 
 /**
  * O ritmo dos bots (proposta 2 da F14): a simulação calibrada faz cada bot decidir com chance 0,25 a cada passo de 3
@@ -92,6 +96,7 @@ export class BotRunner {
     private readonly ledger: PortfolioLedger,
     private readonly entry: EntryService,
     private readonly settings: BotRunnerSettings,
+    private readonly attention: AttentionClubs,
   ) {}
 
   /** A chance de cada bot agir numa rodada. */
@@ -215,13 +220,17 @@ export class BotRunner {
     const view = new LiveBotView(snapshot);
     const prev = await this.prevPlacements(seasonId);
     const chance = this.chancePerRound;
+    // clubes em foco (um gol acabou de sair): parte dos bots que agem olha só para eles, com o valor justo de sempre
+    const focus = this.attention.clubs(now).filter((id) => snapshot.clubIds.includes(id));
+    const focusView = focus.length > 0 ? new LiveBotView({ ...snapshot, clubIds: focus }) : undefined;
     for (const row of active) {
       if (!walletOf.has(row.id) || !snapshot.wallets.has(String(row.id))) continue;
       if (random() >= chance) continue;
-      this.instance(seasonId, row.id, row.profile as BotProfile, snapshot.clubIds, prev).act(view);
+      const looksAt = focusView && random() < FRACAO_COM_ATENCAO ? focusView : view;
+      this.instance(seasonId, row.id, row.profile as BotProfile, snapshot.clubIds, prev).act(looksAt);
       report.acted++;
     }
-    for (const intent of view.intents) await this.execute(seasonId, intent, walletOf, now, report);
+    for (const intent of [...view.intents, ...(focusView?.intents ?? [])]) await this.execute(seasonId, intent, walletOf, now, report);
   }
 
   private async execute(seasonId: number, intent: BotIntent, walletOf: Map<number, number>, now: Date, report: BotRunReport): Promise<void> {

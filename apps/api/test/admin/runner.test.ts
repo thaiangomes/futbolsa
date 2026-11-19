@@ -7,7 +7,7 @@ import { withTransaction } from "../../src/infra/db/index.js";
 import { bots, clubs, ipoBids, matches, orders, seasonClubs, seasonRules, seasons, wallets } from "../../src/infra/db/schema/index.js";
 import { IpoBidsService } from "../../src/modules/ipo/bids.service.js";
 import { BotSnapshotService } from "../../src/modules/admin/bots/market-snapshot.js";
-import { PartialScores } from "../../src/modules/admin/bots/partial-scores.js";
+import { AttentionClubs, PartialScores } from "../../src/modules/admin/bots/partial-scores.js";
 import { BotRunner, BotRunnerSettings } from "../../src/modules/admin/bots/runner.js";
 import { createTestApp } from "../support/app.js";
 import { useTestDatabase } from "../support/db.js";
@@ -169,5 +169,26 @@ describe("tarefa dos bots", () => {
     }
     const depois = await snapshots.load(world.seasonId, TUESDAY);
     expect(depois.leagues.get(c)!.fairValue(c)).toBe(normal.leagues.get(c)!.fairValue(c));
+  });
+
+  it("item 23 (atenção no gol): com clubes em foco, os bots que olham para eles só negociam esses clubes; sem foco, olham o mercado todo", async () => {
+    const [, , c, d] = world.tickers as [string, string, string, string];
+    const novas = async (quando: Date, atencao: readonly string[]) => {
+      const antes = (await database.db.select({ id: orders.id }).from(orders)).reduce((m, o) => Math.max(m, o.id), 0);
+      const spy = vi.spyOn(app.get(AttentionClubs), "clubs").mockReturnValue(atencao);
+      try {
+        await runner.runOnce(quando, () => 0); // todos agem e todos olham para o foco, se houver
+      } finally {
+        spy.mockRestore();
+      }
+      const rows = await database.db.select({ id: orders.id, ticker: clubs.ticker }).from(orders).innerJoin(clubs, eq(clubs.id, orders.clubId));
+      return new Set(rows.filter((o) => o.id > antes).map((o) => o.ticker));
+    };
+    const comFoco = await novas(new Date(TUESDAY.getTime() + 3 * 3_600_000), [c, d]);
+    expect(comFoco.size).toBeGreaterThan(0);
+    for (const ticker of comFoco) expect([c, d]).toContain(ticker);
+    const semFoco = await novas(new Date(TUESDAY.getTime() + 4 * 3_600_000), []);
+    expect([...semFoco].some((t) => ![c, d].includes(t!))).toBe(true);
+    await assertReservesMatchOrders(database.db, world.seasonId);
   });
 });

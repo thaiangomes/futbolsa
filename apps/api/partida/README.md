@@ -53,6 +53,8 @@ esperados com o placar de agora menos os do apito inicial, vezes o dividendo por
 aos 10; 0 a 0 não muda nada. Copas, a colocação final e o valor justo da casa ficam de fora.
 Como um gol muda o valor justo só ~1% (R$ 0,10 por ponto), na parada em que aparece um **gol novo** os bots agem bem mais (6 por
 bot a cada 3 horas, uns 8 de 50 numa parada de 5 minutos), para o mercado reagir na hora; sem gol novo volta o ritmo normal.
+Nessa rodada, **metade dos bots que agem olha só para os dois clubes do jogo do gol**, como um torcedor que vai ver o que aconteceu,
+e decide com o valor justo de sempre (nada de multiplicar o efeito do gol: o preço só se mexe se a conta mandar).
 
 **Deixar o relógio pronto para os jogos:** peça **agora** (botão "Alcançar a hora real e ligar o tempo real" na tela do admin, ou
 `npm run partida:relogio -- agora`). Ele baixa os dados, salta até a hora real (em um ou mais saltos; leva alguns minutos, passando

@@ -7,7 +7,7 @@ import { FixedClock } from "../src/infra/clock/index.js";
 import { connect, type DbConnection } from "../src/infra/db/client.js";
 import { createTestApp } from "../test/support/app.js";
 import { withTestAuth } from "../test/support/auth.js";
-import { PartialScores } from "../src/modules/admin/bots/partial-scores.js";
+import { AttentionClubs, PartialScores } from "../src/modules/admin/bots/partial-scores.js";
 import { LiveScores } from "../src/modules/market/book/live-scores.js";
 import { BotRunnerSettings } from "../src/modules/admin/bots/runner.js";
 import { ResultSourceRegistry } from "../src/modules/admin/results/sources/registry.js";
@@ -54,6 +54,8 @@ export interface OpcoesServidor {
   bots?: { tickMinutes: number; activityPer3h: number };
   /** Os placares parciais dos jogos em andamento, que os bots leem (a partida de teste); o padrão é nenhum. */
   parciais?: PartialScores;
+  /** Os clubes em foco na rodada dos bots (a partida: os do jogo em que saiu gol); o padrão é nenhum. */
+  atencao?: AttentionClubs;
 }
 
 export async function criarServidorEnsaio(opcoes: OpcoesServidor): Promise<ServidorEnsaio> {
@@ -86,6 +88,8 @@ export async function criarServidorEnsaio(opcoes: OpcoesServidor): Promise<Servi
           .useValue({ config: ritmo })
           .overrideProvider(PartialScores)
           .useValue(opcoes.parciais ?? { at: () => [] })
+          .overrideProvider(AttentionClubs)
+          .useValue(opcoes.atencao ?? { clubs: () => [] })
           // a faixa e a página dos jogos ao vivo leem o mesmo placar parcial dos bots (item 25)
           .overrideProvider(LiveScores)
           .useValue(opcoes.parciais ?? { at: () => [] }),
