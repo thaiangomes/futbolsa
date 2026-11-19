@@ -8,7 +8,7 @@ import { BotsController } from "./bots.controller.js";
 import { BotsJob } from "./bots.jobs.js";
 import { BotsService } from "./bots.service.js";
 import { BotSnapshotService } from "./market-snapshot.js";
-import { noPartialScores, PartialScores } from "./partial-scores.js";
+import { AttentionClubs, noAttention, noPartialScores, PartialScores } from "./partial-scores.js";
 import { BotRunner, BotRunnerSettings, botRunnerConfigFromEnv } from "./runner.js";
 
 /** Bots ao vivo no admin (F14, T10 a T12): ligar e desligar, a visão de mercado e a tarefa que os faz agir. */
@@ -21,6 +21,7 @@ import { BotRunner, BotRunnerSettings, botRunnerConfigFromEnv } from "./runner.j
     BotRunner,
     BotsJob,
     { provide: PartialScores, useValue: noPartialScores },
+    { provide: AttentionClubs, useValue: noAttention },
     { provide: BotRunnerSettings, useFactory: () => ({ config: botRunnerConfigFromEnv() }) },
   ],
   exports: [BotsService, BotRunner],

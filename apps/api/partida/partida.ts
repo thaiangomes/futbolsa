@@ -17,7 +17,7 @@ import { criarConta, type ContaEnsaio } from "../ensaio/contas.js";
 import { prepararBanco, criarTabelasDaPartida } from "./banco.js";
 import { ANO_DA_PARTIDA, arquivoDaSerieA, atualizarFotos, fotosMaisNovas, paraMemoria, semearFotos, type Baixador } from "./dados.js";
 import { PartialScores } from "../src/modules/admin/bots/partial-scores.js";
-import { AgenteDaPartida, ATIVIDADE_DOS_SALTOS } from "./bots.js";
+import { AgenteDaPartida, ATIVIDADE_DOS_SALTOS, FocoDosBots } from "./bots.js";
 import { recusarAmbienteDaPartida, recusarEscutaForaDoLocal } from "./guardas.js";
 import { PORTAS_DA_PARTIDA } from "./portas.js";
 import { ModuloDaPartida, PorRelogio } from "./modulo.js";
@@ -138,6 +138,7 @@ export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
       return fonte.parciais();
     },
   };
+  const foco = new FocoDosBots();
   const servidor = await criarServidorEnsaio({
     databaseUrl: banco.url,
     inicio: clock.now(),
@@ -149,6 +150,7 @@ export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
     poolSize: 20,
     bots: ritmo,
     parciais,
+    atencao: foco,
   });
   const db = servidor.conexao.db;
   const escala = o.escala ?? 0.2;
@@ -167,7 +169,7 @@ export async function subirPartida(o: OpcoesDaPartida): Promise<Partida> {
   } else {
     carga = await reconstruirCarga(servidor, clock, adminApelido, fotos);
   }
-  const bots = new AgenteDaPartida(servidor, ritmo, () => parciais.at(clock.now()));
+  const bots = new AgenteDaPartida(servidor, ritmo, () => parciais.at(clock.now()), foco);
   const condutor = new Condutor(servidor, carga, {
     aprovar: o.aprovarSozinho === true,
     liquidar: true,

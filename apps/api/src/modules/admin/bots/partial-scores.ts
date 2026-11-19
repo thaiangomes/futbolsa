@@ -11,3 +11,13 @@ export abstract class PartialScores {
 }
 
 export const noPartialScores: PartialScores = { at: () => [] };
+
+/**
+ * Os clubes para onde os bots olham primeiro na rodada (item 23, parte 4): os dois do jogo em que acabou de sair um gol, como um
+ * torcedor que vai ver o que aconteceu. O valor justo continua o de sempre; só muda onde a atenção cai. Na API do jogo é vazio.
+ */
+export abstract class AttentionClubs {
+  abstract clubs(now: Date): readonly string[];
+}
+
+export const noAttention: AttentionClubs = { clubs: () => [] };

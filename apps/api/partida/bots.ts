@@ -1,6 +1,7 @@
 import { AgenteDeBots } from "../ensaio/bots.js";
 import type { Parada } from "../ensaio/condutor.js";
 import type { ServidorEnsaio } from "../ensaio/servidor.js";
+import type { AttentionClubs } from "../src/modules/admin/bots/partial-scores.js";
 
 /**
  * Os bots da partida: o executor da F14 (`BotRunner`) pelas mesmas rotas dos humanos. A chance de cada bot agir numa rodada é
@@ -38,6 +39,8 @@ export class AgenteDaPartida {
     private readonly config: { tickMinutes: number; activityPer3h: number },
     /** Os placares parciais de agora; sem isto os bots nunca têm a rodada extra do gol. */
     private readonly placar?: PlacarAgora,
+    /** Onde o agente deixa os clubes do gol para a rodada dos bots olhar primeiro; sem isto não há atenção. */
+    private readonly foco?: FocoDosBots,
   ) {
     this.agente = new AgenteDeBots(servidor, Math.random, 0);
   }
@@ -53,21 +56,42 @@ export class AgenteDaPartida {
     if (minutos < 1) return;
     this.config.tickMinutes = Math.min(180, minutos);
     const tempoReal = minutos <= INTERVALO_DO_TEMPO_REAL;
-    const gol = this.saiuGol(); // lê sempre, para o ponto de partida não ficar velho depois de um salto
+    const clubesDoGol = this.golsNovos(); // lê sempre, para o ponto de partida não ficar velho depois de um salto
+    const gol = tempoReal && clubesDoGol.length > 0;
     this.config.activityPer3h = tempoReal ? (gol ? ATIVIDADE_NO_GOL : ATIVIDADE_NO_TEMPO_REAL) : ATIVIDADE_DOS_SALTOS;
     this.ultima = em;
-    await this.agente.agir(parada);
+    // só nesta rodada, parte dos bots que agem olha primeiro para os clubes do jogo do gol
+    if (this.foco && gol) this.foco.emFoco = clubesDoGol;
+    try {
+      await this.agente.agir(parada);
+    } finally {
+      if (this.foco) this.foco.emFoco = [];
+    }
   }
 
-  /** Algum jogo ganhou gol desde a parada anterior? A primeira leitura só guarda o ponto de partida. */
-  private saiuGol(): boolean {
-    if (!this.placar) return false;
+  /** Os clubes dos jogos que ganharam gol desde a parada anterior. A primeira leitura só guarda o ponto de partida. */
+  private golsNovos(): string[] {
+    if (!this.placar) return [];
     const agora = new Map<string, number>();
-    for (const m of this.placar()) agora.set(`${m.home}-${m.away}`, m.homeGoals + m.awayGoals);
+    const clubes = new Map<string, [string, string]>();
+    for (const m of this.placar()) {
+      const jogo = `${m.home}-${m.away}`;
+      agora.set(jogo, m.homeGoals + m.awayGoals);
+      clubes.set(jogo, [m.home, m.away]);
+    }
     const antes = this.golsAntes;
     this.golsAntes = agora;
-    if (!antes) return false;
-    for (const [jogo, gols] of agora) if (gols > (antes.get(jogo) ?? 0)) return true;
-    return false;
+    if (!antes) return [];
+    const out: string[] = [];
+    for (const [jogo, gols] of agora) if (gols > (antes.get(jogo) ?? 0)) out.push(...clubes.get(jogo)!);
+    return out;
+  }
+}
+
+/** Os clubes em foco na rodada dos bots: a partida preenche na parada com gol novo e a API dos bots lê (`AttentionClubs`). */
+export class FocoDosBots implements AttentionClubs {
+  emFoco: string[] = [];
+  clubs(): readonly string[] {
+    return this.emFoco;
   }
 }

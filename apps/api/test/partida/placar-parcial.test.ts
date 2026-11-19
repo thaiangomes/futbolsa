@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Match } from "@futbolsa/engine";
-import { AgenteDaPartida, ATIVIDADE_DOS_SALTOS, ATIVIDADE_NO_GOL, ATIVIDADE_NO_TEMPO_REAL } from "../../partida/bots.js";
+import { AgenteDaPartida, ATIVIDADE_DOS_SALTOS, ATIVIDADE_NO_GOL, ATIVIDADE_NO_TEMPO_REAL, FocoDosBots } from "../../partida/bots.js";
 import { ReplaySource } from "../../ensaio/replay-source.js";
 import type { ServidorEnsaio } from "../../ensaio/servidor.js";
 
@@ -87,5 +87,31 @@ describe("ritmo dos bots da partida (item 23)", () => {
     placar = [{ home: "FLA3", away: "CAP3", homeGoals: 0, awayGoals: 1 }]; // jogo novo já com gol entre duas leituras
     await agente.agir(parada("2026-11-18T23:25:00Z"));
     expect(config.activityPer3h).toBe(ATIVIDADE_NO_GOL);
+  });
+
+  it("os clubes do jogo do gol ficam em foco só na rodada do gol e depois são limpos", async () => {
+    const config = { tickMinutes: 15, activityPer3h: ATIVIDADE_DOS_SALTOS };
+    const relatorio = { skipped: false, placed: 0, cancelled: 0, bids: 0, wallets: 0, refused: {} };
+    const foco = new FocoDosBots();
+    let vistoNaRodada: string[] = [];
+    const servidor = { app: { get: () => ({ runOnce: async () => ((vistoNaRodada = [...foco.clubs()]), relatorio) }) } } as unknown as ServidorEnsaio;
+    let placar = [
+      { home: "COR3", away: "BOT3", homeGoals: 0, awayGoals: 0 },
+      { home: "GRE3", away: "BAH3", homeGoals: 0, awayGoals: 0 },
+    ];
+    const agente = new AgenteDaPartida(servidor, config, () => placar, foco);
+    const parada = (iso: string) => ({ em: new Date(iso), motivo: "grade", novoDia: false });
+
+    await agente.agir(parada("2026-11-19T01:00:00Z"));
+    await agente.agir(parada("2026-11-19T01:05:00Z"));
+    expect(vistoNaRodada).toEqual([]); // sem gol, ninguém em foco
+
+    placar = [{ ...placar[0]!, homeGoals: 1 }, placar[1]!];
+    await agente.agir(parada("2026-11-19T01:10:00Z"));
+    expect(vistoNaRodada).toEqual(["COR3", "BOT3"]); // só o jogo do gol
+    expect(foco.clubs()).toEqual([]); // limpo depois da rodada
+
+    await agente.agir(parada("2026-11-19T01:15:00Z"));
+    expect(vistoNaRodada).toEqual([]);
   });
 });
