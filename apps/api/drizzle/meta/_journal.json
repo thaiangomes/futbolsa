@@ -78,6 +78,13 @@
       "when": 1795175405177,
       "tag": "0010_classificacao_e_rebaixamento",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795190180169,
+      "tag": "0011_correcao_das_regras_das_ligas",
+      "breakpoints": true
     }
   ]
 }

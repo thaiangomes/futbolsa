@@ -69,7 +69,7 @@ describe("registro do admin (record)", () => {
   });
 
   it("admin 33: a tabela de ações diz quais exigem motivo", () => {
-    for (const action of ["match.create", "match.update", "standings.update", "suspension.set", "player.role", "cup.correct"]) {
+    for (const action of ["match.create", "match.update", "standings.update", "suspension.set", "player.role", "cup.correct", "season.rules.correct"]) {
       expect(reasonRequired(action), action).toBe(true);
     }
     for (const action of [
@@ -93,7 +93,7 @@ describe("registro do admin (record)", () => {
     // as duas dos pagamentos (F12): aprovar não pede motivo, corrigir pede
     expect(reasonRequired("payout.approve")).toBe(false);
     expect(reasonRequired("payout.correct")).toBe(true);
-    expect(Object.keys(ADMIN_ACTIONS)).toHaveLength(33);
+    expect(Object.keys(ADMIN_ACTIONS)).toHaveLength(34);
   });
 
   it("admin 33: ação sem motivo que exige motivo é recusada e nada é gravado", async () => {

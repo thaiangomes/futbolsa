@@ -1,9 +1,10 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import {
   ADMIN_ERROR_MESSAGES,
   COMMON_ERROR_MESSAGES,
   type CorrectCupBody,
+  type CorrectRulesBody,
   type CupCompetitionCode,
   type CupView,
   type PutCupBody,
@@ -66,6 +67,42 @@ export class RulesService {
         after,
         reason,
       });
+      return after;
+    });
+  }
+
+  /**
+   * Corrige os valores de colocação, classificação e rebaixamento da Série A **depois** da abertura do IPO (a tabela de
+   * 2026-11-20 na partida de teste em curso). Só vale enquanto nenhum pagamento de colocação, classificação ou rebaixamento foi
+   * aprovado (eles saem no fim do campeonato); os pontos e a recompra não mudam. A exceção à trava do banco vale só dentro desta
+   * transação (`futbolsa.rules_correction`), e o antes e o depois vão para o registro do admin, com o motivo. Os eventos
+   * pendentes se refazem na próxima passada de fechamento.
+   */
+  async correctRules(actorId: string, seasonId: number, body: CorrectRulesBody): Promise<SeasonRulesView> {
+    return withTransaction(this.db, async (tx) => {
+      await assertSeasonIdOpen(tx, seasonId);
+      await this.ensure(tx, seasonId);
+      const [rules] = await tx.db.select({ lockedAt: seasonRules.lockedAt }).from(seasonRules).where(eq(seasonRules.seasonId, seasonId));
+      if (!rules?.lockedAt) throw new DomainError("rules_correction_not_needed", 409, ADMIN_ERROR_MESSAGES.rules_correction_not_needed);
+      const [paid] = await tx.db
+        .select({ id: payoutEvents.id })
+        .from(payoutEvents)
+        .where(
+          and(
+            eq(payoutEvents.seasonId, seasonId),
+            eq(payoutEvents.status, "approved"),
+            inArray(payoutEvents.kind, ["placement", "qualification", "relegation"]),
+          ),
+        )
+        .limit(1);
+      if (paid) throw new DomainError("rules_correction_invalid", 409, ADMIN_ERROR_MESSAGES.rules_correction_invalid);
+      const before = await this.rulesView(tx, seasonId);
+      const { reason, ...next } = body;
+      await tx.db.execute(sql`select set_config('futbolsa.rules_correction', 'on', true)`);
+      await tx.db.update(seasonRules).set(next).where(eq(seasonRules.seasonId, seasonId));
+      await tx.db.execute(sql`select set_config('futbolsa.rules_correction', 'off', true)`);
+      const after = await this.rulesView(tx, seasonId);
+      await this.log.record(tx, { actorId, action: "season.rules.correct", targetType: "season", targetId: String(seasonId), before, after, reason });
       return after;
     });
   }
