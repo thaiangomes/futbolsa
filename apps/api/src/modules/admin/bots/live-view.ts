@@ -145,6 +145,8 @@ export class LiveBotView implements BotView {
   market(botId: string, clubId: string, side: "buy" | "sell", quantity: number): void {
     const qty = side === "sell" ? Math.min(Math.floor(quantity), this.availableShares(botId, clubId)) : Math.floor(quantity);
     if (qty <= 0) return;
+    // caixa zerado ou negativo (penalização de rebaixamento, estorno): só vende, como na simulação
+    if (side === "buy" && this.wallet(botId).cash <= 0) return;
     if (side === "sell") this.wallet(botId).positions.get(clubId)!.reservedShares += qty;
     this.intents.push({ kind: "market", botId, ticker: clubId, side, quantity: qty });
   }

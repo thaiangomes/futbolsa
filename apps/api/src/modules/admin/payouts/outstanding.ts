@@ -77,6 +77,7 @@ export class PayoutsStatusService {
           eq(payoutEvents.seasonId, seasonId),
           eq(payoutEvents.clubId, clubId),
           ne(payoutEvents.kind, "buyback"),
+          ne(payoutEvents.kind, "relegation"),
           ne(payoutEvents.status, "superseded"),
           lte(payoutEvents.closedAt, now),
         ),

@@ -73,7 +73,7 @@ export function leaguesFromRules(rules: RulesRow): { "brasileirao-a": LeagueRule
         ? { qualification: { libertadores: rules.aLibertadoresBonus, sulamericana: rules.aSulamericanaBonus } }
         : {}),
       ...(rules.aRelegationPenalty > 0 && rules.aRelegationSlots > 0
-        ? { penalty: relegationPenalty(rules.aRelegationPenalty, rules.aRelegationSlots, rules.aPlacement.length) }
+        ? { penalty: relegationPenalty(rules.aRelegationPenalty, rules.aRelegationSlots) }
         : {}),
     },
     "brasileirao-b": { perPoint: rules.bPerPoint, placement: Array.from({ length: rules.promotionSlots }, () => rules.promotionPerShare) },
@@ -82,10 +82,9 @@ export function leaguesFromRules(rules: RulesRow): { "brasileirao-a": LeagueRule
 
 /**
  * A penalização por colocação do motor: o valor nos `slots` últimos de uma Série A de 20 clubes, zero nos demais
- * (índice 0 = 1º lugar). A Série A tem 20 clubes por regra do jogo; `placementLength` só garante que a tabela de
- * colocação não invada a zona de rebaixamento.
+ * (índice 0 = 1º lugar). A Série A tem 20 clubes por regra do jogo (o contrato limita a tabela de colocação a 20).
  */
-export function relegationPenalty(perShare: number, slots: number, placementLength: number): number[] {
-  const clubs = Math.max(20, placementLength);
+export function relegationPenalty(perShare: number, slots: number): number[] {
+  const clubs = 20;
   return Array.from({ length: clubs }, (_, i) => (i >= clubs - slots ? perShare : 0));
 }

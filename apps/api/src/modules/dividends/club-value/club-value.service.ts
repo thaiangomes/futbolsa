@@ -88,7 +88,9 @@ export class ClubValueService {
         and(
           eq(payoutEvents.seasonId, seasonId),
           eq(payoutEvents.clubId, clubId),
+          // a recompra à parte e a penalização de rebaixamento, que é débito (negativo) e fica fora da base da recompra
           ne(payoutEvents.kind, "buyback"),
+          ne(payoutEvents.kind, "relegation"),
           ne(payoutEvents.status, "superseded"),
           lte(payoutEvents.closedAt, this.clock.now()),
         ),

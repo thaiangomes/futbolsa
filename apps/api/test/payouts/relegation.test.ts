@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FixedClock } from "../../src/infra/clock/index.js";
 import { seasonQualifications, standings } from "../../src/infra/db/schema/index.js";
+import { ApplyCorrectionService } from "../../src/modules/admin/payouts/apply-correction.service.js";
 import { ApproveService } from "../../src/modules/admin/payouts/approve.service.js";
 import { RankingsPort } from "../../src/modules/admin/payouts/ports.js";
 import { SettleCreditsService } from "../../src/modules/admin/payouts/settle-credits.js";
@@ -25,6 +26,7 @@ describe("classificação e rebaixamento no fechamento (valores de 2026-11-20)",
   const rankings = new RecordingRankings();
   let app: NestFastifyApplication;
   let settle: SettleCreditsService;
+  let applier: ApplyCorrectionService;
   const scene = correctionScene(() => t.db, () => app, clock, 2040);
 
   beforeAll(async () => {
@@ -36,6 +38,7 @@ describe("classificação e rebaixamento no fechamento (valores de 2026-11-20)",
       override: (b) => withTestAuth(clock)(b).overrideProvider(RankingsPort).useValue(rankings).overrideProvider(RefreshWaker).useValue(new SilentWaker()),
     });
     settle = app.get(SettleCreditsService, { strict: false });
+    applier = app.get(ApplyCorrectionService, { strict: false });
     await scene.init();
   });
   afterAll(async () => {
@@ -138,9 +141,53 @@ describe("classificação e rebaixamento no fechamento (valores de 2026-11-20)",
     const sold = await scene.place(s, bruno, "CAM3", "sell", 10, 100, after(ROUND10_CLOSE, 10));
     expect(sold.ok).toBe(true);
 
-    // a recompra não conta a penalização: só pontos, colocação e o bônus entram na base
+    // a tela do clube segue de pé com o débito: pago e a receber não ficam negativos (o débito fica fora dos dois)
+    const view = await app.inject({ method: "GET", url: "/clubs/CAM3/dividends" });
+    expect(view.statusCode).toBe(200);
+    expect(view.json().paid).toBeGreaterThanOrEqual(0);
+    expect(view.json().toReceive).toBeGreaterThanOrEqual(0);
     await assertLedgerConsistent(t.db, s.seasonId);
     await assertSharesConserved(t.db, s.seasonId);
+  });
+
+  it("corrigir a tabela e tirar o clube do rebaixamento devolve o débito (complemento) e põe o outro no lugar", async () => {
+    const s = await season(true);
+    const bruno = await scene.player(s, 1_000_000);
+    await scene.buy(s, bruno, "CAM3", 100); // 17º: debitado em R$ 100,00
+    const carla = await scene.player(s, 1_000_000);
+    const sixteenth = OFFICIAL[15]!;
+    await scene.buy(s, carla, sixteenth, 100); // 16º: passa a rebaixado na correção
+    await scene.close(s.seasonId, after(ROUND10_CLOSE, 3));
+    await scene.approveAll(after(ROUND10_CLOSE, 5));
+    const brunoAfterDebit = await scene.cashOf(bruno);
+    const carlaBefore = await scene.cashOf(carla);
+
+    // o admin corrige a tabela oficial: CAM3 sobe para 16º e o antigo 16º cai para 17º
+    await t.db.update(standings).set({ position: 16 }).where(and(eq(standings.seasonId, s.seasonId), eq(standings.clubId, scene.club("CAM3"))));
+    await t.db.update(standings).set({ position: 17 }).where(and(eq(standings.seasonId, s.seasonId), eq(standings.clubId, scene.club(sixteenth))));
+    const now = after(ROUND10_CLOSE, 60);
+    const plan = await scene.plan(s.seasonId, now);
+    clock.set(now);
+    await applier.apply(scene.admin.id, { planCode: plan.planCode, reason: "desempate corrigido pela CBF" });
+    expect((await settle.settlePending()).errors).toEqual([]);
+
+    // Bruno recebe de volta os R$ 100,00 do débito e a colocação de 16º (R$ 0,30 × 100); Carla perde a colocação de 16º e paga o débito
+    expect((await scene.cashOf(bruno)) - brunoAfterDebit).toBe(100 * 100 + 100 * 30);
+    expect(carlaBefore - (await scene.cashOf(carla))).toBe(100 * 100 + 100 * 30);
+    await assertLedgerConsistent(t.db, s.seasonId);
+  });
+
+  it("com a tabela sem conferir (a marcação ou a ordem mudou), a correção não mexe em colocação, classificação nem rebaixamento", async () => {
+    const s = await season(true);
+    const bruno = await scene.player(s, 1_000_000);
+    await scene.buy(s, bruno, "CAM3", 100);
+    await scene.close(s.seasonId, after(ROUND10_CLOSE, 3));
+    await scene.approveAll(after(ROUND10_CLOSE, 5));
+    // o admin muda a ordem (a conferência cai) e o plano deixa de fora os eventos que dependem da tabela
+    await t.db.update(standings).set({ confirmedBy: null, confirmedAt: null }).where(eq(standings.seasonId, s.seasonId));
+    await t.db.update(standings).set({ position: 16 }).where(and(eq(standings.seasonId, s.seasonId), eq(standings.clubId, scene.club("CAM3"))));
+    const plan = await scene.plan(s.seasonId, after(ROUND10_CLOSE, 60));
+    expect(JSON.stringify(plan.preview)).not.toContain("relegation|brasileirao-a|fim|CAM3");
   });
 
   it("o caixa zerado também só vende", async () => {

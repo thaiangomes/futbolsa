@@ -15,8 +15,9 @@ import { clubs, orders, payoutEvents, payoutHoldings, seasons, users, wallets } 
 import { DomainError } from "../../../infra/http/index.js";
 import { BUYBACK_EVENTS } from "./buyback-events.js";
 import { CLOSE_MARGIN_MS, DIVIDEND_EVENTS, groupOfKey, type PayoutEventSource, roundAndPhase, storedCompetition } from "./close-events.service.js";
-import { EngineInputService } from "./engine-input.js";
+import { EngineInputService, type SeasonEngineInput } from "./engine-input.js";
 import { type Executor, executorOf, type Holding, holdingsAt } from "./holdings.js";
+import { STANDINGS_OF_KIND } from "./preview.service.js";
 import { settlingEventIds } from "./settlement.js";
 
 export type CorrectionOutcome = CorrectionChange["outcome"];
@@ -35,6 +36,12 @@ export interface CurrentVersion {
  * no fechamento novo (evento novo, ou fechamento que mudou). A foto nova é a completa, como a da passada de
  * fechamento: inclui a conta excluída (a foto é o que era; quem não recebe é decisão do pagamento, P6).
  */
+/** O evento depende da classificação oficial conferida (STANDINGS_OF_KIND) e a tabela não está conferida. */
+function unconfirmed(loaded: SeasonEngineInput, kind: string, competition: string | null): boolean {
+  const required = STANDINGS_OF_KIND[kind as keyof typeof STANDINGS_OF_KIND];
+  return required !== undefined && !loaded.standingsConfirmed(competition ?? required);
+}
+
 export type PlannedPhoto = { kind: "copy"; fromEventId: number } | { kind: "new"; holdings: Holding[] };
 
 /** Uma mudança por evento e clube, com o que a T7 grava. */
@@ -200,10 +207,13 @@ export class CorrectionPlanService {
     const after: PayoutEvent[] = [];
     for (const row of approved.values()) {
       const old = toPayoutEvent(row, loaded.tickerOf(row.clubId));
+      // classificação, rebaixamento e colocação só mudam com a tabela oficial conferida, como na aprovação
+      if (unconfirmed(loaded, row.kind, row.competition)) continue;
       const next = computed.get(row.eventKey);
       if (!next) {
         // já foi a R$ 0,00 numa correção anterior e continua fora do resultado: nada a corrigir
-        if (row.perShare > 0) before.push(old);
+        // (o rebaixamento tem valor negativo: o evento que some, como o de um clube que saiu da zona, devolve o débito)
+        if (row.perShare !== 0) before.push(old);
         continue;
       }
       // o fechamento novo ainda está na margem (ou no futuro): a foto dele ainda não pode ser tirada, espera
@@ -213,6 +223,7 @@ export class CorrectionPlanService {
     }
     for (const [key, event] of computed) {
       if (currentKeys.has(key) || !approvedGroups.has(groupOfKey(key)) || event.closedAt > limit) continue;
+      if (unconfirmed(loaded, event.kind, event.competition)) continue;
       after.push(event);
     }
     const afterByKey = new Map(after.map((e) => [e.key, e]));

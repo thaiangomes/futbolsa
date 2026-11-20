@@ -78,7 +78,7 @@ export const seasonRulesSchema = z.strictObject({
   aPerPoint: z.number().int().min(0),
   bPerPoint: z.number().int().min(0),
   /** Colocação final da Série A, do 1º ao último (centavos por ação). */
-  aPlacement: z.array(z.number().int().min(0)).min(1),
+  aPlacement: z.array(z.number().int().min(0)).min(1).max(20),
   /** Classificação para o ano seguinte (centavos por ação): Libertadores e Sul-Americana; quem vai às duas recebe só a primeira. */
   aLibertadoresBonus: z.number().int().min(0),
   aSulamericanaBonus: z.number().int().min(0),

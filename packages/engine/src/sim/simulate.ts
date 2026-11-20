@@ -352,8 +352,11 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
           if (exclude.has(account.id)) continue;
           const shares = account.positions.get(p.clubId)?.shares ?? 0;
           if (shares <= 0) continue;
-          // Ordens de compra abertas seguram caixa reservado, que o débito deixaria a descoberto: cancela antes.
-          exchange.cancelAll(account.id);
+          // Ordens de compra abertas seguram caixa reservado, que o débito deixaria a descoberto: se o caixa livre não cobre
+          // o débito, cancela as compras antes (como a API; as vendas ficam).
+          if (ledger.availableCash(account.id) < shares * p.perShare) {
+            for (const o of exchange.openOrders(account.id)) if (o.side === "buy") exchange.cancelOrder(o.id);
+          }
           account.cash -= shares * p.perShare; // pode ficar negativo
           totalPenalty += shares * p.perShare;
         }
