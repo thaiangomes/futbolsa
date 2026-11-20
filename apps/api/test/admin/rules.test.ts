@@ -257,6 +257,54 @@ describe("regras e copas da temporada", () => {
     expect((await cup("sulamericana")).phases).toEqual(view.phases);
   });
 
+  it("a correção dos valores das ligas depois do IPO muda só colocação, classificação e rebaixamento, com motivo, e some quando há pagamento aprovado", async () => {
+    await call("GET", `/admin/seasons/${seasonId}/rules`);
+    await withTransaction(database.db, (tx) => values.lockSeasonValues(tx, seasonId, clock.now()));
+    const url = `/admin/seasons/${seasonId}/rules/correction`;
+    const antes = (await database.db.select().from(seasonRules).where(eq(seasonRules.seasonId, seasonId)))[0]!;
+    const body = { aPlacement: [1000, 700, 500], aLibertadoresBonus: 300, aSulamericanaBonus: 100, aRelegationPenalty: 100, aRelegationSlots: 4 };
+    const motivo = "Tabela de dividendos de 2026-11-20 escolhida depois da abertura do IPO.";
+
+    // sem motivo não passa; com campo que não é da correção (o valor por ponto) também não
+    expect((await call("POST", url, body)).statusCode).toBe(400);
+    expect((await call("POST", url, { ...body, aPerPoint: 99, reason: motivo })).statusCode).toBe(400);
+    const ok = await call("POST", url, { ...body, reason: motivo });
+    expect(ok.statusCode, JSON.stringify(ok.json())).toBe(200);
+    expect(seasonRulesSchema.parse(ok.json())).toMatchObject({ ...body, aPerPoint: antes.aPerPoint, bPerPoint: antes.bPerPoint, buybackMultipleBp: antes.buybackMultipleBp });
+    const [depois] = await database.db.select().from(seasonRules).where(eq(seasonRules.seasonId, seasonId));
+    expect(depois).toMatchObject({ aLibertadoresBonus: 300, aRelegationSlots: 4, aPerPoint: antes.aPerPoint });
+    expect(depois!.lockedAt).not.toBeNull(); // continua travada
+
+    // o antes e o depois ficam no registro, com o motivo e quem fez
+    const [registro] = await logs("season.rules.correct");
+    expect(registro).toMatchObject({ actorId: admin.id, targetType: "season", reason: motivo });
+    expect((registro!.before as { aLibertadoresBonus: number }).aLibertadoresBonus).toBe(antes.aLibertadoresBonus);
+    expect((registro!.after as { aLibertadoresBonus: number }).aLibertadoresBonus).toBe(300);
+
+    // a exceção vale só dentro da correção: a tela normal e o banco seguem recusando
+    const { lockedAt: _locked, ...editavel } = (await call("GET", `/admin/seasons/${seasonId}/rules`)).json().rules;
+    expect((await call("PUT", `/admin/seasons/${seasonId}/rules`, { ...editavel, aPerPoint: 1 })).statusCode).toBe(409);
+    await expect(database.db.update(seasonRules).set({ aRelegationPenalty: 1 }).where(eq(seasonRules.seasonId, seasonId))).rejects.toThrow();
+
+    // com um pagamento de colocação aprovado, os valores não mudam mais
+    await database.db.insert(payoutEvents).values({
+      seasonId, clubId: clubIds.get("FLA3")!, eventKey: "placement|brasileirao-a|fim|FLA3", kind: "placement", reason: "1º lugar",
+      competition: "brasileirao-a", round: null, phase: null, perShare: 1000, closedAt: clock.now(), status: "approved", createdAt: clock.now(),
+    });
+    const recusada = await call("POST", url, { ...body, aLibertadoresBonus: 500, reason: motivo });
+    expect(recusada.statusCode).toBe(409);
+    expect(recusada.json().code).toBe("rules_correction_invalid");
+    expect((await database.db.select().from(seasonRules).where(eq(seasonRules.seasonId, seasonId)))[0]!.aLibertadoresBonus).toBe(300);
+  });
+
+  it("a correção dos valores das ligas é só do admin", async () => {
+    await expectAdminOnly(app, database.db, {
+      method: "POST",
+      url: `/admin/seasons/${seasonId}/rules/correction`,
+      payload: { aPlacement: [1], aLibertadoresBonus: 0, aSulamericanaBonus: 0, aRelegationPenalty: 0, aRelegationSlots: 0, reason: "x" },
+    });
+  });
+
   it("item 16: jogador comum não usa a correção da tabela", async () => {
     await expectAdminOnly(app, database.db, { method: "POST", url: `/admin/seasons/${seasonId}/cups/sulamericana/correction`, payload: { phases: [{ phaseKey: "final", variant: "title", perShare: 1 }], reason: "x" } });
   });

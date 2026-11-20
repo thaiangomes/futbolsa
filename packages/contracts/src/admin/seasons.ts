@@ -144,3 +144,18 @@ export type SeasonRulesResponse = z.infer<typeof seasonRulesResponseSchema>;
 /** `GET /admin/clubs`: os clubes com ticker, para escolher a lista da temporada. */
 export const knownClubsResponseSchema = z.strictObject({ clubs: z.array(clubRefSchema) });
 export type KnownClubsResponse = z.infer<typeof knownClubsResponseSchema>;
+
+/**
+ * `POST /admin/seasons/:id/rules/correction`: a correção dos valores de colocação, classificação e rebaixamento da Série A
+ * **depois** da abertura do IPO (a tabela de 2026-11-20 na partida de teste em curso). Só esses campos; o valor por ponto, o
+ * acesso e a recompra não mudam, porque os pontos já pagaram. O motivo é obrigatório e vai para o registro do admin.
+ */
+export const correctRulesBodySchema = z.strictObject({
+  aPlacement: z.array(z.number().int().min(0)).min(1).max(20),
+  aLibertadoresBonus: z.number().int().min(0),
+  aSulamericanaBonus: z.number().int().min(0),
+  aRelegationPenalty: z.number().int().min(0),
+  aRelegationSlots: z.number().int().min(0).max(20),
+  reason: adminReasonSchema,
+});
+export type CorrectRulesBody = z.infer<typeof correctRulesBodySchema>;

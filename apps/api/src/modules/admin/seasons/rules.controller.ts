@@ -2,6 +2,8 @@ import { Body, Controller, Get, HttpCode, Param, Post, Put } from "@nestjs/commo
 import { z } from "zod";
 import {
   type CorrectCupBody,
+  type CorrectRulesBody,
+  correctRulesBodySchema,
   correctCupBodySchema,
   type CupCompetitionCode,
   cupCompetitionSchema,
@@ -38,6 +40,17 @@ export class RulesController {
     @Body(new ZodValidationPipe(putSeasonRulesBodySchema)) body: PutSeasonRulesBody,
   ): Promise<SeasonRulesView> {
     return this.rules.putRules(admin.id, id, body);
+  }
+
+  /** A correção dos valores de colocação, classificação e rebaixamento depois da abertura do IPO, com motivo. */
+  @HttpCode(200)
+  @Post("rules/correction")
+  correctRules(
+    @CurrentUser() admin: ResolvedUser,
+    @Param("id", idPipe) id: number,
+    @Body(new ZodValidationPipe(correctRulesBodySchema)) body: CorrectRulesBody,
+  ): Promise<SeasonRulesView> {
+    return this.rules.correctRules(admin.id, id, body);
   }
 
   @Put("cups/:competition")

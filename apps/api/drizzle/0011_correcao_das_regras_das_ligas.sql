@@ -1,0 +1,44 @@
+-- Correção dos valores das ligas depois da abertura do IPO (tabela de dividendos da Série A de 2026-11-20 na partida de teste em
+-- curso, cuja temporada já tinha os valores travados): a trava continua valendo para todo mundo, exceto para a rota de correção do
+-- admin (`POST /admin/seasons/:id/rules/correction`), que liga `futbolsa.rules_correction` só dentro da própria transação
+-- (`set_config(..., true)`), só vale para UPDATE de `season_rules` e registra o antes e o depois no log do admin, com motivo.
+-- `cup_phases` segue com a exceção própria da migração 0008; `season_cups` continua travada.
+CREATE OR REPLACE FUNCTION "futbolsa"."forbid_locked_season_values"() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+  season integer;
+  locked timestamptz;
+BEGIN
+  IF TG_TABLE_NAME = 'season_rules' THEN
+    IF TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND OLD.locked_at IS NULL) THEN
+      RETURN NEW;
+    END IF;
+    IF TG_OP = 'UPDATE' AND coalesce(current_setting('futbolsa.rules_correction', true), '') = 'on' THEN
+      RETURN NEW;
+    END IF;
+    RAISE EXCEPTION 'season_values_locked: os valores da temporada % estão travados desde %', OLD.season_id, OLD.locked_at
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+  IF TG_TABLE_NAME = 'cup_phases' AND coalesce(current_setting('futbolsa.cup_correction', true), '') = 'on' THEN
+    IF TG_OP = 'DELETE' THEN
+      RETURN OLD;
+    END IF;
+    RETURN NEW;
+  END IF;
+  FOREACH season IN ARRAY ARRAY[
+    CASE WHEN TG_OP <> 'INSERT' THEN OLD.season_id END,
+    CASE WHEN TG_OP <> 'DELETE' THEN NEW.season_id END
+  ] LOOP
+    CONTINUE WHEN season IS NULL;
+    SELECT r.locked_at INTO locked FROM "futbolsa"."season_rules" r WHERE r.season_id = season;
+    IF locked IS NOT NULL THEN
+      RAISE EXCEPTION 'season_values_locked: os valores da temporada % estão travados desde %', season, locked
+        USING ERRCODE = 'restrict_violation';
+    END IF;
+  END LOOP;
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
+END;
+$$;
