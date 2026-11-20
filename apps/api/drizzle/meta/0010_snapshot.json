@@ -1,0 +1,5001 @@
+{
+  "id": "b72b3116-4a1a-4ef6-9a69-3793135a60bc",
+  "prevId": "ca8b28c2-b0ad-4a01-9110-9d948e791ca8",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "futbolsa.auth_identities": {
+      "name": "auth_identities",
+      "schema": "futbolsa",
+      "columns": {
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subject": {
+          "name": "subject",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "auth_identities_user_id_users_id_fk": {
+          "name": "auth_identities_user_id_users_id_fk",
+          "tableFrom": "auth_identities",
+          "tableTo": "users",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "auth_identities_provider_subject_pk": {
+          "name": "auth_identities_provider_subject_pk",
+          "columns": [
+            "provider",
+            "subject"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "futbolsa.invites": {
+      "name": "invites",
+      "schema": "futbolsa",
+      "columns": {
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "invited_by": {
+          "name": "invited_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "used_at": {
+          "name": "used_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "invites_invited_by_users_id_fk": {
+          "name": "invites_invited_by_users_id_fk",
+          "tableFrom": "invites",
+          "tableTo": "users",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "invited_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "invites_email_lower_check": {
+          "name": "invites_email_lower_check",
+          "value": "\"futbolsa\".\"invites\".\"email\" = lower(\"futbolsa\".\"invites\".\"email\")"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.player_notices": {
+      "name": "player_notices",
+      "schema": "futbolsa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "player_notices_id_seq",
+            "schema": "futbolsa",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "read_at": {
+          "name": "read_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email_sent_at": {
+          "name": "email_sent_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email_attempts": {
+          "name": "email_attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {
+        "player_notices_user_unread_idx": {
+          "name": "player_notices_user_unread_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"futbolsa\".\"player_notices\".\"read_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "player_notices_mail_idx": {
+          "name": "player_notices_mail_idx",
+          "columns": [
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"futbolsa\".\"player_notices\".\"email_sent_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "player_notices_user_id_users_id_fk": {
+          "name": "player_notices_user_id_users_id_fk",
+          "tableFrom": "player_notices",
+          "tableTo": "users",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "player_notices_kind_check": {
+          "name": "player_notices_kind_check",
+          "value": "\"futbolsa\".\"player_notices\".\"kind\" in ('fraud_warning', 'fraud_ban')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.season_results": {
+      "name": "season_results",
+      "schema": "futbolsa",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "final_equity": {
+          "name": "final_equity",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "base": {
+          "name": "base",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "season_results_user_id_users_id_fk": {
+          "name": "season_results_user_id_users_id_fk",
+          "tableFrom": "season_results",
+          "tableTo": "users",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "season_results_season_id_seasons_id_fk": {
+          "name": "season_results_season_id_seasons_id_fk",
+          "tableFrom": "season_results",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "season_results_user_id_season_id_pk": {
+          "name": "season_results_user_id_season_id_pk",
+          "columns": [
+            "user_id",
+            "season_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "futbolsa.users": {
+      "name": "users",
+      "schema": "futbolsa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nickname": {
+          "name": "nickname",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'player'"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "terms_accepted_at": {
+          "name": "terms_accepted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "blocked_reason": {
+          "name": "blocked_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "users_email_lower_key": {
+          "name": "users_email_lower_key",
+          "columns": [
+            {
+              "expression": "lower(\"email\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "users_nickname_lower_key": {
+          "name": "users_nickname_lower_key",
+          "columns": [
+            {
+              "expression": "lower(\"nickname\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "users_role_check": {
+          "name": "users_role_check",
+          "value": "\"futbolsa\".\"users\".\"role\" in ('player', 'admin')"
+        },
+        "users_status_check": {
+          "name": "users_status_check",
+          "value": "\"futbolsa\".\"users\".\"status\" in ('active', 'blocked', 'deleted')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.admin_log": {
+      "name": "admin_log",
+      "schema": "futbolsa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "admin_log_id_seq",
+            "schema": "futbolsa",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at": {
+          "name": "at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_type": {
+          "name": "target_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "before": {
+          "name": "before",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "after": {
+          "name": "after",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "admin_log_at_idx": {
+          "name": "admin_log_at_idx",
+          "columns": [
+            {
+              "expression": "at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "admin_log_actor_id_users_id_fk": {
+          "name": "admin_log_actor_id_users_id_fk",
+          "tableFrom": "admin_log",
+          "tableTo": "users",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "actor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "futbolsa.bots": {
+      "name": "bots",
+      "schema": "futbolsa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "bots_id_seq",
+            "schema": "futbolsa",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "profile": {
+          "name": "profile",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "bots_profile_check": {
+          "name": "bots_profile_check",
+          "value": "\"futbolsa\".\"bots\".\"profile\" in ('dividendos', 'momentum', 'torcedor', 'aleatorio', 'trader', 'captura', 'analista', 'concentrador', 'antecipador')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.clubs": {
+      "name": "clubs",
+      "schema": "futbolsa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "clubs_id_seq",
+            "schema": "futbolsa",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "ticker": {
+          "name": "ticker",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "color_primary": {
+          "name": "color_primary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "color_secondary": {
+          "name": "color_secondary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "badge_abbr": {
+          "name": "badge_abbr",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "badge_pattern": {
+          "name": "badge_pattern",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "badge_ink": {
+          "name": "badge_ink",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "badge_extra": {
+          "name": "badge_extra",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "external_ids": {
+          "name": "external_ids",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "clubs_ticker_unique": {
+          "name": "clubs_ticker_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "ticker"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "futbolsa.matches": {
+      "name": "matches",
+      "schema": "futbolsa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "matches_id_seq",
+            "schema": "futbolsa",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "competition": {
+          "name": "competition",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "round": {
+          "name": "round",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phase": {
+          "name": "phase",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "home_club_id": {
+          "name": "home_club_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "away_club_id": {
+          "name": "away_club_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kickoff": {
+          "name": "kickoff",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "home_goals": {
+          "name": "home_goals",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "away_goals": {
+          "name": "away_goals",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "advanced_club_id": {
+          "name": "advanced_club_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'scheduled'"
+        },
+        "out_of_window": {
+          "name": "out_of_window",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_id": {
+          "name": "source_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "manual_override": {
+          "name": "manual_override",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "source_snapshot": {
+          "name": "source_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "matches_season_kickoff_idx": {
+          "name": "matches_season_kickoff_idx",
+          "columns": [
+            {
+              "expression": "season_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "kickoff",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "matches_season_id_seasons_id_fk": {
+          "name": "matches_season_id_seasons_id_fk",
+          "tableFrom": "matches",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "matches_home_club_id_clubs_id_fk": {
+          "name": "matches_home_club_id_clubs_id_fk",
+          "tableFrom": "matches",
+          "tableTo": "clubs",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "home_club_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "matches_away_club_id_clubs_id_fk": {
+          "name": "matches_away_club_id_clubs_id_fk",
+          "tableFrom": "matches",
+          "tableTo": "clubs",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "away_club_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "matches_advanced_club_id_clubs_id_fk": {
+          "name": "matches_advanced_club_id_clubs_id_fk",
+          "tableFrom": "matches",
+          "tableTo": "clubs",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "advanced_club_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "matches_source_key": {
+          "name": "matches_source_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "source",
+            "source_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "matches_competition_check": {
+          "name": "matches_competition_check",
+          "value": "\"futbolsa\".\"matches\".\"competition\" in ('brasileirao-a', 'brasileirao-b', 'copa-do-brasil', 'libertadores', 'sulamericana')"
+        },
+        "matches_status_check": {
+          "name": "matches_status_check",
+          "value": "\"futbolsa\".\"matches\".\"status\" in ('scheduled', 'finished', 'postponed', 'cancelled')"
+        },
+        "matches_clubs_check": {
+          "name": "matches_clubs_check",
+          "value": "\"futbolsa\".\"matches\".\"home_club_id\" <> \"futbolsa\".\"matches\".\"away_club_id\""
+        },
+        "matches_goals_check": {
+          "name": "matches_goals_check",
+          "value": "coalesce(\"futbolsa\".\"matches\".\"home_goals\", 0) >= 0 and coalesce(\"futbolsa\".\"matches\".\"away_goals\", 0) >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.season_clubs": {
+      "name": "season_clubs",
+      "schema": "futbolsa",
+      "columns": {
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "club_id": {
+          "name": "club_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "division": {
+          "name": "division",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prev_placement": {
+          "name": "prev_placement",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "band_center": {
+          "name": "band_center",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "band_floor": {
+          "name": "band_floor",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "band_ceiling": {
+          "name": "band_ceiling",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ipo_price": {
+          "name": "ipo_price",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_shares": {
+          "name": "total_shares",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "suspended_reason": {
+          "name": "suspended_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_price": {
+          "name": "last_price",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_trade_at": {
+          "name": "last_trade_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reference_price": {
+          "name": "reference_price",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mm_refreshed_at": {
+          "name": "mm_refreshed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tunnel_ref": {
+          "name": "tunnel_ref",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tunnel_ref_day": {
+          "name": "tunnel_ref_day",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "auction_opened_at": {
+          "name": "auction_opened_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "auction_until": {
+          "name": "auction_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "season_clubs_season_id_seasons_id_fk": {
+          "name": "season_clubs_season_id_seasons_id_fk",
+          "tableFrom": "season_clubs",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "season_clubs_club_id_clubs_id_fk": {
+          "name": "season_clubs_club_id_clubs_id_fk",
+          "tableFrom": "season_clubs",
+          "tableTo": "clubs",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "club_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "season_clubs_season_id_club_id_pk": {
+          "name": "season_clubs_season_id_club_id_pk",
+          "columns": [
+            "season_id",
+            "club_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "season_clubs_division_check": {
+          "name": "season_clubs_division_check",
+          "value": "\"futbolsa\".\"season_clubs\".\"division\" in ('A', 'B')"
+        },
+        "season_clubs_total_shares_check": {
+          "name": "season_clubs_total_shares_check",
+          "value": "\"futbolsa\".\"season_clubs\".\"total_shares\" >= 0"
+        },
+        "season_clubs_last_price_check": {
+          "name": "season_clubs_last_price_check",
+          "value": "\"futbolsa\".\"season_clubs\".\"last_price\" is null or \"futbolsa\".\"season_clubs\".\"last_price\" > 0"
+        },
+        "season_clubs_reference_price_check": {
+          "name": "season_clubs_reference_price_check",
+          "value": "\"futbolsa\".\"season_clubs\".\"reference_price\" is null or \"futbolsa\".\"season_clubs\".\"reference_price\" > 0"
+        },
+        "season_clubs_tunnel_ref_check": {
+          "name": "season_clubs_tunnel_ref_check",
+          "value": "\"futbolsa\".\"season_clubs\".\"tunnel_ref\" is null or \"futbolsa\".\"season_clubs\".\"tunnel_ref\" > 0"
+        },
+        "season_clubs_auction_check": {
+          "name": "season_clubs_auction_check",
+          "value": "\"futbolsa\".\"season_clubs\".\"auction_until\" is null or \"futbolsa\".\"season_clubs\".\"auction_opened_at\" is not null"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.seasons": {
+      "name": "seasons",
+      "schema": "futbolsa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "seasons_id_seq",
+            "schema": "futbolsa",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "year": {
+          "name": "year",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'preparing'"
+        },
+        "offer_size": {
+          "name": "offer_size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "first_kickoff": {
+          "name": "first_kickoff",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ipo_opens_at": {
+          "name": "ipo_opens_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ipo_closes_at": {
+          "name": "ipo_closes_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "trading_opens_at": {
+          "name": "trading_opens_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "trading_ended_at": {
+          "name": "trading_ended_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mm_quantity_bp": {
+          "name": "mm_quantity_bp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 25
+        },
+        "mm_match_quantity_bp": {
+          "name": "mm_match_quantity_bp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 6
+        },
+        "mm_min_side_qty": {
+          "name": "mm_min_side_qty",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 10
+        },
+        "mm_match_min_side_qty": {
+          "name": "mm_match_min_side_qty",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 3
+        },
+        "mm_lot_bp": {
+          "name": "mm_lot_bp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 2000
+        },
+        "bots_in_rankings": {
+          "name": "bots_in_rankings",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "suspended_reason": {
+          "name": "suspended_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "seasons_year_unique": {
+          "name": "seasons_year_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "year"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "seasons_status_check": {
+          "name": "seasons_status_check",
+          "value": "\"futbolsa\".\"seasons\".\"status\" in ('preparing', 'ipo_open', 'ipo_closed', 'trading', 'trading_ended', 'closed')"
+        },
+        "seasons_offer_size_check": {
+          "name": "seasons_offer_size_check",
+          "value": "\"futbolsa\".\"seasons\".\"offer_size\" is null or \"futbolsa\".\"seasons\".\"offer_size\" > 0"
+        },
+        "seasons_mm_bp_check": {
+          "name": "seasons_mm_bp_check",
+          "value": "\"futbolsa\".\"seasons\".\"mm_quantity_bp\" between 0 and 10000 and \"futbolsa\".\"seasons\".\"mm_match_quantity_bp\" between 0 and 10000 and \"futbolsa\".\"seasons\".\"mm_lot_bp\" between 0 and 10000"
+        },
+        "seasons_mm_min_side_qty_check": {
+          "name": "seasons_mm_min_side_qty_check",
+          "value": "\"futbolsa\".\"seasons\".\"mm_min_side_qty\" >= 1 and \"futbolsa\".\"seasons\".\"mm_match_min_side_qty\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.standings": {
+      "name": "standings",
+      "schema": "futbolsa",
+      "columns": {
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "competition": {
+          "name": "competition",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "club_id": {
+          "name": "club_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "points": {
+          "name": "points",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "manual_override": {
+          "name": "manual_override",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "confirmed_by": {
+          "name": "confirmed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confirmed_at": {
+          "name": "confirmed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "standings_season_id_seasons_id_fk": {
+          "name": "standings_season_id_seasons_id_fk",
+          "tableFrom": "standings",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "standings_club_id_clubs_id_fk": {
+          "name": "standings_club_id_clubs_id_fk",
+          "tableFrom": "standings",
+          "tableTo": "clubs",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "club_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "standings_confirmed_by_users_id_fk": {
+          "name": "standings_confirmed_by_users_id_fk",
+          "tableFrom": "standings",
+          "tableTo": "users",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "confirmed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "standings_season_id_competition_club_id_pk": {
+          "name": "standings_season_id_competition_club_id_pk",
+          "columns": [
+            "season_id",
+            "competition",
+            "club_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "standings_competition_check": {
+          "name": "standings_competition_check",
+          "value": "\"futbolsa\".\"standings\".\"competition\" in ('brasileirao-a', 'brasileirao-b', 'copa-do-brasil', 'libertadores', 'sulamericana')"
+        },
+        "standings_position_check": {
+          "name": "standings_position_check",
+          "value": "\"futbolsa\".\"standings\".\"position\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.club_projections": {
+      "name": "club_projections",
+      "schema": "futbolsa",
+      "columns": {
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "club_id": {
+          "name": "club_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "points": {
+          "name": "points",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cups": {
+          "name": "cups",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "club_projections_season_id_seasons_id_fk": {
+          "name": "club_projections_season_id_seasons_id_fk",
+          "tableFrom": "club_projections",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "club_projections_user_id_users_id_fk": {
+          "name": "club_projections_user_id_users_id_fk",
+          "tableFrom": "club_projections",
+          "tableTo": "users",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "club_projections_club_id_clubs_id_fk": {
+          "name": "club_projections_club_id_clubs_id_fk",
+          "tableFrom": "club_projections",
+          "tableTo": "clubs",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "club_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "club_projections_season_id_user_id_club_id_pk": {
+          "name": "club_projections_season_id_user_id_club_id_pk",
+          "columns": [
+            "season_id",
+            "user_id",
+            "club_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "club_projections_points_check": {
+          "name": "club_projections_points_check",
+          "value": "\"futbolsa\".\"club_projections\".\"points\" between 0 and 114"
+        },
+        "club_projections_position_check": {
+          "name": "club_projections_position_check",
+          "value": "\"futbolsa\".\"club_projections\".\"position\" between 1 and 20"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.cup_phases": {
+      "name": "cup_phases",
+      "schema": "futbolsa",
+      "columns": {
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "competition": {
+          "name": "competition",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phase_key": {
+          "name": "phase_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "variant": {
+          "name": "variant",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'advance'"
+        },
+        "ord": {
+          "name": "ord",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "per_share": {
+          "name": "per_share",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "cup_phases_season_id_seasons_id_fk": {
+          "name": "cup_phases_season_id_seasons_id_fk",
+          "tableFrom": "cup_phases",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "cup_phases_season_id_competition_phase_key_variant_pk": {
+          "name": "cup_phases_season_id_competition_phase_key_variant_pk",
+          "columns": [
+            "season_id",
+            "competition",
+            "phase_key",
+            "variant"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "cup_phases_competition_check": {
+          "name": "cup_phases_competition_check",
+          "value": "\"futbolsa\".\"cup_phases\".\"competition\" in ('copa-do-brasil', 'libertadores', 'sulamericana')"
+        },
+        "cup_phases_variant_check": {
+          "name": "cup_phases_variant_check",
+          "value": "\"futbolsa\".\"cup_phases\".\"variant\" in ('advance', 'title') or \"futbolsa\".\"cup_phases\".\"variant\" like 'to:%'"
+        },
+        "cup_phases_per_share_check": {
+          "name": "cup_phases_per_share_check",
+          "value": "\"futbolsa\".\"cup_phases\".\"per_share\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.season_cups": {
+      "name": "season_cups",
+      "schema": "futbolsa",
+      "columns": {
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "competition": {
+          "name": "competition",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "confirmed_by": {
+          "name": "confirmed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confirmed_at": {
+          "name": "confirmed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "season_cups_season_id_seasons_id_fk": {
+          "name": "season_cups_season_id_seasons_id_fk",
+          "tableFrom": "season_cups",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "season_cups_confirmed_by_users_id_fk": {
+          "name": "season_cups_confirmed_by_users_id_fk",
+          "tableFrom": "season_cups",
+          "tableTo": "users",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "confirmed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "season_cups_season_id_competition_pk": {
+          "name": "season_cups_season_id_competition_pk",
+          "columns": [
+            "season_id",
+            "competition"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "season_cups_competition_check": {
+          "name": "season_cups_competition_check",
+          "value": "\"futbolsa\".\"season_cups\".\"competition\" in ('copa-do-brasil', 'libertadores', 'sulamericana')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.season_qualifications": {
+      "name": "season_qualifications",
+      "schema": "futbolsa",
+      "columns": {
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "club_id": {
+          "name": "club_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cup": {
+          "name": "cup",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "season_qualifications_season_id_seasons_id_fk": {
+          "name": "season_qualifications_season_id_seasons_id_fk",
+          "tableFrom": "season_qualifications",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "season_qualifications_club_id_clubs_id_fk": {
+          "name": "season_qualifications_club_id_clubs_id_fk",
+          "tableFrom": "season_qualifications",
+          "tableTo": "clubs",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "club_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "season_qualifications_season_id_club_id_cup_pk": {
+          "name": "season_qualifications_season_id_club_id_cup_pk",
+          "columns": [
+            "season_id",
+            "club_id",
+            "cup"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "season_qualifications_cup_check": {
+          "name": "season_qualifications_cup_check",
+          "value": "\"futbolsa\".\"season_qualifications\".\"cup\" in ('libertadores', 'sulamericana')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.season_rules": {
+      "name": "season_rules",
+      "schema": "futbolsa",
+      "columns": {
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "a_per_point": {
+          "name": "a_per_point",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "b_per_point": {
+          "name": "b_per_point",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "a_placement": {
+          "name": "a_placement",
+          "type": "bigint[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "a_libertadores_bonus": {
+          "name": "a_libertadores_bonus",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "a_sulamericana_bonus": {
+          "name": "a_sulamericana_bonus",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "a_relegation_penalty": {
+          "name": "a_relegation_penalty",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "a_relegation_slots": {
+          "name": "a_relegation_slots",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "promotion_per_share": {
+          "name": "promotion_per_share",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "promotion_slots": {
+          "name": "promotion_slots",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "buyback_multiple_bp": {
+          "name": "buyback_multiple_bp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 15000
+        },
+        "locked_at": {
+          "name": "locked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "season_rules_season_id_seasons_id_fk": {
+          "name": "season_rules_season_id_seasons_id_fk",
+          "tableFrom": "season_rules",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "season_rules_values_check": {
+          "name": "season_rules_values_check",
+          "value": "\"futbolsa\".\"season_rules\".\"a_per_point\" >= 0 and \"futbolsa\".\"season_rules\".\"b_per_point\" >= 0 and \"futbolsa\".\"season_rules\".\"promotion_per_share\" >= 0 and \"futbolsa\".\"season_rules\".\"promotion_slots\" >= 0 and \"futbolsa\".\"season_rules\".\"buyback_multiple_bp\" >= 0 and \"futbolsa\".\"season_rules\".\"a_libertadores_bonus\" >= 0 and \"futbolsa\".\"season_rules\".\"a_sulamericana_bonus\" >= 0 and \"futbolsa\".\"season_rules\".\"a_relegation_penalty\" >= 0 and \"futbolsa\".\"season_rules\".\"a_relegation_slots\" between 0 and 20"
+        },
+        "season_rules_placement_check": {
+          "name": "season_rules_placement_check",
+          "value": "0 <= all(\"futbolsa\".\"season_rules\".\"a_placement\")"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.candles": {
+      "name": "candles",
+      "schema": "futbolsa",
+      "columns": {
+        "club_id": {
+          "name": "club_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "interval": {
+          "name": "interval",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "start": {
+          "name": "start",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "open": {
+          "name": "open",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "high": {
+          "name": "high",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "low": {
+          "name": "low",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "close": {
+          "name": "close",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "volume": {
+          "name": "volume",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "turnover": {
+          "name": "turnover",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "candles_club_id_clubs_id_fk": {
+          "name": "candles_club_id_clubs_id_fk",
+          "tableFrom": "candles",
+          "tableTo": "clubs",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "club_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "candles_club_id_interval_start_pk": {
+          "name": "candles_club_id_interval_start_pk",
+          "columns": [
+            "club_id",
+            "interval",
+            "start"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "candles_interval_check": {
+          "name": "candles_interval_check",
+          "value": "\"futbolsa\".\"candles\".\"interval\" in ('15m', '1d')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.equity_daily": {
+      "name": "equity_daily",
+      "schema": "futbolsa",
+      "columns": {
+        "wallet_id": {
+          "name": "wallet_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "day": {
+          "name": "day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "equity": {
+          "name": "equity",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "equity_daily_wallet_id_wallets_id_fk": {
+          "name": "equity_daily_wallet_id_wallets_id_fk",
+          "tableFrom": "equity_daily",
+          "tableTo": "wallets",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "wallet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "equity_daily_wallet_id_day_pk": {
+          "name": "equity_daily_wallet_id_day_pk",
+          "columns": [
+            "wallet_id",
+            "day"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "futbolsa.portfolio_snapshots": {
+      "name": "portfolio_snapshots",
+      "schema": "futbolsa",
+      "columns": {
+        "wallet_id": {
+          "name": "wallet_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "month": {
+          "name": "month",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slices": {
+          "name": "slices",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "taken_at": {
+          "name": "taken_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "portfolio_snapshots_wallet_id_wallets_id_fk": {
+          "name": "portfolio_snapshots_wallet_id_wallets_id_fk",
+          "tableFrom": "portfolio_snapshots",
+          "tableTo": "wallets",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "wallet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "portfolio_snapshots_wallet_id_month_pk": {
+          "name": "portfolio_snapshots_wallet_id_month_pk",
+          "columns": [
+            "wallet_id",
+            "month"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "portfolio_snapshots_month_check": {
+          "name": "portfolio_snapshots_month_check",
+          "value": "\"futbolsa\".\"portfolio_snapshots\".\"month\" ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.positions": {
+      "name": "positions",
+      "schema": "futbolsa",
+      "columns": {
+        "wallet_id": {
+          "name": "wallet_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "club_id": {
+          "name": "club_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "shares": {
+          "name": "shares",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "reserved_shares": {
+          "name": "reserved_shares",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "cost": {
+          "name": "cost",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "realized": {
+          "name": "realized",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "dividends": {
+          "name": "dividends",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "positions_wallet_id_wallets_id_fk": {
+          "name": "positions_wallet_id_wallets_id_fk",
+          "tableFrom": "positions",
+          "tableTo": "wallets",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "wallet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "positions_club_id_clubs_id_fk": {
+          "name": "positions_club_id_clubs_id_fk",
+          "tableFrom": "positions",
+          "tableTo": "clubs",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "club_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "positions_wallet_id_club_id_pk": {
+          "name": "positions_wallet_id_club_id_pk",
+          "columns": [
+            "wallet_id",
+            "club_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "positions_shares_check": {
+          "name": "positions_shares_check",
+          "value": "\"futbolsa\".\"positions\".\"shares\" >= \"futbolsa\".\"positions\".\"reserved_shares\" and \"futbolsa\".\"positions\".\"reserved_shares\" >= 0"
+        },
+        "positions_cost_check": {
+          "name": "positions_cost_check",
+          "value": "\"futbolsa\".\"positions\".\"cost\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.wallet_entries": {
+      "name": "wallet_entries",
+      "schema": "futbolsa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "wallet_entries_id_seq",
+            "schema": "futbolsa",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "wallet_id": {
+          "name": "wallet_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at": {
+          "name": "at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "club_id": {
+          "name": "club_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cash_delta": {
+          "name": "cash_delta",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "reserved_cash_delta": {
+          "name": "reserved_cash_delta",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "shares_delta": {
+          "name": "shares_delta",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "reserved_shares_delta": {
+          "name": "reserved_shares_delta",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "price": {
+          "name": "price",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "realized": {
+          "name": "realized",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cash_after": {
+          "name": "cash_after",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ref_type": {
+          "name": "ref_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ref_id": {
+          "name": "ref_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "wallet_entries_wallet_club_at_idx": {
+          "name": "wallet_entries_wallet_club_at_idx",
+          "columns": [
+            {
+              "expression": "wallet_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "club_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "wallet_entries_wallet_at_idx": {
+          "name": "wallet_entries_wallet_at_idx",
+          "columns": [
+            {
+              "expression": "wallet_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "wallet_entries_wallet_id_wallets_id_fk": {
+          "name": "wallet_entries_wallet_id_wallets_id_fk",
+          "tableFrom": "wallet_entries",
+          "tableTo": "wallets",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "wallet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "wallet_entries_club_id_clubs_id_fk": {
+          "name": "wallet_entries_club_id_clubs_id_fk",
+          "tableFrom": "wallet_entries",
+          "tableTo": "clubs",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "club_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "wallet_entries_kind_check": {
+          "name": "wallet_entries_kind_check",
+          "value": "\"futbolsa\".\"wallet_entries\".\"kind\" in ('initial', 'ipo_reserve', 'ipo_settle', 'index_entry', 'trade', 'order_reserve', 'order_release', 'dividend', 'reversal', 'complement', 'adjustment', 'buyback', 'season_close', 'account_deleted', 'trade_annulled')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.wallets": {
+      "name": "wallets",
+      "schema": "futbolsa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "wallets_id_seq",
+            "schema": "futbolsa",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_type": {
+          "name": "owner_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bot_id": {
+          "name": "bot_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cash": {
+          "name": "cash",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "reserved_cash": {
+          "name": "reserved_cash",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "entered_at": {
+          "name": "entered_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entry_mode": {
+          "name": "entry_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "open_orders": {
+          "name": "open_orders",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {
+        "wallets_season_user_key": {
+          "name": "wallets_season_user_key",
+          "columns": [
+            {
+              "expression": "season_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "wallets_season_bot_key": {
+          "name": "wallets_season_bot_key",
+          "columns": [
+            {
+              "expression": "season_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "bot_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "wallets_season_treasury_key": {
+          "name": "wallets_season_treasury_key",
+          "columns": [
+            {
+              "expression": "season_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"futbolsa\".\"wallets\".\"owner_type\" = 'treasury'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "wallets_season_id_seasons_id_fk": {
+          "name": "wallets_season_id_seasons_id_fk",
+          "tableFrom": "wallets",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "wallets_user_id_users_id_fk": {
+          "name": "wallets_user_id_users_id_fk",
+          "tableFrom": "wallets",
+          "tableTo": "users",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "wallets_bot_id_bots_id_fk": {
+          "name": "wallets_bot_id_bots_id_fk",
+          "tableFrom": "wallets",
+          "tableTo": "bots",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "bot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "wallets_owner_type_check": {
+          "name": "wallets_owner_type_check",
+          "value": "\"futbolsa\".\"wallets\".\"owner_type\" in ('user', 'bot', 'treasury')"
+        },
+        "wallets_owner_check": {
+          "name": "wallets_owner_check",
+          "value": "(\"futbolsa\".\"wallets\".\"owner_type\" = 'user' and \"futbolsa\".\"wallets\".\"user_id\" is not null and \"futbolsa\".\"wallets\".\"bot_id\" is null)\n        or (\"futbolsa\".\"wallets\".\"owner_type\" = 'bot' and \"futbolsa\".\"wallets\".\"bot_id\" is not null and \"futbolsa\".\"wallets\".\"user_id\" is null)\n        or (\"futbolsa\".\"wallets\".\"owner_type\" = 'treasury' and \"futbolsa\".\"wallets\".\"user_id\" is null and \"futbolsa\".\"wallets\".\"bot_id\" is null)"
+        },
+        "wallets_entry_mode_check": {
+          "name": "wallets_entry_mode_check",
+          "value": "\"futbolsa\".\"wallets\".\"entry_mode\" is null or \"futbolsa\".\"wallets\".\"entry_mode\" in ('ipo', 'index', 'cash')"
+        },
+        "wallets_reserved_cash_check": {
+          "name": "wallets_reserved_cash_check",
+          "value": "\"futbolsa\".\"wallets\".\"reserved_cash\" >= 0"
+        },
+        "wallets_cash_check": {
+          "name": "wallets_cash_check",
+          "value": "\"futbolsa\".\"wallets\".\"cash\" >= \"futbolsa\".\"wallets\".\"reserved_cash\" or \"futbolsa\".\"wallets\".\"reserved_cash\" = 0"
+        },
+        "wallets_open_orders_check": {
+          "name": "wallets_open_orders_check",
+          "value": "\"futbolsa\".\"wallets\".\"open_orders\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.market_refresh_requests": {
+      "name": "market_refresh_requests",
+      "schema": "futbolsa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "market_refresh_requests_id_seq",
+            "schema": "futbolsa",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "club_id": {
+          "name": "club_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "requested_at": {
+          "name": "requested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "done_at": {
+          "name": "done_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "market_refresh_requests_pending_idx": {
+          "name": "market_refresh_requests_pending_idx",
+          "columns": [
+            {
+              "expression": "club_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"futbolsa\".\"market_refresh_requests\".\"done_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "market_refresh_requests_season_id_seasons_id_fk": {
+          "name": "market_refresh_requests_season_id_seasons_id_fk",
+          "tableFrom": "market_refresh_requests",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "market_refresh_requests_club_id_clubs_id_fk": {
+          "name": "market_refresh_requests_club_id_clubs_id_fk",
+          "tableFrom": "market_refresh_requests",
+          "tableTo": "clubs",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "club_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "market_refresh_requests_reason_check": {
+          "name": "market_refresh_requests_reason_check",
+          "value": "\"futbolsa\".\"market_refresh_requests\".\"reason\" in ('score', 'correction', 'close', 'resume')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.orders": {
+      "name": "orders",
+      "schema": "futbolsa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "orders_id_seq",
+            "schema": "futbolsa",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "club_id": {
+          "name": "club_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wallet_id": {
+          "name": "wallet_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "side": {
+          "name": "side",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "filled": {
+          "name": "filled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "limit_price": {
+          "name": "limit_price",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reserved_cash": {
+          "name": "reserved_cash",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'open'"
+        },
+        "cancel_reason": {
+          "name": "cancel_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "orders_book_idx": {
+          "name": "orders_book_idx",
+          "columns": [
+            {
+              "expression": "club_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "side",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "limit_price",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"futbolsa\".\"orders\".\"status\" = 'open'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "orders_wallet_open_idx": {
+          "name": "orders_wallet_open_idx",
+          "columns": [
+            {
+              "expression": "wallet_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"futbolsa\".\"orders\".\"status\" = 'open'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "orders_wallet_created_idx": {
+          "name": "orders_wallet_created_idx",
+          "columns": [
+            {
+              "expression": "wallet_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "orders_season_id_seasons_id_fk": {
+          "name": "orders_season_id_seasons_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "orders_club_id_clubs_id_fk": {
+          "name": "orders_club_id_clubs_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "clubs",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "club_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "orders_wallet_id_wallets_id_fk": {
+          "name": "orders_wallet_id_wallets_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "wallets",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "wallet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "orders_side_check": {
+          "name": "orders_side_check",
+          "value": "\"futbolsa\".\"orders\".\"side\" in ('buy', 'sell')"
+        },
+        "orders_type_check": {
+          "name": "orders_type_check",
+          "value": "\"futbolsa\".\"orders\".\"type\" in ('limit', 'market')"
+        },
+        "orders_status_check": {
+          "name": "orders_status_check",
+          "value": "\"futbolsa\".\"orders\".\"status\" in ('open', 'filled', 'cancelled')"
+        },
+        "orders_cancel_reason_check": {
+          "name": "orders_cancel_reason_check",
+          "value": "\"futbolsa\".\"orders\".\"cancel_reason\" is null or \"futbolsa\".\"orders\".\"cancel_reason\" in ('player', 'blocked', 'deleted', 'bot_off', 'reversal', 'trading_end', 'house_refresh', 'suspension', 'market_remainder', 'annulment')"
+        },
+        "orders_quantity_check": {
+          "name": "orders_quantity_check",
+          "value": "\"futbolsa\".\"orders\".\"quantity\" > 0 and \"futbolsa\".\"orders\".\"filled\" >= 0 and \"futbolsa\".\"orders\".\"filled\" <= \"futbolsa\".\"orders\".\"quantity\""
+        },
+        "orders_limit_price_check": {
+          "name": "orders_limit_price_check",
+          "value": "(\"futbolsa\".\"orders\".\"type\" = 'limit' and \"futbolsa\".\"orders\".\"limit_price\" > 0) or (\"futbolsa\".\"orders\".\"type\" = 'market' and \"futbolsa\".\"orders\".\"limit_price\" is null)"
+        },
+        "orders_reserved_cash_check": {
+          "name": "orders_reserved_cash_check",
+          "value": "\"futbolsa\".\"orders\".\"reserved_cash\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.trade_annulments": {
+      "name": "trade_annulments",
+      "schema": "futbolsa",
+      "columns": {
+        "trade_id": {
+          "name": "trade_id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "case_id": {
+          "name": "case_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at": {
+          "name": "at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "shares_returned": {
+          "name": "shares_returned",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "cash_returned": {
+          "name": "cash_returned",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "shares_short": {
+          "name": "shares_short",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "trade_annulments_trade_id_trades_id_fk": {
+          "name": "trade_annulments_trade_id_trades_id_fk",
+          "tableFrom": "trade_annulments",
+          "tableTo": "trades",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "trade_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "trade_annulments_values_check": {
+          "name": "trade_annulments_values_check",
+          "value": "\"futbolsa\".\"trade_annulments\".\"shares_returned\" >= 0 and \"futbolsa\".\"trade_annulments\".\"shares_short\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.trades": {
+      "name": "trades",
+      "schema": "futbolsa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "trades_id_seq",
+            "schema": "futbolsa",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "club_id": {
+          "name": "club_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at": {
+          "name": "at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "price": {
+          "name": "price",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "buy_order_id": {
+          "name": "buy_order_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sell_order_id": {
+          "name": "sell_order_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "buyer_wallet_id": {
+          "name": "buyer_wallet_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seller_wallet_id": {
+          "name": "seller_wallet_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "with_house": {
+          "name": "with_house",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "price_before": {
+          "name": "price_before",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "in_auction": {
+          "name": "in_auction",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "trades_club_at_idx": {
+          "name": "trades_club_at_idx",
+          "columns": [
+            {
+              "expression": "club_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trades_season_at_idx": {
+          "name": "trades_season_at_idx",
+          "columns": [
+            {
+              "expression": "season_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trades_buyer_at_idx": {
+          "name": "trades_buyer_at_idx",
+          "columns": [
+            {
+              "expression": "buyer_wallet_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trades_seller_at_idx": {
+          "name": "trades_seller_at_idx",
+          "columns": [
+            {
+              "expression": "seller_wallet_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "trades_season_id_seasons_id_fk": {
+          "name": "trades_season_id_seasons_id_fk",
+          "tableFrom": "trades",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "trades_club_id_clubs_id_fk": {
+          "name": "trades_club_id_clubs_id_fk",
+          "tableFrom": "trades",
+          "tableTo": "clubs",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "club_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "trades_buy_order_id_orders_id_fk": {
+          "name": "trades_buy_order_id_orders_id_fk",
+          "tableFrom": "trades",
+          "tableTo": "orders",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "buy_order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "trades_sell_order_id_orders_id_fk": {
+          "name": "trades_sell_order_id_orders_id_fk",
+          "tableFrom": "trades",
+          "tableTo": "orders",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "sell_order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "trades_buyer_wallet_id_wallets_id_fk": {
+          "name": "trades_buyer_wallet_id_wallets_id_fk",
+          "tableFrom": "trades",
+          "tableTo": "wallets",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "buyer_wallet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "trades_seller_wallet_id_wallets_id_fk": {
+          "name": "trades_seller_wallet_id_wallets_id_fk",
+          "tableFrom": "trades",
+          "tableTo": "wallets",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "seller_wallet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "trades_values_check": {
+          "name": "trades_values_check",
+          "value": "\"futbolsa\".\"trades\".\"price\" > 0 and \"futbolsa\".\"trades\".\"quantity\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.ipo_allocations": {
+      "name": "ipo_allocations",
+      "schema": "futbolsa",
+      "columns": {
+        "bid_id": {
+          "name": "bid_id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "shares": {
+          "name": "shares",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "paid": {
+          "name": "paid",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "refunded": {
+          "name": "refunded",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ipo_allocations_bid_id_ipo_bids_id_fk": {
+          "name": "ipo_allocations_bid_id_ipo_bids_id_fk",
+          "tableFrom": "ipo_allocations",
+          "tableTo": "ipo_bids",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "bid_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ipo_allocations_values_check": {
+          "name": "ipo_allocations_values_check",
+          "value": "\"futbolsa\".\"ipo_allocations\".\"shares\" >= 0 and \"futbolsa\".\"ipo_allocations\".\"paid\" >= 0 and \"futbolsa\".\"ipo_allocations\".\"refunded\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.ipo_bids": {
+      "name": "ipo_bids",
+      "schema": "futbolsa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "ipo_bids_id_seq",
+            "schema": "futbolsa",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "club_id": {
+          "name": "club_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wallet_id": {
+          "name": "wallet_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_price": {
+          "name": "max_price",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reserved": {
+          "name": "reserved",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ipo_bids_season_id_seasons_id_fk": {
+          "name": "ipo_bids_season_id_seasons_id_fk",
+          "tableFrom": "ipo_bids",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ipo_bids_club_id_clubs_id_fk": {
+          "name": "ipo_bids_club_id_clubs_id_fk",
+          "tableFrom": "ipo_bids",
+          "tableTo": "clubs",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "club_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ipo_bids_wallet_id_wallets_id_fk": {
+          "name": "ipo_bids_wallet_id_wallets_id_fk",
+          "tableFrom": "ipo_bids",
+          "tableTo": "wallets",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "wallet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "ipo_bids_season_club_wallet_key": {
+          "name": "ipo_bids_season_club_wallet_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "season_id",
+            "club_id",
+            "wallet_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "ipo_bids_status_check": {
+          "name": "ipo_bids_status_check",
+          "value": "\"futbolsa\".\"ipo_bids\".\"status\" in ('active', 'cancelled', 'settled')"
+        },
+        "ipo_bids_values_check": {
+          "name": "ipo_bids_values_check",
+          "value": "\"futbolsa\".\"ipo_bids\".\"quantity\" > 0 and \"futbolsa\".\"ipo_bids\".\"max_price\" > 0 and \"futbolsa\".\"ipo_bids\".\"reserved\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.ipo_results": {
+      "name": "ipo_results",
+      "schema": "futbolsa",
+      "columns": {
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "club_id": {
+          "name": "club_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cut_price": {
+          "name": "cut_price",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "demand_at_cut": {
+          "name": "demand_at_cut",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "allocation_num": {
+          "name": "allocation_num",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "allocation_den": {
+          "name": "allocation_den",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "treasury_shares": {
+          "name": "treasury_shares",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mm_lot_shares": {
+          "name": "mm_lot_shares",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "settled_at": {
+          "name": "settled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ipo_results_season_id_seasons_id_fk": {
+          "name": "ipo_results_season_id_seasons_id_fk",
+          "tableFrom": "ipo_results",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ipo_results_club_id_clubs_id_fk": {
+          "name": "ipo_results_club_id_clubs_id_fk",
+          "tableFrom": "ipo_results",
+          "tableTo": "clubs",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "club_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "ipo_results_season_id_club_id_pk": {
+          "name": "ipo_results_season_id_club_id_pk",
+          "columns": [
+            "season_id",
+            "club_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ipo_results_values_check": {
+          "name": "ipo_results_values_check",
+          "value": "\"futbolsa\".\"ipo_results\".\"cut_price\" > 0 and \"futbolsa\".\"ipo_results\".\"allocation_den\" > 0 and \"futbolsa\".\"ipo_results\".\"treasury_shares\" >= 0 and \"futbolsa\".\"ipo_results\".\"mm_lot_shares\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.payout_credits": {
+      "name": "payout_credits",
+      "schema": "futbolsa",
+      "columns": {
+        "event_id": {
+          "name": "event_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wallet_id": {
+          "name": "wallet_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entry_id": {
+          "name": "entry_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "payout_credits_event_id_payout_events_id_fk": {
+          "name": "payout_credits_event_id_payout_events_id_fk",
+          "tableFrom": "payout_credits",
+          "tableTo": "payout_events",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "payout_credits_wallet_id_wallets_id_fk": {
+          "name": "payout_credits_wallet_id_wallets_id_fk",
+          "tableFrom": "payout_credits",
+          "tableTo": "wallets",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "wallet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "payout_credits_entry_id_wallet_entries_id_fk": {
+          "name": "payout_credits_entry_id_wallet_entries_id_fk",
+          "tableFrom": "payout_credits",
+          "tableTo": "wallet_entries",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "entry_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "payout_credits_event_id_wallet_id_pk": {
+          "name": "payout_credits_event_id_wallet_id_pk",
+          "columns": [
+            "event_id",
+            "wallet_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "futbolsa.payout_events": {
+      "name": "payout_events",
+      "schema": "futbolsa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "payout_events_id_seq",
+            "schema": "futbolsa",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "club_id": {
+          "name": "club_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_key": {
+          "name": "event_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "competition": {
+          "name": "competition",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "round": {
+          "name": "round",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phase": {
+          "name": "phase",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "per_share": {
+          "name": "per_share",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "supersedes_id": {
+          "name": "supersedes_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approved_by": {
+          "name": "approved_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "payout_events_current_key": {
+          "name": "payout_events_current_key",
+          "columns": [
+            {
+              "expression": "season_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "club_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "event_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"futbolsa\".\"payout_events\".\"status\" <> 'superseded'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payout_events_season_status_idx": {
+          "name": "payout_events_season_status_idx",
+          "columns": [
+            {
+              "expression": "season_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "payout_events_season_id_seasons_id_fk": {
+          "name": "payout_events_season_id_seasons_id_fk",
+          "tableFrom": "payout_events",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "payout_events_club_id_clubs_id_fk": {
+          "name": "payout_events_club_id_clubs_id_fk",
+          "tableFrom": "payout_events",
+          "tableTo": "clubs",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "club_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "payout_events_supersedes_id_payout_events_id_fk": {
+          "name": "payout_events_supersedes_id_payout_events_id_fk",
+          "tableFrom": "payout_events",
+          "tableTo": "payout_events",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "supersedes_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "payout_events_approved_by_users_id_fk": {
+          "name": "payout_events_approved_by_users_id_fk",
+          "tableFrom": "payout_events",
+          "tableTo": "users",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "approved_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "payout_events_kind_check": {
+          "name": "payout_events_kind_check",
+          "value": "\"futbolsa\".\"payout_events\".\"kind\" in ('points', 'placement', 'qualification', 'relegation', 'cup_phase', 'cup_title', 'promotion', 'buyback')"
+        },
+        "payout_events_status_check": {
+          "name": "payout_events_status_check",
+          "value": "\"futbolsa\".\"payout_events\".\"status\" in ('pending', 'approved', 'superseded')"
+        },
+        "payout_events_competition_check": {
+          "name": "payout_events_competition_check",
+          "value": "\"futbolsa\".\"payout_events\".\"competition\" is null or \"futbolsa\".\"payout_events\".\"competition\" in ('brasileirao-a', 'brasileirao-b', 'copa-do-brasil', 'libertadores', 'sulamericana')"
+        },
+        "payout_events_values_check": {
+          "name": "payout_events_values_check",
+          "value": "(\"futbolsa\".\"payout_events\".\"per_share\" >= 0 or \"futbolsa\".\"payout_events\".\"kind\" = 'relegation') and \"futbolsa\".\"payout_events\".\"version\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.payout_holdings": {
+      "name": "payout_holdings",
+      "schema": "futbolsa",
+      "columns": {
+        "event_id": {
+          "name": "event_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wallet_id": {
+          "name": "wallet_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "shares": {
+          "name": "shares",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "payout_holdings_event_id_payout_events_id_fk": {
+          "name": "payout_holdings_event_id_payout_events_id_fk",
+          "tableFrom": "payout_holdings",
+          "tableTo": "payout_events",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "payout_holdings_wallet_id_wallets_id_fk": {
+          "name": "payout_holdings_wallet_id_wallets_id_fk",
+          "tableFrom": "payout_holdings",
+          "tableTo": "wallets",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "wallet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "payout_holdings_event_id_wallet_id_pk": {
+          "name": "payout_holdings_event_id_wallet_id_pk",
+          "columns": [
+            "event_id",
+            "wallet_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "payout_holdings_shares_check": {
+          "name": "payout_holdings_shares_check",
+          "value": "\"futbolsa\".\"payout_holdings\".\"shares\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.ranking_recalc_requests": {
+      "name": "ranking_recalc_requests",
+      "schema": "futbolsa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "ranking_recalc_requests_id_seq",
+            "schema": "futbolsa",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_at": {
+          "name": "from_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "requested_at": {
+          "name": "requested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "done_at": {
+          "name": "done_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "ranking_recalc_requests_open_key": {
+          "name": "ranking_recalc_requests_open_key",
+          "columns": [
+            {
+              "expression": "season_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"futbolsa\".\"ranking_recalc_requests\".\"done_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ranking_recalc_requests_season_idx": {
+          "name": "ranking_recalc_requests_season_idx",
+          "columns": [
+            {
+              "expression": "season_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ranking_recalc_requests_season_id_seasons_id_fk": {
+          "name": "ranking_recalc_requests_season_id_seasons_id_fk",
+          "tableFrom": "ranking_recalc_requests",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "futbolsa.ranking_rows": {
+      "name": "ranking_rows",
+      "schema": "futbolsa",
+      "columns": {
+        "snapshot_id": {
+          "name": "snapshot_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wallet_id": {
+          "name": "wallet_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "base": {
+          "name": "base",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "equity": {
+          "name": "equity",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ranking_rows_snapshot_id_ranking_snapshots_id_fk": {
+          "name": "ranking_rows_snapshot_id_ranking_snapshots_id_fk",
+          "tableFrom": "ranking_rows",
+          "tableTo": "ranking_snapshots",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "snapshot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ranking_rows_wallet_id_wallets_id_fk": {
+          "name": "ranking_rows_wallet_id_wallets_id_fk",
+          "tableFrom": "ranking_rows",
+          "tableTo": "wallets",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "wallet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "ranking_rows_snapshot_id_wallet_id_pk": {
+          "name": "ranking_rows_snapshot_id_wallet_id_pk",
+          "columns": [
+            "snapshot_id",
+            "wallet_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ranking_rows_values_check": {
+          "name": "ranking_rows_values_check",
+          "value": "\"futbolsa\".\"ranking_rows\".\"base\" is not null and \"futbolsa\".\"ranking_rows\".\"position\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.ranking_snapshots": {
+      "name": "ranking_snapshots",
+      "schema": "futbolsa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "ranking_snapshots_id_seq",
+            "schema": "futbolsa",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period": {
+          "name": "period",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_key": {
+          "name": "period_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bots_included": {
+          "name": "bots_included",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ranking_snapshots_season_id_seasons_id_fk": {
+          "name": "ranking_snapshots_season_id_seasons_id_fk",
+          "tableFrom": "ranking_snapshots",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "ranking_snapshots_version_key": {
+          "name": "ranking_snapshots_version_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "season_id",
+            "period",
+            "period_key",
+            "version"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "ranking_snapshots_period_check": {
+          "name": "ranking_snapshots_period_check",
+          "value": "\"futbolsa\".\"ranking_snapshots\".\"period\" in ('month', 'season')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.idempotency_keys": {
+      "name": "idempotency_keys",
+      "schema": "futbolsa",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status_code": {
+          "name": "status_code",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "response": {
+          "name": "response",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "idempotency_keys_user_id_users_id_fk": {
+          "name": "idempotency_keys_user_id_users_id_fk",
+          "tableFrom": "idempotency_keys",
+          "tableTo": "users",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "idempotency_keys_user_id_key_pk": {
+          "name": "idempotency_keys_user_id_key_pk",
+          "columns": [
+            "user_id",
+            "key"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "futbolsa.fraud_case_trades": {
+      "name": "fraud_case_trades",
+      "schema": "futbolsa",
+      "columns": {
+        "case_id": {
+          "name": "case_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "trade_id": {
+          "name": "trade_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "suspicious": {
+          "name": "suspicious",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "selected": {
+          "name": "selected",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        }
+      },
+      "indexes": {
+        "fraud_case_trades_trade_idx": {
+          "name": "fraud_case_trades_trade_idx",
+          "columns": [
+            {
+              "expression": "trade_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "fraud_case_trades_case_id_fraud_cases_id_fk": {
+          "name": "fraud_case_trades_case_id_fraud_cases_id_fk",
+          "tableFrom": "fraud_case_trades",
+          "tableTo": "fraud_cases",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "case_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "fraud_case_trades_trade_id_trades_id_fk": {
+          "name": "fraud_case_trades_trade_id_trades_id_fk",
+          "tableFrom": "fraud_case_trades",
+          "tableTo": "trades",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "trade_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "fraud_case_trades_case_id_trade_id_pk": {
+          "name": "fraud_case_trades_case_id_trade_id_pk",
+          "columns": [
+            "case_id",
+            "trade_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "futbolsa.fraud_cases": {
+      "name": "fraud_cases",
+      "schema": "futbolsa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "fraud_cases_id_seq",
+            "schema": "futbolsa",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "origin": {
+          "name": "origin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'open'"
+        },
+        "wallet_low": {
+          "name": "wallet_low",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wallet_high": {
+          "name": "wallet_high",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "club_id": {
+          "name": "club_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "period_from": {
+          "name": "period_from",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_to": {
+          "name": "period_to",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "opened_by": {
+          "name": "opened_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "opened_at": {
+          "name": "opened_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decided_by": {
+          "name": "decided_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decided_at": {
+          "name": "decided_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decision_reason": {
+          "name": "decision_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "report": {
+          "name": "report",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "report_hash": {
+          "name": "report_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "fraud_cases_open_alert_key": {
+          "name": "fraud_cases_open_alert_key",
+          "columns": [
+            {
+              "expression": "season_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "club_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "wallet_low",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "wallet_high",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"futbolsa\".\"fraud_cases\".\"origin\" = 'alert' and \"futbolsa\".\"fraud_cases\".\"status\" = 'open'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "fraud_cases_season_status_idx": {
+          "name": "fraud_cases_season_status_idx",
+          "columns": [
+            {
+              "expression": "season_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "fraud_cases_season_id_seasons_id_fk": {
+          "name": "fraud_cases_season_id_seasons_id_fk",
+          "tableFrom": "fraud_cases",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "fraud_cases_wallet_low_wallets_id_fk": {
+          "name": "fraud_cases_wallet_low_wallets_id_fk",
+          "tableFrom": "fraud_cases",
+          "tableTo": "wallets",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "wallet_low"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "fraud_cases_wallet_high_wallets_id_fk": {
+          "name": "fraud_cases_wallet_high_wallets_id_fk",
+          "tableFrom": "fraud_cases",
+          "tableTo": "wallets",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "wallet_high"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "fraud_cases_club_id_clubs_id_fk": {
+          "name": "fraud_cases_club_id_clubs_id_fk",
+          "tableFrom": "fraud_cases",
+          "tableTo": "clubs",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "club_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "fraud_cases_opened_by_users_id_fk": {
+          "name": "fraud_cases_opened_by_users_id_fk",
+          "tableFrom": "fraud_cases",
+          "tableTo": "users",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "opened_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "fraud_cases_decided_by_users_id_fk": {
+          "name": "fraud_cases_decided_by_users_id_fk",
+          "tableFrom": "fraud_cases",
+          "tableTo": "users",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "decided_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "fraud_cases_origin_check": {
+          "name": "fraud_cases_origin_check",
+          "value": "\"futbolsa\".\"fraud_cases\".\"origin\" in ('alert', 'manual')"
+        },
+        "fraud_cases_status_check": {
+          "name": "fraud_cases_status_check",
+          "value": "\"futbolsa\".\"fraud_cases\".\"status\" in ('open', 'confirmed', 'dismissed')"
+        },
+        "fraud_cases_pair_check": {
+          "name": "fraud_cases_pair_check",
+          "value": "\"futbolsa\".\"fraud_cases\".\"wallet_low\" < \"futbolsa\".\"fraud_cases\".\"wallet_high\""
+        },
+        "fraud_cases_period_check": {
+          "name": "fraud_cases_period_check",
+          "value": "\"futbolsa\".\"fraud_cases\".\"period_from\" <= \"futbolsa\".\"fraud_cases\".\"period_to\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "futbolsa.fraud_warnings": {
+      "name": "fraud_warnings",
+      "schema": "futbolsa",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "fraud_warnings_id_seq",
+            "schema": "futbolsa",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "case_id": {
+          "name": "case_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at": {
+          "name": "at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "fraud_warnings_user_case_key": {
+          "name": "fraud_warnings_user_case_key",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "case_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "fraud_warnings_user_season_idx": {
+          "name": "fraud_warnings_user_season_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "season_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "fraud_warnings_user_id_users_id_fk": {
+          "name": "fraud_warnings_user_id_users_id_fk",
+          "tableFrom": "fraud_warnings",
+          "tableTo": "users",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "fraud_warnings_season_id_seasons_id_fk": {
+          "name": "fraud_warnings_season_id_seasons_id_fk",
+          "tableFrom": "fraud_warnings",
+          "tableTo": "seasons",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "fraud_warnings_case_id_fraud_cases_id_fk": {
+          "name": "fraud_warnings_case_id_fraud_cases_id_fk",
+          "tableFrom": "fraud_warnings",
+          "tableTo": "fraud_cases",
+          "schemaTo": "futbolsa",
+          "columnsFrom": [
+            "case_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {
+    "futbolsa": "futbolsa"
+  },
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

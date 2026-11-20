@@ -5,12 +5,13 @@ import {
   COMMON_ERROR_MESSAGES,
   type ImportKind,
   type PatchStandingsBody,
+  type PutQualifiedBody,
   type StandingsCompetition,
   type StandingsView,
 } from "@futbolsa/contracts";
 import { Clock } from "../../../infra/clock/index.js";
 import { DB, type Database, lockSeason, type Tx, withTransaction } from "../../../infra/db/index.js";
-import { clubs, standings, users } from "../../../infra/db/schema/index.js";
+import { clubs, seasonQualifications, seasonRules, standings, users } from "../../../infra/db/schema/index.js";
 import { DomainError } from "../../../infra/http/index.js";
 import { currentSeason } from "../current-season.js";
 import { AdminLogService } from "../log/index.js";
@@ -192,6 +193,57 @@ export class StandingsService {
     });
   }
 
+  /**
+   * Marca os classificados para a Libertadores e a Sul-Americana (Dividendos e recompra, "Classificação para o ano
+   * seguinte"). Só clubes da tabela da Série A; a lista inteira substitui a anterior. Mudar a marcação tira a
+   * conferência da tabela: o evento de classificação só é aprovado com a tabela conferida de novo.
+   */
+  async setQualified(actorId: string, body: PutQualifiedBody): Promise<StandingsView> {
+    const competition: StandingsCompetition = "brasileirao-a";
+    return withTransaction(this.db, async (tx) => {
+      const seasonId = await this.lockCurrent(tx);
+      const rows = await tx.db
+        .select()
+        .from(standings)
+        .where(and(eq(standings.seasonId, seasonId), eq(standings.competition, competition)))
+        .for("update");
+      if (rows.length === 0) throw noTable();
+      const inTable = new Set(rows.map((r) => r.clubId));
+      const lists = [body.libertadores, body.sulamericana];
+      if (lists.some((l) => new Set(l).size !== l.length || l.some((id) => !inTable.has(id)))) {
+        throw new DomainError("invalid_input", 400, COMMON_ERROR_MESSAGES.invalid_input, ["libertadores", "sulamericana"]);
+      }
+      const before = await this.qualifiedOf(tx.db, seasonId);
+      await tx.db.delete(seasonQualifications).where(eq(seasonQualifications.seasonId, seasonId));
+      const values = [
+        ...body.libertadores.map((clubId) => ({ seasonId, clubId, cup: "libertadores" })),
+        ...body.sulamericana.map((clubId) => ({ seasonId, clubId, cup: "sulamericana" })),
+      ];
+      if (values.length > 0) await tx.db.insert(seasonQualifications).values(values);
+      await tx.db
+        .update(standings)
+        .set({ confirmedBy: null, confirmedAt: null })
+        .where(and(eq(standings.seasonId, seasonId), eq(standings.competition, competition)));
+      await this.log.record(tx, {
+        actorId,
+        action: "standings.qualified",
+        targetType: "standings",
+        targetId: competition,
+        before,
+        after: { libertadores: body.libertadores, sulamericana: body.sulamericana },
+        reason: body.reason,
+      });
+      this.notifyChanged(tx, seasonId, competition);
+      return this.view(tx.db, seasonId, competition);
+    });
+  }
+
+  private async qualifiedOf(db: Database | Tx["db"], seasonId: number): Promise<{ libertadores: number[]; sulamericana: number[] }> {
+    const rows = await db.select().from(seasonQualifications).where(eq(seasonQualifications.seasonId, seasonId));
+    const ids = (cup: string) => rows.filter((r) => r.cup === cup).map((r) => r.clubId).sort((a, b) => a - b);
+    return { libertadores: ids("libertadores"), sulamericana: ids("sulamericana") };
+  }
+
   async confirm(actorId: string, competition: StandingsCompetition): Promise<StandingsView> {
     return withTransaction(this.db, async (tx) => {
       const seasonId = await this.lockCurrent(tx);
@@ -229,7 +281,7 @@ export class StandingsService {
   }
 
   private async view(db: Database | Tx["db"], seasonId: number | null, competition: StandingsCompetition): Promise<StandingsView> {
-    const empty: StandingsView = { competition, rows: [], manualOverride: false, confirmedBy: null, confirmedAt: null };
+    const empty: StandingsView = { competition, rows: [], manualOverride: false, confirmedBy: null, confirmedAt: null, qualificationBonus: false };
     if (seasonId === null) return empty;
     const rows = await db
       .select({ s: standings, club: clubs, nickname: users.nickname })
@@ -239,6 +291,11 @@ export class StandingsService {
       .where(and(eq(standings.seasonId, seasonId), eq(standings.competition, competition)))
       .orderBy(asc(standings.position));
     if (rows.length === 0) return empty;
+    const marked = await this.qualifiedOf(db, seasonId);
+    const [rules] = await db
+      .select({ lib: seasonRules.aLibertadoresBonus, sul: seasonRules.aSulamericanaBonus })
+      .from(seasonRules)
+      .where(eq(seasonRules.seasonId, seasonId));
     // Confirmada é a tabela em que todas as linhas têm conferência.
     const confirmed = rows.every((r) => r.s.confirmedAt !== null);
     return {
@@ -248,10 +305,13 @@ export class StandingsService {
         position: r.s.position,
         points: r.s.points,
         sourcePosition: sourcePosition(r.s.source),
+        libertadores: marked.libertadores.includes(r.club.id),
+        sulamericana: marked.sulamericana.includes(r.club.id),
       })),
       manualOverride: rows.some((r) => r.s.manualOverride),
       confirmedBy: confirmed ? (rows[0]!.nickname ?? null) : null,
       confirmedAt: confirmed ? rows[0]!.s.confirmedAt!.toISOString() : null,
+      qualificationBonus: competition === "brasileirao-a" && ((rules?.lib ?? 0) > 0 || (rules?.sul ?? 0) > 0),
     };
   }
 }

@@ -122,10 +122,10 @@ describe("entrada do motor (EngineInputService)", () => {
     const placement = events.filter((e) => e.kind === "placement").map((e) => [e.clubId, e.perShare, e.reason]);
     expect(placement).toEqual(
       expect.arrayContaining([
-        ["FLA3", 500, "1º lugar"],
-        ["BOT3", 450, "2º lugar"],
-        ["PAL3", 400, "3º lugar"],
-        ["COR3", 350, "4º lugar"],
+        ["FLA3", 1000, "1º lugar"],
+        ["BOT3", 700, "2º lugar"],
+        ["PAL3", 500, "3º lugar"],
+        ["COR3", 450, "4º lugar"],
       ]),
     );
     expect(placement).toHaveLength(4);

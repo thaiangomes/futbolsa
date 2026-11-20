@@ -2,6 +2,7 @@
 
 import type { ClubValueView, Projection, ProjectionBody, ProjectionList } from "@futbolsa/contracts";
 import { buybackIfEndedNow, type ClubValueSimulation } from "@futbolsa/engine/engine/clubValue";
+import { placementWithQualification } from "@futbolsa/engine/engine/dividends";
 import { useEffect, useMemo, useState } from "react";
 import { formatCents } from "../../lib/format";
 import { SituationCard } from "./situation-card";
@@ -153,7 +154,10 @@ function Loaded({ view, name, price, title, ticker, api, canSave, saved }: { vie
                   <label htmlFor="sim-colocacao">Colocação final</label>
                   <select id="sim-colocacao" className="input" value={form.position} onChange={(e) => set({ position: e.target.value })}>
                     {Array.from({ length: POSITIONS }, (_, i) => (
-                      <option key={i + 1} value={String(i + 1)}>{i + 1}º lugar · {formatCents(view.leagueRules.placement[i] ?? 0)}</option>
+                      <option key={i + 1} value={String(i + 1)}>
+                        {i + 1}º lugar · {formatCents(placementWithQualification(view.leagueRules, i + 1))}
+                        {view.leagueRules.penalty?.[i] ? ` (−${formatCents(view.leagueRules.penalty[i]!)} de rebaixamento)` : ""}
+                      </option>
                     ))}
                   </select>
                 </div>

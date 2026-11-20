@@ -15,7 +15,8 @@ import { currentSeason } from "../current-season.js";
 import { dues } from "./settlement.js";
 
 /** A classificação oficial de que cada tipo de evento depende (colocação da Série A, acesso da Série B). */
-export const STANDINGS_OF_KIND = { placement: "brasileirao-a", promotion: "brasileirao-b" } as const;
+/** Os eventos que dependem da classificação oficial conferida: a colocação, a classificação para o ano seguinte e o rebaixamento. */
+export const STANDINGS_OF_KIND = { placement: "brasileirao-a", qualification: "brasileirao-a", relegation: "brasileirao-a", promotion: "brasileirao-b" } as const;
 
 /**
  * A prévia dos pagamentos (Admin, "Pagamento de dividendos", critério 2): por evento, o motivo, o valor por ação,

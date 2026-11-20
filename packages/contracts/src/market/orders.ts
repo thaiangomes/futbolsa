@@ -54,7 +54,7 @@ export const MARKET_ERROR_MESSAGES = {
   invalid_quantity: "A quantidade tem de ser um número inteiro de ações, de 1 em diante.",
   invalid_price: "O preço tem de ser um valor em reais com no máximo dois decimais, maior que zero.",
   below_min_price: "O preço mínimo de uma ação é R$ 0,50.",
-  negative_cash: "Seu caixa está negativo: você só pode vender até regularizar.",
+  negative_cash: "Seu caixa está zerado ou negativo: você só pode vender até ter caixa de novo.",
   price_out_of_band: "O preço está fora da faixa aceita agora: 20% acima ou abaixo do preço exibido.",
   too_many_open_orders: "Você já tem 50 ordens abertas. Cancele alguma para mandar outra.",
   insufficient_cash: "Seu caixa livre não cobre esta compra.",

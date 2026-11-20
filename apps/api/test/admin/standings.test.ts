@@ -6,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { standingsResponseSchema, standingsViewSchema } from "@futbolsa/contracts";
 import { CLUBS } from "@futbolsa/engine";
 import { FixedClock } from "../../src/infra/clock/index.js";
-import { adminLog, clubs, seasons, standings } from "../../src/infra/db/schema/index.js";
+import { adminLog, clubs, seasonRules, seasons, standings } from "../../src/infra/db/schema/index.js";
 import { StandingsService } from "../../src/modules/admin/standings/standings.service.js";
 import { convertEspnStandings } from "../../src/modules/admin/results/sources/espn.js";
 import type { SourceStanding } from "../../src/modules/admin/results/sources/types.js";
@@ -15,6 +15,7 @@ import { expectAdminOnly } from "../support/admin-routes.js";
 import { createTestApp } from "../support/app.js";
 import { bearer, TOKEN_T0, withTestAuth } from "../support/auth.js";
 import { useTestDatabase } from "../support/db.js";
+import { initialRules } from "../../src/modules/dividends/season-values/defaults.js";
 import { seedSeason } from "../support/fixtures.js";
 
 const fixture = (name: string) =>
@@ -43,7 +44,7 @@ describe("classificação oficial", () => {
     await database.db.update(seasons).set({ status: "preparing" }).where(eq(seasons.id, seasonId));
   });
 
-  const call = (method: "GET" | "PATCH" | "POST", url: string, payload?: object) =>
+  const call = (method: "GET" | "PATCH" | "POST" | "PUT", url: string, payload?: object) =>
     app.inject({ method, url, headers: bearer(admin.token), ...(payload ? { payload } : {}) });
   const view = async (competition: "brasileirao-a" | "brasileirao-b") =>
     standingsResponseSchema.parse((await call("GET", "/admin/standings")).json()).standings.find((s) => s.competition === competition)!;
@@ -74,6 +75,40 @@ describe("classificação oficial", () => {
     expect(a.rows).toHaveLength(CLUBS.length);
     expect(a.rows[0]!.club.ticker).toBe("FLA3");
     expect(a.rows[CLUBS.length - 1]!.club.ticker).toBe(CLUBS.at(-1)!.id);
+  });
+
+  it("classificados: o admin marca Libertadores e Sul-Americana, a marcação tira a conferência e vai para o registro", async () => {
+    await service.importStandings(seasonId, "brasileirao-a", tableA());
+    await call("POST", "/admin/standings/brasileirao-a/confirm");
+    expect((await view("brasileirao-a")).confirmedAt).not.toBeNull();
+    const a = await view("brasileirao-a");
+    expect(a.qualificationBonus).toBe(false); // a temporada do teste não tem os valores novos
+    const [first, second, third] = a.rows.map((r) => r.club.id);
+    await database.db.insert(seasonRules).values({ seasonId, ...initialRules() }).onConflictDoNothing();
+    const res = await call("PUT", "/admin/standings/brasileirao-a/qualified", { libertadores: [first, second], sulamericana: [second, third], reason: "vagas da Conmebol" });
+    expect(res.statusCode).toBe(200);
+    const body = standingsViewSchema.parse(res.json());
+    expect(body).toMatchObject({ confirmedAt: null, qualificationBonus: true });
+    expect(body.rows.slice(0, 4).map((r) => [r.libertadores, r.sulamericana])).toEqual([
+      [true, false],
+      [true, true],
+      [false, true],
+      [false, false],
+    ]);
+    const log = (await database.db.select().from(adminLog).where(eq(adminLog.action, "standings.qualified"))).at(-1);
+    expect(log).toMatchObject({ reason: "vagas da Conmebol", after: { libertadores: [first, second], sulamericana: [second, third] } });
+    // marcar de novo substitui a lista inteira
+    const again = standingsViewSchema.parse((await call("PUT", "/admin/standings/brasileirao-a/qualified", { libertadores: [third], sulamericana: [] })).json());
+    expect(again.rows.filter((r) => r.libertadores || r.sulamericana)).toHaveLength(1);
+  });
+
+  it("classificados: clube fora da tabela, repetido na lista, ou tabela sem importar, é recusado", async () => {
+    expect((await call("PUT", "/admin/standings/brasileirao-a/qualified", { libertadores: [], sulamericana: [] })).statusCode).toBe(404);
+    await service.importStandings(seasonId, "brasileirao-a", tableA());
+    const [first] = (await view("brasileirao-a")).rows.map((r) => r.club.id);
+    expect((await call("PUT", "/admin/standings/brasileirao-a/qualified", { libertadores: [999_999], sulamericana: [] })).statusCode).toBe(400);
+    expect((await call("PUT", "/admin/standings/brasileirao-a/qualified", { libertadores: [first, first], sulamericana: [] })).statusCode).toBe(400);
+    await expectAdminOnly(app, database.db, { method: "PUT", url: "/admin/standings/brasileirao-a/qualified", payload: { libertadores: [], sulamericana: [] } });
   });
 
   it("conferir grava autor e hora, e nada muda na ordem", async () => {

@@ -9,7 +9,7 @@ import { adminReasonSchema, clubRefSchema, competitionSchema, isoInstantSchema }
 export const payoutStatusSchema = z.enum(["pending", "approved", "superseded"]);
 export type PayoutStatusCode = z.infer<typeof payoutStatusSchema>;
 
-export const payoutKindSchema = z.enum(["points", "placement", "promotion", "cup_phase", "cup_title", "buyback"]);
+export const payoutKindSchema = z.enum(["points", "placement", "qualification", "relegation", "promotion", "cup_phase", "cup_title", "buyback"]);
 export type PayoutKindCode = z.infer<typeof payoutKindSchema>;
 
 /**

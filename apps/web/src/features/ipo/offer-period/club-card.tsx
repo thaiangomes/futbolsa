@@ -49,7 +49,7 @@ export function ClubCard({ club, cash, canBid, api, onSaved, onCancelled, onStal
           <Cell label="Teto">{formatCents(band.ceiling)}</Cell>
         </div>
         <p className="ipo-conta xs muted">
-          Colocação do ano anterior {formatCents(band.placementPrice)} + copas esperadas {formatCents(band.cupsPart)} = centro {formatCents(band.center)}
+          Colocação do ano anterior {formatCents(band.placementPrice)}{band.placementUplift ? ` + dividendo maior da colocação ${formatCents(band.placementUplift)}` : ""} + copas esperadas {formatCents(band.cupsPart)} = centro {formatCents(band.center)}
         </p>
       </div>
 

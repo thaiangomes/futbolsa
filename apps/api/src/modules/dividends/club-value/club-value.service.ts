@@ -53,7 +53,12 @@ export class ClubValueService {
     return {
       ticker,
       league,
-      leagueRules: { perPoint: rules.perPoint, placement: rules.placement },
+      leagueRules: {
+        perPoint: rules.perPoint,
+        placement: rules.placement,
+        ...(rules.qualification ? { qualification: rules.qualification } : {}),
+        ...(rules.penalty ? { penalty: rules.penalty } : {}),
+      },
       leagueOpen: await this.leagueOpen(season.id, league),
       points: standing?.points ?? 0,
       position: standing?.position ?? null,

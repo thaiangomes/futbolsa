@@ -33,7 +33,13 @@ export const clubValueViewSchema = z.strictObject({
   /** `brasileirao-a` ou `brasileirao-b`, o campeonato do clube nesta temporada. */
   league: z.enum(["brasileirao-a", "brasileirao-b"]),
   /** Valor de cada ponto e tabela de colocação (índice 0 = 1º lugar) do campeonato. */
-  leagueRules: z.strictObject({ perPoint: centsSchema, placement: z.array(centsSchema) }),
+  leagueRules: z.strictObject({
+    perPoint: centsSchema,
+    placement: z.array(centsSchema),
+    /** Bônus de classificação projetado (Libertadores do 1º ao 6º, Sul-Americana do 7º ao 12º) e penalização por colocação, quando a temporada os tem. */
+    qualification: z.strictObject({ libertadores: centsSchema, sulamericana: centsSchema }).optional(),
+    penalty: z.array(centsSchema).optional(),
+  }),
   /** Falso quando o campeonato já fechou (colocação paga): a aposta em pontos e colocação não vale mais. */
   leagueOpen: z.boolean(),
   /** Pontos e colocação agora (0 e `null` antes da primeira rodada). */

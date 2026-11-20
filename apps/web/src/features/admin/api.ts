@@ -60,6 +60,7 @@ import {
   standingsResponseSchema,
   standingsViewSchema,
   suspensionStateSchema,
+  type PutQualifiedBody,
   type StandingsCompetition,
   seasonClosePreviewSchema,
   seasonCloseResponseSchema,
@@ -94,6 +95,7 @@ export function adminApi(api: ApiClient) {
     standings: () => api.request(standingsResponseSchema, "/admin/standings"),
     correctStandings: (competition: StandingsCompetition, order: number[], reason: string) =>
       api.request(standingsViewSchema, `/admin/standings/${competition}`, { method: "PATCH", body: { order, reason } }),
+    putQualified: (body: PutQualifiedBody) => api.request(standingsViewSchema, "/admin/standings/brasileirao-a/qualified", { method: "PUT", body }),
     confirmStandings: (competition: StandingsCompetition) =>
       api.request(standingsViewSchema, `/admin/standings/${competition}/confirm`, { method: "POST" }),
 

@@ -162,8 +162,7 @@ describe("tarefa dos bots", () => {
       const vivo = await snapshots.load(world.seasonId, TUESDAY);
       expect(vivo.leagues.get(c)!.fairValue(c)).toBeGreaterThan(normal.leagues.get(c)!.fairValue(c));
       expect(vivo.leagues.get(d)!.fairValue(d)).toBeLessThan(normal.leagues.get(d)!.fairValue(d));
-      const [a] = world.tickers as [string];
-      expect(vivo.leagues.get(a)!.fairValue(a)).toBe(normal.leagues.get(a)!.fairValue(a)); // quem não joga não muda
+      // quem não joga só muda pela colocação projetada: o gol entra na tabela projetada, e com ela no bônus e na penalização
     } finally {
       spy.mockRestore();
     }

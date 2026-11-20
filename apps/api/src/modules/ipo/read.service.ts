@@ -3,8 +3,10 @@ import { and, asc, eq } from "drizzle-orm";
 import type { IpoClubResult, IpoClubView, IpoOverview, IpoResults, MyBid } from "@futbolsa/contracts";
 import { placementPrice } from "@futbolsa/engine";
 import { DB, type Database } from "../../infra/db/index.js";
-import { clubs, ipoAllocations, ipoBids, ipoResults, seasonClubs, wallets } from "../../infra/db/schema/index.js";
+import { clubs, ipoAllocations, ipoBids, ipoResults, seasonClubs, seasonRules, wallets } from "../../infra/db/schema/index.js";
+import { leaguesFromRules } from "../dividends/season-values/mapper.js";
 import { currentSeason } from "../admin/current-season.js";
+import { placementUpliftPart } from "./bands.js";
 import { ipoError } from "./errors.js";
 import { IpoSettlementService } from "./settlement.service.js";
 
@@ -51,16 +53,27 @@ export class IpoReadService {
           myBids.set(b.clubId, { quantity: b.quantity, maxPrice: b.maxPrice, reserved: b.reserved, updatedAt: b.updatedAt.toISOString() });
         }
       }
+      // os valores da Série A da temporada dão o aumento da colocação que a faixa já traz (sem valores gravados, aumento zero)
+      const [rules] = await this.db.select().from(seasonRules).where(eq(seasonRules.seasonId, season.id));
+      const seasonValues = { leagues: rules ? leaguesFromRules(rules) : {}, cups: {} };
       clubViews = rows.flatMap((r) => {
         // A faixa é gravada na abertura; clube sem ela (não deveria existir com o IPO aberto) fica de fora.
         if (r.sc.bandFloor === null || r.sc.bandCenter === null || r.sc.bandCeiling === null || !r.ticker) return [];
         const base = placementPrice(r.sc.prevPlacement);
+        const uplift = placementUpliftPart(r.sc.prevPlacement, seasonValues, rules?.buybackMultipleBp ?? 0);
         return [
           {
             ticker: r.ticker,
             name: r.name,
-            // a parte das copas é o centro menos o preço da colocação, sem coluna nova
-            band: { floor: r.sc.bandFloor, center: r.sc.bandCenter, ceiling: r.sc.bandCeiling, placementPrice: base, cupsPart: r.sc.bandCenter - base },
+            // a parte das copas é o centro menos o preço da colocação e o aumento dela, sem coluna nova
+            band: {
+              floor: r.sc.bandFloor,
+              center: r.sc.bandCenter,
+              ceiling: r.sc.bandCeiling,
+              placementPrice: base,
+              ...(uplift > 0 ? { placementUplift: uplift } : {}),
+              cupsPart: r.sc.bandCenter - base - uplift,
+            },
             myBid: myBids.get(r.sc.clubId) ?? null,
           },
         ];

@@ -10,6 +10,9 @@ export const standingsRowSchema = z.strictObject({
   points: z.number().int(),
   /** A posição que a fonte traz (para a tela mostrar a diferença quando o admin corrigiu). */
   sourcePosition: z.number().int().nullable(),
+  /** Classificado para a Libertadores / a Sul-Americana do ano seguinte, como o admin marcou (só na Série A). */
+  libertadores: z.boolean(),
+  sulamericana: z.boolean(),
 });
 
 export const standingsViewSchema = z.strictObject({
@@ -19,6 +22,8 @@ export const standingsViewSchema = z.strictObject({
   /** Nulo até o admin conferir; cai quando a importação muda a tabela sem correção manual. */
   confirmedBy: z.string().nullable(),
   confirmedAt: z.string().nullable(),
+  /** A Série A da temporada paga bônus de classificação (os valores não são zero): só então a tela pede a marcação. */
+  qualificationBonus: z.boolean(),
 });
 export type StandingsView = z.infer<typeof standingsViewSchema>;
 
@@ -31,3 +36,14 @@ export const patchStandingsBodySchema = z.strictObject({
   reason: adminReasonSchema,
 });
 export type PatchStandingsBody = z.infer<typeof patchStandingsBodySchema>;
+
+/**
+ * `PUT /admin/standings/brasileirao-a/qualified`: os clubes classificados para o ano seguinte, por id de clube. Quem está
+ * nas duas listas recebe só o bônus da Libertadores. Marcar tira a conferência da tabela (o admin confere de novo).
+ */
+export const putQualifiedBodySchema = z.strictObject({
+  libertadores: z.array(z.number().int()).max(20),
+  sulamericana: z.array(z.number().int()).max(20),
+  reason: adminReasonSchema.optional(),
+});
+export type PutQualifiedBody = z.infer<typeof putQualifiedBodySchema>;

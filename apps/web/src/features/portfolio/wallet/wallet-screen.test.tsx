@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useDom } from "../../../test-support/dom";
 import type { MarketApi } from "../../market/api";
 import type { PortfolioApi } from "../api";
+import { entryLabel } from "./sections";
 import { WalletBody, WalletContent } from "./wallet-screen";
 
 vi.setConfig({ testTimeout: 20_000 });
@@ -141,7 +142,23 @@ describe("página da carteira", () => {
     expect(dom.$("[data-testid=caixa-total]").className).toContain("neg-cash");
     expect(dom.$("[data-testid=caixa-total]").textContent).toBe("−R$ 250,00");
     expect(dom.$("[data-testid=aviso-caixa-negativo]")).not.toBeNull();
+    // o aviso diz o saldo, a causa (estorno ou rebaixamento) e o que fica bloqueado
+    expect(dom.$("[data-testid=aviso-caixa-negativo]").textContent).toContain("−R$ 250,00");
+    expect(dom.$("[data-testid=aviso-caixa-negativo]").textContent).toContain("rebaixamento");
+    expect(dom.$("[data-testid=aviso-caixa-negativo]").textContent).toContain("compras ficam bloqueadas");
     expect(dom.$("[data-testid=sem-posicoes]")).not.toBeNull();
+  });
+
+  it("caixa zerado: aviso mais leve (compras bloqueadas), sem o alerta de caixa negativo", async () => {
+    await open(apis({ wallet: view({ negativeCash: false, cash: { total: 0, reserved: 0, free: 0 } }) }));
+    expect(dom.$("[data-testid=aviso-caixa-zerado]")).not.toBeNull();
+    expect(dom.$("[data-testid=aviso-caixa-negativo]")).toBeNull();
+  });
+
+  it("o débito de rebaixamento aparece no extrato como débito, e o estorno comum continua estorno", () => {
+    const base = { id: 1, at: "2027-12-05T21:00:00.000Z", kind: "reversal", group: "dividends", club: null, quantity: 0, price: null, amount: -15_000, realized: null, cashAfter: -5000, reason: "x", annulled: null, inAuction: null } as unknown as EntryItem;
+    expect(entryLabel({ ...base, payout: { reason: "rebaixamento: 18º lugar", perShare: -100, shares: 150 } })).toBe("Débito de rebaixamento");
+    expect(entryLabel({ ...base, payout: { reason: "3 pontos, rodada 5", perShare: -30, shares: 150 } })).toBe("Estorno");
   });
 
   it("carteira 1 a 5 e 9: a posição mostra preço médio, valor, resultado com % e a fatia; o resultado por clube soma o ganho", async () => {

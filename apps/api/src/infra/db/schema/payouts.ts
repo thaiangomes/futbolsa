@@ -48,7 +48,8 @@ export const payoutEvents = futbolsa.table(
     check("payout_events_kind_check", oneOf(t.kind, PAYOUT_KINDS)),
     check("payout_events_status_check", oneOf(t.status, PAYOUT_STATUSES)),
     check("payout_events_competition_check", sql`${t.competition} is null or ${oneOf(t.competition, COMPETITIONS)}`),
-    check("payout_events_values_check", sql`${t.perShare} >= 0 and ${t.version} >= 1`),
+    // só a penalização de rebaixamento tem valor negativo (débito por ação)
+    check("payout_events_values_check", sql`(${t.perShare} >= 0 or ${t.kind} = 'relegation') and ${t.version} >= 1`),
   ],
 );
 

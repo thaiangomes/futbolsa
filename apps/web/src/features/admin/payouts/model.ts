@@ -5,6 +5,8 @@ import { COMPETITION_LABELS } from "../forms";
 export const KIND_LABELS: Record<PayoutEventView["kind"], string> = {
   points: "Pontos da rodada",
   placement: "Colocação final",
+  qualification: "Classificação (Libertadores/Sul-Americana)",
+  relegation: "Rebaixamento (débito)",
   promotion: "Acesso",
   cup_phase: "Fase da copa",
   cup_title: "Título da copa",

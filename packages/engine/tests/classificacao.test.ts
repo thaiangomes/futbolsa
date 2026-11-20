@@ -15,6 +15,7 @@ import { eventsFor, type EventsInput } from "../src/engine/payoutEvents.js";
 import { fairValue, projectLeague } from "../src/engine/fairValue.js";
 import { ipoBand, placementUplift } from "../src/engine/ipoBand.js";
 import type { Match } from "../src/engine/types.js";
+import { LeagueView } from "../src/sim/leagueView.js";
 
 const clubs = Array.from({ length: 20 }, (_, i) => `C${String(i + 1).padStart(2, "0")}`);
 const final: Match = {
@@ -168,5 +169,45 @@ describe("faixa do IPO acompanha o dividendo maior", () => {
     expect(antes.center).toBe(5000);
     expect(depois.center).toBe(5000 + 2000); // R$ 8,00 × 2,5
     expect(depois.ceiling).toBe(Math.round(7000 * 1.4));
+  });
+});
+
+describe("placar ao vivo recalcula a colocação projetada", () => {
+  const game = (id: string, home: string, away: string, status: Match["status"], goals: [number, number] | null): Match => ({
+    id,
+    competition: "brasileirao-a",
+    round: 1,
+    kickoff: "2027-04-04T16:00:00-03:00",
+    home,
+    away,
+    homeGoals: goals ? goals[0] : null,
+    awayGoals: goals ? goals[1] : null,
+    status,
+  });
+  // A e B ainda vão jogar entre si; C e D empataram. Sem placar, A é o 1º projetado (desempate pela ordem da lista).
+  const calendar = [game("ab", "A", "B", "scheduled", null), game("cd", "C", "D", "finished", [0, 0])];
+  const rules: LeagueRules = { perPoint: 10, placement: [1000, 0, 0, 0], qualification: { libertadores: 300, sulamericana: 100 }, penalty: [0, 0, 0, 100] };
+  const make = () => {
+    const view = new LeagueView(["A", "B", "C", "D"], rules, calendar);
+    view.setKnownMatches([calendar[1]!]);
+    return view;
+  };
+
+  it("o gol que vira a colocação projetada vale a colocação inteira, e não só os pontos esperados vezes R$ 0,10", () => {
+    const semGol = make();
+    const comGol = make();
+    comGol.setLive([{ home: "A", away: "B", homeGoals: 0, awayGoals: 1, minute: 85 }]);
+    // B sobe de 2º para 1º na projeção e ganha a colocação inteira (R$ 10,00), além dos pontos; antes o gol só valia ~R$ 0,16
+    expect(comGol.fairValue("B") - semGol.fairValue("B")).toBeGreaterThan(1000);
+    // A cai para o 2º e perde a colocação
+    expect(semGol.fairValue("A") - comGol.fairValue("A")).toBeGreaterThan(1000);
+  });
+
+  it("o jogo ao vivo que não é do campeonato (uma copa entre os mesmos clubes, na ordem inversa) não entra", () => {
+    const semGol = make();
+    const copa = make();
+    copa.setLive([{ home: "B", away: "A", homeGoals: 3, awayGoals: 0, minute: 80 }]);
+    expect(copa.fairValue("B")).toBe(semGol.fairValue("B"));
+    expect(copa.fairValue("A")).toBe(semGol.fairValue("A"));
   });
 });

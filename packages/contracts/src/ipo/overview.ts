@@ -1,12 +1,14 @@
 import { z } from "zod";
 import { ipoCashSchema, myBidSchema } from "./bids.js";
 
-/** A faixa de um clube, com a conta que a tela mostra: preço da colocação mais a parte das copas. */
+/** A faixa de um clube, com a conta que a tela mostra: preço da colocação, o aumento da colocação e a parte das copas. */
 export const ipoBandSchema = z.strictObject({
   floor: z.number().int(),
   center: z.number().int(),
   ceiling: z.number().int(),
   placementPrice: z.number().int(),
+  /** O dividendo de colocação maior da tabela da temporada, já com a recompra (omitido = zero, o que vale para as temporadas antigas). */
+  placementUplift: z.number().int().optional(),
   cupsPart: z.number().int(),
 });
 export type IpoBandView = z.infer<typeof ipoBandSchema>;

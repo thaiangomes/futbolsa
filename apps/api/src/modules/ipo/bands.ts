@@ -1,4 +1,4 @@
-import { cupExpected, type Cents, type IpoBand, ipoBand, prepareCups, type SeasonValues } from "@futbolsa/engine";
+import { cupExpected, type Cents, type IpoBand, ipoBand, mulDivRound, placementUplift, prepareCups, type SeasonValues } from "@futbolsa/engine";
 import { CUP_COMPETITIONS } from "../../infra/db/schema/values.js";
 import { type MatchRow, toEngineMatch } from "../admin/results/to-engine.js";
 
@@ -56,7 +56,7 @@ export function cupsExpectedAt(
 /**
  * A faixa de cada clube listado, calculada na abertura das ofertas e fixa até o fechamento (proposta 1
  * do Plano do IPO): centro = preço da colocação + copas esperadas no fechamento × (1 + múltiplo da
- * recompra), piso e teto ±40%. Um jogo de copa decidido durante o período não muda a faixa, porque o
+ * recompra) + o aumento do dividendo de colocação da tabela da temporada (`placementUpliftPart`), piso e teto ±40%. Um jogo de copa decidido durante o período não muda a faixa, porque o
  * teto define a reserva de quem já ofertou.
  */
 export function ipoBands(
@@ -68,6 +68,20 @@ export function ipoBands(
 ): Map<number, IpoBand> {
   const cups = cupsExpectedAt(listed, cupMatches, values, closesAtMs);
   return new Map(
-    listed.map((c) => [c.clubId, ipoBand({ placement: c.prevPlacement, cupExpected: cups.get(c.ticker)!, buybackBp })]),
+    listed.map((c) => [
+      c.clubId,
+      ipoBand({ placement: c.prevPlacement, cupExpected: cups.get(c.ticker)!, buybackBp, placementUplift: upliftOf(c.prevPlacement, values) }),
+    ]),
   );
+}
+
+/** O aumento do dividendo de colocação do clube (por ação, sem a recompra) com os valores da Série A da temporada. */
+function upliftOf(prevPlacement: number | null, values: SeasonValues): Cents {
+  const league = values.leagues["brasileirao-a"];
+  return league ? placementUplift(prevPlacement, league) : 0;
+}
+
+/** O mesmo aumento, já com a recompra: a parte do centro da faixa que a tela mostra como "dividendo maior da colocação". */
+export function placementUpliftPart(prevPlacement: number | null, values: SeasonValues, buybackBp: number): Cents {
+  return mulDivRound(upliftOf(prevPlacement, values), 10_000 + buybackBp, 10_000);
 }

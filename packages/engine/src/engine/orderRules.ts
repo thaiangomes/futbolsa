@@ -52,7 +52,7 @@ export interface OrderRequestShape {
 /** O que quem chama sabe da conta e do clube no envio (na API, lido com a carteira travada). */
 export interface OrderState {
   displayedPrice: Cents;
-  /** Caixa total: negativo só depois de um estorno. */
+  /** Caixa total: negativo só depois de um estorno ou da penalização de rebaixamento. */
   cash: Cents;
   availableCash: Cents;
   /** Ações livres do clube. */
@@ -95,7 +95,8 @@ export function validateOrder(req: OrderRequestShape, state: OrderState): OrderV
   // Em leilão não sai negócio, e a ordem a mercado não tem preço para esperar o preço único.
   if (state.inAuction && req.type === "market") return reject("club_in_auction");
 
-  if (req.side === "buy" && state.cash < 0) return reject("negative_cash");
+  // Caixa zerado ou negativo (depois de um estorno ou da penalização de rebaixamento): só vende. A casa só é barrada no negativo.
+  if (req.side === "buy" && (state.cash < 0 || (state.cash === 0 && !state.isHouse))) return reject("negative_cash");
 
   const band = state.isHouse ? undefined : tradingBand(state.displayedPrice);
   if (band && req.type === "limit" && (req.limitPrice! < band.min || req.limitPrice! > band.max)) return reject("price_out_of_band");

@@ -97,6 +97,12 @@ export interface LeagueProjection {
   prior: PointsPrior;
   standings: Map<string, StandingRow>;
   projectedRank: Map<string, number>;
+  /**
+   * Pontos esperados a mais (ou a menos) que o placar parcial dos jogos em andamento dá a cada clube, comparados com o
+   * apito inicial (`livePointsDelta`). Só os bots da partida usam: entram na colocação projetada (e com ela no bônus de
+   * classificação, na penalização e na recompra) e nos pontos ainda não fechados, mas não mexem nos pontos por jogo.
+   */
+  liveDelta?: ReadonlyMap<string, number>;
 }
 
 export function projectLeague(
@@ -104,13 +110,14 @@ export function projectLeague(
   clubIds: readonly string[],
   gamesPerClub: number,
   prior: PointsPrior = DEFAULT_PRIOR,
+  liveDelta?: ReadonlyMap<string, number>,
 ): LeagueProjection {
   const standings = new Map(computeStandings(knownMatches).map((r) => [r.clubId, r]));
-  const projection: LeagueProjection = { clubIds, gamesPerClub, prior, standings, projectedRank: new Map() };
+  const projection: LeagueProjection = { clubIds, gamesPerClub, prior, standings, projectedRank: new Map(), ...(liveDelta ? { liveDelta } : {}) };
   const projected = clubIds.map((id) => {
     const row = standings.get(id);
     const remaining = Math.max(0, gamesPerClub - (row?.played ?? 0));
-    return { id, final: (row?.points ?? 0) + pointsPerGame(projection, id) * remaining };
+    return { id, final: (row?.points ?? 0) + (liveDelta?.get(id) ?? 0) + pointsPerGame(projection, id) * remaining };
   });
   projected.sort((a, b) => b.final - a.final);
   projection.projectedRank = new Map(projected.map((p, i) => [p.id, i + 1]));
@@ -149,7 +156,7 @@ export interface FairValueInput {
 export function fairValue(i: FairValueInput): Cents {
   const row = i.projection.standings.get(i.clubId);
   const played = row?.played ?? 0;
-  const points = row?.points ?? 0;
+  const points = (row?.points ?? 0) + (i.projection.liveDelta?.get(i.clubId) ?? 0);
   const remaining = Math.max(0, i.projection.gamesPerClub - played);
   const ppg = pointsPerGame(i.projection, i.clubId);
   const unclosed = points - i.closedPoints;
@@ -169,11 +176,11 @@ export function fairValueWithPpg(i: FairValueInput, ppg: (clubId: string) => num
   const { standings, gamesPerClub, clubIds } = i.projection;
   const final = (id: string) => {
     const row = standings.get(id);
-    return (row?.points ?? 0) + ppg(id) * Math.max(0, gamesPerClub - (row?.played ?? 0));
+    return (row?.points ?? 0) + (i.projection.liveDelta?.get(id) ?? 0) + ppg(id) * Math.max(0, gamesPerClub - (row?.played ?? 0));
   };
   const mine = final(i.clubId);
   const rank = 1 + clubIds.filter((id) => id !== i.clubId && final(id) > mine).length;
-  const points = standings.get(i.clubId)?.points ?? 0;
+  const points = (standings.get(i.clubId)?.points ?? 0) + (i.projection.liveDelta?.get(i.clubId) ?? 0);
   const unclosed = points - i.closedPoints;
   const projectedPlacement = placementWithQualification(i.rules, rank);
   const placement = i.placementClosed ? 0 : projectedPlacement - (i.rules.penalty?.[rank - 1] ?? 0);
