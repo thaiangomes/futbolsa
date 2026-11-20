@@ -205,12 +205,12 @@ jobs:
           done
           docker compose logs api
           exit 1
-      - name: As migrações criaram as 39 tabelas
+      - name: As migrações criaram as 40 tabelas
         run: |
           tabelas=$($PSQL "select count(*) from information_schema.tables where table_schema = 'futbolsa'")
           aplicadas=$($PSQL "select count(*) from drizzle.__drizzle_migrations")
           echo "tabelas: $tabelas, migrações aplicadas: $aplicadas"
-          test "$tabelas" = "39"
+          test "$tabelas" = "40"
           test "$aplicadas" = "$(ls apps/api/drizzle/*.sql | wc -l)"
           echo "$aplicadas" > aplicadas.txt
       - name: Subir de novo não aplica nada
