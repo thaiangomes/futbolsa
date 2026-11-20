@@ -154,7 +154,7 @@ export function fairValue(i: FairValueInput): Cents {
   const ppg = pointsPerGame(i.projection, i.clubId);
   const unclosed = points - i.closedPoints;
   const projectedPlacement = i.rules.placement[i.projection.projectedRank.get(i.clubId)! - 1] ?? 0;
-  const placement = i.placementClosed ? 0 : projectedPlacement;
+  const placement = i.placementClosed ? 0 : projectedPlacement - (i.rules.penalty?.[i.projection.projectedRank.get(i.clubId)! - 1] ?? 0);
   const seasonTotal = (points + ppg * remaining) * i.rules.perPoint + projectedPlacement + i.cupClosed + i.cupExpected;
   return Math.round((unclosed + ppg * remaining) * i.rules.perPoint + placement + i.cupExpected + i.buybackMultiple * seasonTotal);
 }
@@ -175,7 +175,7 @@ export function fairValueWithPpg(i: FairValueInput, ppg: (clubId: string) => num
   const points = standings.get(i.clubId)?.points ?? 0;
   const unclosed = points - i.closedPoints;
   const projectedPlacement = i.rules.placement[rank - 1] ?? 0;
-  const placement = i.placementClosed ? 0 : projectedPlacement;
+  const placement = i.placementClosed ? 0 : projectedPlacement - (i.rules.penalty?.[rank - 1] ?? 0);
   const rest = mine - points;
   const seasonTotal = mine * i.rules.perPoint + projectedPlacement + i.cupClosed + i.cupExpected;
   return Math.round((unclosed + rest) * i.rules.perPoint + placement + i.cupExpected + i.buybackMultiple * seasonTotal);
