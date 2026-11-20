@@ -94,6 +94,8 @@ export class MarketView extends LeagueView implements BotView {
     const qty =
       side === "sell" ? Math.min(Math.floor(quantity), this.ledger.availableShares(accountId, clubId)) : Math.floor(quantity);
     if (qty <= 0) return;
+    // Caixa negativo (penalização de rebaixamento, rodada F): sem saldo, o bot não compra.
+    if (side === "buy" && this.ledger.availableCash(accountId) <= 0) return;
     // Com as regras do jogo a ordem a mercado também respeita a faixa de 20% (teto da compra, piso da venda), como na API.
     const band = this.enforceBand ? tradingBand(this.reference?.(clubId) ?? this.price(clubId)) : undefined;
     this.exchange.placeOrder({ accountId, clubId, side, type: "market", quantity: qty, ...(band ? { marketPriceLimit: side === "buy" ? band.max : band.min } : {}) });

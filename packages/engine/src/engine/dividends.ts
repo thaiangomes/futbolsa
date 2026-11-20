@@ -24,7 +24,7 @@ import { finishTime, type Match } from "./types.js";
  *   na temporada, somando todas as competições. As ações deixam de existir.
  */
 
-export type PayoutKind = "points" | "placement" | "cup-phase" | "cup-title" | "buyback";
+export type PayoutKind = "points" | "placement" | "cup-phase" | "cup-title" | "buyback" | "penalty";
 
 export interface Payout {
   /** Momento do pagamento (ms desde 1970). */
@@ -41,6 +41,11 @@ export interface LeagueRules {
   perPoint: Cents;
   /** Dividendo por colocação final; índice 0 = 1º lugar. Faltando = zero. */
   placement: Cents[];
+  /**
+   * Só na simulação (rodada F): quanto cada ação paga, no fechamento, por terminar em cada colocação (índice 0 = 1º),
+   * debitado do caixa de quem tem a ação, mesmo que fique negativo. Fica fora da base da recompra. Faltando = zero.
+   */
+  penalty?: Cents[];
 }
 
 /** Série A: R$ 0,10 por ponto; colocação de R$ 5,00 (1º) a zero (17º ao 20º). */

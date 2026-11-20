@@ -152,6 +152,8 @@ export interface SimResult {
   totalDividends: Cents;
   /** Total pago na recompra de fim de temporada. */
   totalBuyback: Cents;
+  /** Rodada F: total debitado pela penalização de rebaixamento e quantos bots ficaram com o caixa negativo por ela. */
+  penalty?: { total: Cents; botsNegative: number };
   /** Ordens de bot recusadas por código (só com `gameRules`). */
   refused?: Record<string, number>;
 }
@@ -281,7 +283,16 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
   // Só os clubes com ações recebem; os de fora da Série A só decidem quando cada fase termina.
   const cupPayouts = config.cups.flatMap((c) => scheduleCupPayouts(c.matches, c.rules)).filter((p) => clubIds.includes(p.clubId));
   const dividends = [...league, ...cupPayouts].sort((a, b) => a.at - b.at || a.clubId.localeCompare(b.clubId));
-  const payouts: Payout[] = [...dividends, ...scheduleBuyback(dividends, config.buyback)];
+  // Rodada F: penalização de rebaixamento, no instante da colocação final; fica fora da base da recompra.
+  const penaltyPayouts: Payout[] = [];
+  if (config.rules.penalty?.some((v) => v > 0)) {
+    const at = Math.max(...league.filter((p) => p.kind === "placement").map((p) => p.at));
+    computeStandings(matches).forEach((row, i) => {
+      const perShare = config.rules.penalty![i] ?? 0;
+      if (perShare > 0) penaltyPayouts.push({ at, clubId: row.clubId, perShare, kind: "penalty", competition: "temporada", detail: `${i + 1}º lugar` });
+    });
+  }
+  const payouts: Payout[] = [...dividends, ...penaltyPayouts, ...scheduleBuyback(dividends, config.buyback)].sort((a, b) => a.at - b.at);
   const closes = [...roundCloseTimes(matches)].sort((a, b) => a[1] - b[1]);
   const lastPayoutAt = Math.max(...payouts.map((p) => p.at));
   const finalPayoutAt = Math.max(...payouts.filter((p) => p.kind === "placement").map((p) => p.at), lastPayoutAt);
@@ -305,6 +316,7 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
   const exclude = new Set([TREASURY]);
   let totalDividends = 0;
   let totalBuyback = 0;
+  let totalPenalty = 0;
 
   let trades = 0;
   let peerTrades = 0;
@@ -330,6 +342,18 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
       if (p.kind === "buyback") {
         for (const account of ledger.all()) exchange.cancelAll(account.id, p.clubId);
         totalBuyback += applyBuyback(ledger, p, exclude);
+        continue;
+      }
+      if (p.kind === "penalty") {
+        for (const account of ledger.all()) {
+          if (exclude.has(account.id)) continue;
+          const shares = account.positions.get(p.clubId)?.shares ?? 0;
+          if (shares <= 0) continue;
+          // Ordens de compra abertas seguram caixa reservado, que o débito deixaria a descoberto: cancela antes.
+          exchange.cancelAll(account.id);
+          account.cash -= shares * p.perShare; // pode ficar negativo
+          totalPenalty += shares * p.perShare;
+        }
         continue;
       }
       if (p.at === finalPayoutAt && p.kind === "placement" && !priceBeforeFinal.size) {
@@ -436,6 +460,7 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
     dailyPrices: Object.fromEntries(view.history),
     totalDividends,
     totalBuyback,
+    ...(config.rules.penalty ? { penalty: { total: totalPenalty, botsNegative: bots.filter((b) => ledger.get(b.id).cash < 0).length } } : {}),
     ...(config.gameRules ? { refused: { ...view.refused } } : {}),
   };
 }
