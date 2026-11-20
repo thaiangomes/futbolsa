@@ -1,4 +1,4 @@
-import { computeStandings, type CupRules, type LeagueRules, type StandingRow } from "./dividends.js";
+import { computeStandings, placementWithQualification, type CupRules, type LeagueRules, type StandingRow } from "./dividends.js";
 import type { Cents } from "./money.js";
 import { finishTime, kickoffTime, type Match } from "./types.js";
 
@@ -153,8 +153,9 @@ export function fairValue(i: FairValueInput): Cents {
   const remaining = Math.max(0, i.projection.gamesPerClub - played);
   const ppg = pointsPerGame(i.projection, i.clubId);
   const unclosed = points - i.closedPoints;
-  const projectedPlacement = i.rules.placement[i.projection.projectedRank.get(i.clubId)! - 1] ?? 0;
-  const placement = i.placementClosed ? 0 : projectedPlacement - (i.rules.penalty?.[i.projection.projectedRank.get(i.clubId)! - 1] ?? 0);
+  const rank = i.projection.projectedRank.get(i.clubId)!;
+  const projectedPlacement = placementWithQualification(i.rules, rank);
+  const placement = i.placementClosed ? 0 : projectedPlacement - (i.rules.penalty?.[rank - 1] ?? 0);
   const seasonTotal = (points + ppg * remaining) * i.rules.perPoint + projectedPlacement + i.cupClosed + i.cupExpected;
   return Math.round((unclosed + ppg * remaining) * i.rules.perPoint + placement + i.cupExpected + i.buybackMultiple * seasonTotal);
 }
@@ -174,7 +175,7 @@ export function fairValueWithPpg(i: FairValueInput, ppg: (clubId: string) => num
   const rank = 1 + clubIds.filter((id) => id !== i.clubId && final(id) > mine).length;
   const points = standings.get(i.clubId)?.points ?? 0;
   const unclosed = points - i.closedPoints;
-  const projectedPlacement = i.rules.placement[rank - 1] ?? 0;
+  const projectedPlacement = placementWithQualification(i.rules, rank);
   const placement = i.placementClosed ? 0 : projectedPlacement - (i.rules.penalty?.[rank - 1] ?? 0);
   const rest = mine - points;
   const seasonTotal = mine * i.rules.perPoint + projectedPlacement + i.cupClosed + i.cupExpected;

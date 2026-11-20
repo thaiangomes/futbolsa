@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { BRASILEIRAO_A, LeagueView, expectedPoints, finishTime, gameMinute, livePointsDelta, type Match } from "../src/index.js";
+import { BRASILEIRAO_A_2026 as BRASILEIRAO_A, LeagueView, expectedPoints, finishTime, gameMinute, livePointsDelta, type Match } from "../src/index.js";
 
 // Item 23 das melhorias da partida de teste: o placar parcial de um jogo em andamento muda o valor justo que os bots enxergam.
 

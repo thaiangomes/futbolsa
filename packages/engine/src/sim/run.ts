@@ -29,7 +29,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { loadSeason } from "../data/season.js";
-import { BRASILEIRAO_A, COPA_DO_BRASIL, LIBERTADORES, SULAMERICANA, type CupRules } from "../engine/dividends.js";
+import { BRASILEIRAO_A, COPA_DO_BRASIL, LIBERTADORES, scaleLeagueRules, SULAMERICANA, type CupRules } from "../engine/dividends.js";
 import type { Match } from "../engine/types.js";
 import { DEFAULT_MARKET_MAKER, LAST_TRADE_MARKET_MAKER } from "../engine/marketMaker.js";
 import { renderReport } from "./report.js";
@@ -86,7 +86,7 @@ const result = simulate(season, {
   seed: Number(values.seed),
   bots: { dividendos: perBot, momentum: perBot, torcedor: perBot, aleatorio: perBot, trader: traders, captura: Number(values.captura), analista: 0, concentrador: 0, antecipador: 0, ...extras },
   // O dividendo da colocação final acompanha a mesma escala do dividendo por ponto.
-  rules: { perPoint, placement: BRASILEIRAO_A.placement.map((v) => Math.round(v * scale)) },
+  rules: { ...scaleLeagueRules(BRASILEIRAO_A, scale), perPoint },
   marketMaker: values.ancora === "fair" ? DEFAULT_MARKET_MAKER : { ...LAST_TRADE_MARKET_MAKER, anchor: values.ancora === "peer" ? "peer" : "lastTrade" },
   buyback: Number(values.recompra),
   traderHitRates: acerto,

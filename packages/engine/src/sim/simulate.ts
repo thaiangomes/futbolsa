@@ -12,6 +12,7 @@ import {
   type LeagueRules,
   type Payout,
 } from "../engine/dividends.js";
+import { placementUplift } from "../engine/ipoBand.js";
 import { Ledger } from "../engine/ledger.js";
 import { mmLot } from "../engine/ipoPlan.js";
 import { DEFAULT_MARKET_MAKER, MarketMaker, quoteSize, type MarketMakerConfig } from "../engine/marketMaker.js";
@@ -251,7 +252,9 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
   const bands = new Map<string, PriceBand>(
     season.clubs.map((c) => {
       const cups = config.ipoCups ? Math.round(view.cupExpected(c.id) * (1 + config.buyback)) : 0;
-      return [c.id, priceBand(suggestedPrice(c.ipoPosition) + cups, config.bandWidth)];
+      // A faixa acompanha o dividendo de colocação maior da tabela da temporada (zero com a tabela de 2026).
+      const uplift = Math.round(placementUplift(c.ipoPosition, config.rules) * (1 + config.buyback));
+      return [c.id, priceBand(suggestedPrice(c.ipoPosition) + cups + uplift, config.bandWidth)];
     }),
   );
   const bidsByClub = new Map<string, Bid[]>(clubIds.map((id) => [id, []]));

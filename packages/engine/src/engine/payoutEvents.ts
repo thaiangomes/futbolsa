@@ -27,7 +27,7 @@ import { finishTime, type Match } from "./types.js";
  * senão o campeonato fecharia antes de o jogo acontecer.
  */
 
-export type PayoutEventKind = "points" | "placement" | "promotion" | "cup_phase" | "cup_title" | "buyback";
+export type PayoutEventKind = "points" | "placement" | "qualification" | "relegation" | "promotion" | "cup_phase" | "cup_title" | "buyback";
 
 export interface PayoutEvent {
   /**
@@ -40,7 +40,10 @@ export interface PayoutEvent {
   competition: string;
   /** Rodada que fechou o pagamento, fase da copa, ou "fim" (jogo adiado que fecha o campeonato). */
   stage: string;
-  /** Valor por ação, em centavos. */
+  /**
+   * Valor por ação, em centavos. Negativo só no `relegation` (a penalização de rebaixamento, debitada do caixa); o
+   * resto da conta (diferença, liquidação) trata o débito como um estorno.
+   */
   perShare: Cents;
   /** Instante em que o evento fecha e que define quem recebe (ms desde 1970). */
   closedAt: number;
@@ -60,6 +63,11 @@ export interface EventsInput {
   values: SeasonValues;
   /** Clubes listados na temporada: só eles recebem. */
   listed: ReadonlySet<string>;
+  /**
+   * Classificados para o ano seguinte que o admin marcou no fechamento da Série A (ids do motor). Sem a marcação não há
+   * evento de classificação; quem está nas duas listas recebe só o da Libertadores.
+   */
+  qualified?: { libertadores: ReadonlySet<string>; sulamericana: ReadonlySet<string> };
 }
 
 export interface EventsResult {
@@ -74,7 +82,7 @@ export interface EventsResult {
 const eventKey = (kind: PayoutEventKind, competition: string, stage: string, clubId: string) =>
   `${kind}|${competition}|${stage}|${clubId}`;
 
-export function eventsFor({ matches, standings, values, listed }: EventsInput): EventsResult {
+export function eventsFor({ matches, standings, values, listed, qualified }: EventsInput): EventsResult {
   const byCompetition = new Map<string, Match[]>();
   for (const m of matches) {
     const list = byCompetition.get(m.competition) ?? [];
@@ -86,7 +94,7 @@ export function eventsFor({ matches, standings, values, listed }: EventsInput): 
   const closes: Record<string, number | undefined> = {};
 
   for (const [competition, rules] of Object.entries(values.leagues)) {
-    const result = leagueEvents(competition, byCompetition.get(competition) ?? [], rules, standings[competition], listed);
+    const result = leagueEvents(competition, byCompetition.get(competition) ?? [], rules, standings[competition], listed, qualified);
     events.push(...result.events);
     closes[competition] = result.closedAt;
   }
@@ -124,6 +132,7 @@ function leagueEvents(
   rules: LeagueRules,
   official: readonly string[] | undefined,
   listed: ReadonlySet<string>,
+  qualified: EventsInput["qualified"],
 ): { events: PayoutEvent[]; closedAt: number | undefined } {
   if (matches.length === 0) return { events: [], closedAt: undefined };
 
@@ -203,6 +212,44 @@ function leagueEvents(
         reason: promotion ? `acesso à Série A: ${i + 1}º na Série B` : `${i + 1}º lugar`,
       });
     });
+
+    if (!promotion) {
+      // Classificação para o ano seguinte: só o que o admin marcou, e quem está nas duas recebe só a Libertadores.
+      const q = rules.qualification;
+      if (q && qualified) {
+        for (const clubId of official) {
+          if (!listed.has(clubId)) continue;
+          const libertadores = qualified.libertadores.has(clubId);
+          const perShare = libertadores ? q.libertadores : qualified.sulamericana.has(clubId) ? q.sulamericana : 0;
+          if (perShare <= 0) continue;
+          events.push({
+            key: eventKey("qualification", competition, "fim", clubId),
+            kind: "qualification",
+            clubId,
+            competition,
+            stage: "fim",
+            perShare,
+            closedAt,
+            reason: libertadores ? "classificado para a Libertadores do ano seguinte" : "classificado para a Sul-Americana do ano seguinte",
+          });
+        }
+      }
+      // Rebaixamento: o débito por ação dos últimos colocados (negativo; fica fora da base da recompra).
+      official.forEach((clubId, i) => {
+        const penalty = rules.penalty?.[i] ?? 0;
+        if (penalty <= 0 || !listed.has(clubId)) return;
+        events.push({
+          key: eventKey("relegation", competition, "fim", clubId),
+          kind: "relegation",
+          clubId,
+          competition,
+          stage: "fim",
+          perShare: -penalty,
+          closedAt,
+          reason: `rebaixamento: ${i + 1}º lugar`,
+        });
+      });
+    }
   }
 
   return { events, closedAt };

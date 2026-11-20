@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { loadSeason } from "../data/season.js";
-import { BRASILEIRAO_A, COPA_DO_BRASIL, LIBERTADORES, SULAMERICANA } from "../engine/dividends.js";
+import { BRASILEIRAO_A_2026 as BRASILEIRAO_A, COPA_DO_BRASIL, LIBERTADORES, SULAMERICANA } from "../engine/dividends.js";
 import { DEFAULT_MARKET_MAKER } from "../engine/marketMaker.js";
 import type { Cents } from "../engine/money.js";
 import type { Trade } from "../engine/orderbook.js";
@@ -60,7 +60,7 @@ export const SCENARIOS: Scenario[] = [
   {
     name: "A-mini-fair",
     slow: false,
-    run: (onTrade) => simulate(loadSeason("tests/fixtures/mini-season.json"), { bots: MINI_BOTS, buyback: 1.5 }, { onTrade }),
+    run: (onTrade) => simulate(loadSeason("tests/fixtures/mini-season.json"), { bots: MINI_BOTS, buyback: 1.5, rules: BRASILEIRAO_A }, { onTrade }),
   },
   {
     name: "B-mini-peer",
@@ -68,7 +68,7 @@ export const SCENARIOS: Scenario[] = [
     run: (onTrade) =>
       simulate(
         loadSeason("tests/fixtures/mini-season.json"),
-        { bots: MINI_BOTS, buyback: 1.5, marketMaker: { ...DEFAULT_MARKET_MAKER, anchor: "peer" } },
+        { bots: MINI_BOTS, buyback: 1.5, rules: BRASILEIRAO_A, marketMaker: { ...DEFAULT_MARKET_MAKER, anchor: "peer" } },
         { onTrade },
       ),
   },

@@ -10,7 +10,7 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { loadSeason } from "../data/season.js";
-import { BRASILEIRAO_A, COPA_DO_BRASIL, LIBERTADORES, SULAMERICANA } from "../engine/dividends.js";
+import { BRASILEIRAO_A_2026 as BRASILEIRAO_A, COPA_DO_BRASIL, LIBERTADORES, SULAMERICANA } from "../engine/dividends.js";
 import { DEFAULT_MARKET_MAKER } from "../engine/marketMaker.js";
 import type { Match } from "../engine/types.js";
 import { PROFILES } from "./bots.js";

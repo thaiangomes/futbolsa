@@ -24,7 +24,7 @@ import { finishTime, type Match } from "./types.js";
  *   na temporada, somando todas as competições. As ações deixam de existir.
  */
 
-export type PayoutKind = "points" | "placement" | "cup-phase" | "cup-title" | "buyback" | "penalty";
+export type PayoutKind = "points" | "placement" | "qualification" | "cup-phase" | "cup-title" | "buyback" | "penalty";
 
 export interface Payout {
   /** Momento do pagamento (ms desde 1970). */
@@ -42,16 +42,62 @@ export interface LeagueRules {
   /** Dividendo por colocação final; índice 0 = 1º lugar. Faltando = zero. */
   placement: Cents[];
   /**
-   * Só na simulação (rodada F): quanto cada ação paga, no fechamento, por terminar em cada colocação (índice 0 = 1º),
+   * Classificação para o ano seguinte (decisão de 2026-11-20): bônus por ação de quem vai à Libertadores e à
+   * Sul-Americana (quem vai às duas recebe só o da Libertadores). No jogo o admin marca os classificados no
+   * fechamento; antes disso (valor justo, simulação) vale a projeção de `QUALIFICATION_SLOTS` pela colocação.
+   * Faltando = sem bônus.
+   */
+  qualification?: { libertadores: Cents; sulamericana: Cents };
+  /**
+   * Rebaixamento: quanto cada ação paga, no fechamento, por terminar em cada colocação (índice 0 = 1º),
    * debitado do caixa de quem tem a ação, mesmo que fique negativo. Fica fora da base da recompra. Faltando = zero.
    */
   penalty?: Cents[];
 }
 
-/** Série A: R$ 0,10 por ponto; colocação de R$ 5,00 (1º) a zero (17º ao 20º). */
+/** Vagas que a projeção usa para o bônus de classificação: Libertadores do 1º ao 6º, Sul-Americana do 7º ao 12º. */
+export const QUALIFICATION_SLOTS = { libertadores: 6, sulamericana: 6 } as const;
+
+/** Bônus de classificação projetado para a colocação `rank` (1 = campeão): o da Libertadores, o da Sul-Americana ou zero. */
+export function projectedQualification(rules: LeagueRules, rank: number): Cents {
+  const q = rules.qualification;
+  if (!q) return 0;
+  if (rank >= 1 && rank <= QUALIFICATION_SLOTS.libertadores) return q.libertadores;
+  if (rank > QUALIFICATION_SLOTS.libertadores && rank <= QUALIFICATION_SLOTS.libertadores + QUALIFICATION_SLOTS.sulamericana) return q.sulamericana;
+  return 0;
+}
+
+/** O que a colocação `rank` rende por ação: a tabela mais o bônus projetado de classificação (sem a penalização). */
+export function placementWithQualification(rules: LeagueRules, rank: number): Cents {
+  return (rules.placement[rank - 1] ?? 0) + projectedQualification(rules, rank);
+}
+
+/** Colocação da Série A até 2026-11-20 (R$ 5,00 do 1º a R$ 0,20 do 16º): a base de que o preço sugerido do IPO partiu. */
+export const PLACEMENT_BASELINE: readonly Cents[] = [500, 450, 400, 350, 300, 270, 240, 210, 180, 150, 120, 100, 80, 60, 40, 20];
+
+/** As regras da liga com todos os valores multiplicados por `scale` (os experimentos da simulação mexem na escala do dividendo). */
+export function scaleLeagueRules(rules: LeagueRules, scale: number): LeagueRules {
+  const k = (v: Cents) => Math.round(v * scale);
+  return {
+    perPoint: k(rules.perPoint),
+    placement: rules.placement.map(k),
+    ...(rules.qualification ? { qualification: { libertadores: k(rules.qualification.libertadores), sulamericana: k(rules.qualification.sulamericana) } } : {}),
+    ...(rules.penalty ? { penalty: rules.penalty.map(k) } : {}),
+  };
+}
+
+/** Série A até 2026-11-20 (R$ 5,00 a R$ 0,20, sem bônus de classificação nem penalização): fica para os testes de regressão e a temporada de 2026. */
+export const BRASILEIRAO_A_2026: LeagueRules = { perPoint: 10, placement: [...PLACEMENT_BASELINE] };
+
+/**
+ * Série A (decisão do Thaian em 2026-11-20, depois da rodada F2): R$ 0,10 por ponto; colocação de R$ 10,00 (1º) a R$ 0,30 (16º);
+ * R$ 3,00 de Libertadores e R$ 1,00 de Sul-Americana; −R$ 1,00 por ação para os quatro rebaixados.
+ */
 export const BRASILEIRAO_A: LeagueRules = {
   perPoint: 10,
-  placement: [500, 450, 400, 350, 300, 270, 240, 210, 180, 150, 120, 100, 80, 60, 40, 20],
+  placement: [1000, 700, 500, 450, 400, 350, 300, 270, 240, 210, 180, 150, 120, 90, 60, 30],
+  qualification: { libertadores: 300, sulamericana: 100 },
+  penalty: [...Array<number>(16).fill(0), 100, 100, 100, 100],
 };
 
 /** Série B: metade por ponto; bônus de R$ 2,00 para os quatro que sobem. */
@@ -194,6 +240,18 @@ export function scheduleLeaguePayouts(matches: readonly Match[], rules: LeagueRu
           kind: "placement",
           competition,
           detail: `${i + 1}º lugar`,
+        });
+      }
+      // Simulação: o bônus de classificação segue a projeção pela colocação (no jogo o admin marca os classificados).
+      const bonus = projectedQualification(rules, i + 1);
+      if (bonus > 0) {
+        payouts.push({
+          at: seasonClose,
+          clubId: row.clubId,
+          perShare: bonus,
+          kind: "qualification",
+          competition,
+          detail: `classificação para o ano seguinte, ${i + 1}º lugar`,
         });
       }
     });

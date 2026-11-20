@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
-  BRASILEIRAO_A,
+  BRASILEIRAO_A_2026 as BRASILEIRAO_A,
   BRASILEIRAO_B,
   computeStandings,
   COPA_DO_BRASIL,
