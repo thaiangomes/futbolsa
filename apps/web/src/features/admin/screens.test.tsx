@@ -131,15 +131,45 @@ describe("jogos (tela)", () => {
 });
 
 describe("classificação (tela)", () => {
-  const view = (confirmedAt: string | null) => ({
+  const view = (confirmedAt: string | null, qualificationBonus = false) => ({
     competition: "brasileirao-a" as const,
     rows: [
-      { club: club(1, "FLA3", "Flamengo"), position: 1, points: 70, sourcePosition: 1 },
-      { club: club(2, "PAL3", "Palmeiras"), position: 2, points: 69, sourcePosition: 2 },
+      { club: club(1, "FLA3", "Flamengo"), position: 1, points: 70, sourcePosition: 1, libertadores: false, sulamericana: false },
+      { club: club(2, "PAL3", "Palmeiras"), position: 2, points: 69, sourcePosition: 2, libertadores: false, sulamericana: false },
     ],
     manualOverride: false,
     confirmedBy: confirmedAt ? "chefe" : null,
     confirmedAt,
+    qualificationBonus,
+  });
+  const select = async (label: string, value: string) => {
+    const el = $<HTMLSelectElement>(`[aria-label="${label}"]`);
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
+    await act(async () => {
+      setter.call(el, value);
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  };
+
+  it("com bônus de classificação, o admin marca os classificados (quem está nas duas fica nas duas listas) e a API recebe os ids", async () => {
+    const putQualified = vi.fn(async () => view(null, true));
+    const admin = fake({ standings: async () => ({ standings: [view(null, true)] }), putQualified });
+    await render(createElement(StandingsScreen, { admin }));
+    expect(button("Salvar os classificados").disabled).toBe(true);
+    await select("Vaga de Flamengo", "3");
+    await select("Vaga de Palmeiras", "2");
+    expect(button("Salvar os classificados").disabled).toBe(false);
+    // com a marcação por salvar, conferir fica desligado (a marcação tira a conferência)
+    expect(button("Conferir").disabled).toBe(true);
+    await click(button("Salvar os classificados"));
+    expect(putQualified).toHaveBeenCalledWith({ libertadores: [1], sulamericana: [1, 2] });
+  });
+
+  it("sem bônus de classificação na temporada, a tela não pede a marcação", async () => {
+    const admin = fake({ standings: async () => ({ standings: [view(null, false)] }) });
+    await render(createElement(StandingsScreen, { admin }));
+    expect(container.querySelector('[aria-label="Vaga de Flamengo"]')).toBeNull();
+    expect(text()).not.toContain("Salvar os classificados");
   });
 
   it("subir um clube pede motivo antes de salvar a correção", async () => {
@@ -173,7 +203,7 @@ describe("preparar a temporada (tela)", () => {
     confirmedAt: null,
   });
   const rules = {
-    aPerPoint: 10, bPerPoint: 5, aPlacement: [500], promotionPerShare: 200, promotionSlots: 4, buybackMultipleBp: 15000, lockedAt: null,
+    aPerPoint: 10, bPerPoint: 5, aPlacement: [1000, 700], aLibertadoresBonus: 300, aSulamericanaBonus: 100, aRelegationPenalty: 100, aRelegationSlots: 4, promotionPerShare: 200, promotionSlots: 4, buybackMultipleBp: 15000, lockedAt: null,
   };
   const base = (cups: ReturnType<typeof cup>[], overrides: Partial<Record<keyof AdminApi, unknown>> = {}) =>
     fake({
@@ -191,6 +221,42 @@ describe("preparar a temporada (tela)", () => {
     expect(button("Confirmar a tabela").disabled).toBe(false);
     await click(button("Confirmar a tabela"));
     expect(confirmCup).toHaveBeenCalledWith(3, "libertadores");
+  });
+
+  it("os valores das ligas (por ponto, colocação, classificação e penalização) se editam e vão para a API", async () => {
+    const putRules = vi.fn(async () => rules);
+    const admin = base([cup([])], { putRules });
+    await render(createElement(SeasonScreen, { admin }));
+    expect(button("Salvar os valores").disabled).toBe(true);
+    expect($<HTMLInputElement>("#bonus-libertadores").value).toBe("300");
+    expect($<HTMLInputElement>("#penalizacao").value).toBe("100");
+    await type("#penalizacao", "200");
+    await type("#bonus-sulamericana", "150");
+    await type('[aria-label="Colocação 1º"]', "1200");
+    expect(button("Salvar os valores").disabled).toBe(false);
+    await click(button("Salvar os valores"));
+    expect(putRules).toHaveBeenCalledWith(
+      3,
+      expect.objectContaining({ aPlacement: [1200, 700], aLibertadoresBonus: 300, aSulamericanaBonus: 150, aRelegationPenalty: 200, aRelegationSlots: 4, buybackMultipleBp: 15000 }),
+    );
+  });
+
+  it("valor inválido (vazio ou com letra) desliga o salvar dos valores das ligas", async () => {
+    await render(createElement(SeasonScreen, { admin: base([cup([])]) }));
+    await type("#rebaixados", "21");
+    expect(button("Salvar os valores").disabled).toBe(true);
+    await type("#rebaixados", "4");
+    await type("#acesso", "2,00");
+    expect(button("Salvar os valores").disabled).toBe(true);
+  });
+
+  it("depois da abertura do IPO os valores das ligas também ficam travados", async () => {
+    const admin = base([cup([])], { rules: async () => ({ rules: { ...rules, lockedAt: "2027-03-01T12:00:00.000Z" }, cups: [cup([])] }) });
+    await render(createElement(SeasonScreen, { admin }));
+    expect($<HTMLInputElement>("#penalizacao").disabled).toBe(true);
+    expect($<HTMLInputElement>("#a-por-ponto").disabled).toBe(true);
+    expect($<HTMLInputElement>('[aria-label="Colocação 2º"]').disabled).toBe(true);
+    expect(button("Salvar os valores").disabled).toBe(true);
   });
 
   it("depois da abertura do IPO a oferta e as tabelas não se editam", async () => {

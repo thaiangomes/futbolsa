@@ -1,5 +1,5 @@
 import { buybackPerShare } from "./buyback.js";
-import type { CupRules } from "./dividends.js";
+import { placementWithQualification, type CupRules } from "./dividends.js";
 import type { Cents } from "./money.js";
 import type { SeasonValues } from "./seasonValues.js";
 
@@ -158,9 +158,12 @@ export function clubValue(input: ClubValueInput, bet?: ClubBet): ClubValueResult
   const league = input.values.leagues[input.league];
   let points = 0;
   let placement = 0;
+  let penalty = 0;
   if (input.leagueOpen && league) {
     points = (bet.points - input.points) * league.perPoint;
-    placement = league.placement[bet.position - 1] ?? 0;
+    // A colocação rende a tabela mais o bônus de classificação projetado, menos a penalização de rebaixamento.
+    placement = placementWithQualification(league, bet.position) - (league.penalty?.[bet.position - 1] ?? 0);
+    penalty = league.penalty?.[bet.position - 1] ?? 0;
   }
 
   const cups: Record<string, Cents> = {};
@@ -173,7 +176,8 @@ export function clubValue(input: ClubValueInput, bet?: ClubBet): ClubValueResult
 
   const cupsTotal = Object.values(cups).reduce((a, b) => a + b, 0);
   const total = points + placement + cupsTotal + input.toReceive;
-  const seasonTotal = input.paid + total;
+  // A penalização não entra na base da recompra.
+  const seasonTotal = input.paid + total + penalty;
   const buyback = buybackPerShare(seasonTotal, input.buybackMultipleBp);
   const value = total + buyback;
   const outlook = value > 0 ? outlookOf(input.displayedPrice, value) : null;

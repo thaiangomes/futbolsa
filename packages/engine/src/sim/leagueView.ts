@@ -39,6 +39,8 @@ export class LeagueView {
   private live: readonly LiveMatch[] = [];
   private cups: PreparedCup[] = [];
   private readonly gamesPerClub: number;
+  /** Os jogos do campeonato como "mandante|visitante" (o placar parcial só vale para eles). */
+  private readonly leaguePairs: ReadonlySet<string>;
   /** Jogos de cada clube em ordem de início, e o índice do próximo a começar. */
   private readonly fixtures = new Map<string, Match[]>();
   private readonly nextIdx = new Map<string, number>();
@@ -53,6 +55,7 @@ export class LeagueView {
     private readonly priorWeight = 5,
   ) {
     this.gamesPerClub = (2 * allMatches.length) / clubIds.length;
+    this.leaguePairs = new Set(allMatches.map((m) => `${m.home}|${m.away}`));
     for (const id of clubIds) {
       this.paidPoints.set(id, 0);
       this.fixtures.set(
@@ -113,14 +116,23 @@ export class LeagueView {
   /** Os jogos em andamento e o placar parcial de cada um (item 23). */
   setLive(matches: readonly LiveMatch[]): void {
     this.live = matches;
+    this.recompute();
   }
 
-  /** O que o placar parcial muda no valor justo do clube: pontos esperados a mais (ou a menos) vezes o dividendo por ponto. */
-  private liveAdjustment(clubId: string): Cents {
-    let points = 0;
-    for (const m of this.live) points += livePointsDelta(m, clubId);
-    return Math.round(points * this.rules.perPoint);
+  /**
+   * Pontos esperados a mais (ou a menos) que o placar parcial dá a cada clube. Só jogos deste campeonato (o par mandante e
+   * visitante está no calendário dele): o jogo de copa de um clube da liga não entra; as copas ficam para outra etapa.
+   */
+  private liveDeltas(): Map<string, number> | undefined {
+    if (this.live.length === 0) return undefined;
+    const deltas = new Map<string, number>();
+    for (const m of this.live) {
+      if (!this.leaguePairs.has(`${m.home}|${m.away}`)) continue;
+      for (const clubId of [m.home, m.away]) deltas.set(clubId, (deltas.get(clubId) ?? 0) + livePointsDelta(m, clubId));
+    }
+    return deltas.size > 0 ? deltas : undefined;
   }
+
 
   setKnownMatches(matches: Match[]): void {
     this.known = matches;
@@ -166,7 +178,7 @@ export class LeagueView {
    * fechamento, então "pago" e "fechado" são o mesmo instante.
    */
   fairValue(clubId: string): Cents {
-    return Math.max(0, fairValue(this.fairValueInput(clubId)) + this.liveAdjustment(clubId));
+    return Math.max(0, fairValue(this.fairValueInput(clubId)));
   }
 
   /** Linha da tabela do clube com os jogos já encerrados. */
@@ -179,7 +191,7 @@ export class LeagueView {
    * (a mesma conta de `fairValue`, inclusive a colocação projetada com ela).
    */
   fairValueWith(clubId: string, ppg: (clubId: string) => number): Cents {
-    return Math.max(0, fairValueWithPpg(this.fairValueInput(clubId), ppg) + this.liveAdjustment(clubId));
+    return Math.max(0, fairValueWithPpg(this.fairValueInput(clubId), ppg));
   }
 
   private fairValueInput(clubId: string): FairValueInput {
@@ -200,6 +212,6 @@ export class LeagueView {
   }
 
   private recompute(): void {
-    this.projection = projectLeague(this.known, this.clubIds, this.gamesPerClub, { ppg: this.priorPpg, weight: this.priorWeight });
+    this.projection = projectLeague(this.known, this.clubIds, this.gamesPerClub, { ppg: this.priorPpg, weight: this.priorWeight }, this.liveDeltas());
   }
 }

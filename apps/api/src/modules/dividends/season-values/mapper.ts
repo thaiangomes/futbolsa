@@ -53,6 +53,10 @@ export interface RulesRow {
   aPerPoint: number;
   bPerPoint: number;
   aPlacement: number[];
+  aLibertadoresBonus: number;
+  aSulamericanaBonus: number;
+  aRelegationPenalty: number;
+  aRelegationSlots: number;
   promotionPerShare: number;
   promotionSlots: number;
   buybackMultipleBp: number;
@@ -61,7 +65,26 @@ export interface RulesRow {
 /** As duas ligas do motor a partir de `season_rules`: a Série B paga o acesso igual aos que sobem. */
 export function leaguesFromRules(rules: RulesRow): { "brasileirao-a": LeagueRules; "brasileirao-b": LeagueRules } {
   return {
-    "brasileirao-a": { perPoint: rules.aPerPoint, placement: [...rules.aPlacement] },
+    "brasileirao-a": {
+      perPoint: rules.aPerPoint,
+      placement: [...rules.aPlacement],
+      // temporada antiga (valores zerados pela migração 0010) fica sem bônus nem penalização
+      ...(rules.aLibertadoresBonus > 0 || rules.aSulamericanaBonus > 0
+        ? { qualification: { libertadores: rules.aLibertadoresBonus, sulamericana: rules.aSulamericanaBonus } }
+        : {}),
+      ...(rules.aRelegationPenalty > 0 && rules.aRelegationSlots > 0
+        ? { penalty: relegationPenalty(rules.aRelegationPenalty, rules.aRelegationSlots) }
+        : {}),
+    },
     "brasileirao-b": { perPoint: rules.bPerPoint, placement: Array.from({ length: rules.promotionSlots }, () => rules.promotionPerShare) },
   };
+}
+
+/**
+ * A penalização por colocação do motor: o valor nos `slots` últimos de uma Série A de 20 clubes, zero nos demais
+ * (índice 0 = 1º lugar). A Série A tem 20 clubes por regra do jogo (o contrato limita a tabela de colocação a 20).
+ */
+export function relegationPenalty(perShare: number, slots: number): number[] {
+  const clubs = 20;
+  return Array.from({ length: clubs }, (_, i) => (i >= clubs - slots ? perShare : 0));
 }

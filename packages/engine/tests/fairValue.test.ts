@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadSeason } from "../src/data/season.js";
-import { BRASILEIRAO_A, computeStandings, roundCloseTimes, scheduleCupPayouts, scheduleLeaguePayouts } from "../src/engine/dividends.js";
+import { BRASILEIRAO_A_2026 as BRASILEIRAO_A, computeStandings, roundCloseTimes, scheduleCupPayouts, scheduleLeaguePayouts } from "../src/engine/dividends.js";
 import { fairValue, projectLeague } from "../src/engine/fairValue.js";
 import { Ledger } from "../src/engine/ledger.js";
 import { Exchange } from "../src/engine/orderbook.js";

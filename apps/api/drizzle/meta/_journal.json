@@ -71,6 +71,13 @@
       "when": 1794864140564,
       "tag": "0009_projecoes_por_clube",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795175405177,
+      "tag": "0010_classificacao_e_rebaixamento",
+      "breakpoints": true
     }
   ]
 }

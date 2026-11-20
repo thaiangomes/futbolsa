@@ -27,7 +27,7 @@ const { values } = parseArgs({
   options: {
     data: { type: "string", default: "data/brasileirao-2025.json" },
     sementes: { type: "string", default: "10" },
-    cenarios: { type: "string", default: "A,B,B1,B2,B3" },
+    cenarios: { type: "string", default: "A,B,B1,B2,B3,N" },
     out: { type: "string", default: "sim-output" },
   },
 });
@@ -42,6 +42,8 @@ const SCENARIOS: Record<string, { label: string; rules: LeagueRules }> = {
   B1: { label: "B + rebaixados −R$ 1,00", rules: { perPoint: 10, placement: withBonus(BASE_B), penalty: pen(100) } },
   B2: { label: "B + rebaixados −R$ 2,00", rules: { perPoint: 10, placement: withBonus(BASE_B), penalty: pen(200) } },
   B3: { label: "B + rebaixados −R$ 3,00", rules: { perPoint: 10, placement: withBonus(BASE_B), penalty: pen(300) } },
+  // A tabela adotada em 2026-11-20 (B1 no jogo): bônus de classificação projetado, penalização de R$ 1,00 e faixa do IPO com o dividendo maior
+  N: { label: "N: adotada (B1 no jogo, faixa do IPO acompanha)", rules: BRASILEIRAO_A },
 };
 
 const season = loadSeason(values.data!);

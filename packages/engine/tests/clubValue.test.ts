@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buybackPerShare } from "../src/engine/buyback.js";
 import { CHAMPION, ClubBetError, buybackIfEndedNow, clubValue, cupMissing, type ClubBet, type ClubValueInput } from "../src/engine/clubValue.js";
-import { BRASILEIRAO_A, BRASILEIRAO_B, COPA_DO_BRASIL, LIBERTADORES, SULAMERICANA } from "../src/engine/dividends.js";
+import { BRASILEIRAO_A_2026 as BRASILEIRAO_A, BRASILEIRAO_B, COPA_DO_BRASIL, LIBERTADORES, SULAMERICANA } from "../src/engine/dividends.js";
 import { reais } from "../src/engine/money.js";
 import type { SeasonValues } from "../src/engine/seasonValues.js";
 

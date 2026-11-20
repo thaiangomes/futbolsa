@@ -1,3 +1,4 @@
+import { PLACEMENT_BASELINE, placementWithQualification, type LeagueRules } from "./dividends.js";
 import { DEFAULT_BAND_WIDTH, priceBand, suggestedPrice } from "./bookbuilding.js";
 import { assertCents, type Cents } from "./money.js";
 import { mulDivRound } from "./rounding.js";
@@ -38,6 +39,11 @@ export interface IpoBandInput {
   buybackBp: number;
   /** Largura da faixa em pontos-base: ±40% por padrão. */
   widthBp?: number;
+  /**
+   * Quanto a colocação rende a mais com a tabela da temporada do que com a tabela de que o preço sugerido partiu
+   * (`placementUplift`), em centavos por ação. O dividendo maior sobe o centro da faixa, na mesma proporção da recompra.
+   */
+  placementUplift?: Cents;
 }
 
 export interface IpoBand {
@@ -56,7 +62,8 @@ export interface IpoBand {
  * Ex.: R$ 40,00 + R$ 4,22 × 2,5 = R$ 50,55; piso R$ 30,33; teto R$ 70,77.
  */
 export function ipoBand(input: IpoBandInput): IpoBand {
-  const { placement, cupExpected, buybackBp, widthBp = DEFAULT_BAND_WIDTH * 10_000 } = input;
+  const { placement, cupExpected, buybackBp, widthBp = DEFAULT_BAND_WIDTH * 10_000, placementUplift = 0 } = input;
+  assertCents(placementUplift, "aumento da colocação");
   assertCents(cupExpected, "copas esperadas");
   if (cupExpected < 0) throw new Error(`Copas esperadas negativas: ${cupExpected}`);
   if (!Number.isInteger(buybackBp) || buybackBp < 0) throw new Error(`Recompra em pontos-base inválida: ${buybackBp}`);
@@ -65,7 +72,8 @@ export function ipoBand(input: IpoBandInput): IpoBand {
   }
   const base = placementPrice(placement);
   const cupsPart = mulDivRound(cupExpected, 10_000 + buybackBp, 10_000);
-  const band = priceBand(base + cupsPart, widthBp / 10_000);
+  const upliftPart = mulDivRound(placementUplift, 10_000 + buybackBp, 10_000);
+  const band = priceBand(base + cupsPart + upliftPart, widthBp / 10_000);
   return { center: band.center, floor: band.min, ceiling: band.max, placementPrice: base, cupsPart };
 }
 
@@ -107,4 +115,15 @@ export function validateBid(input: ValidateBidInput): BidValidation {
     return { ok: false, code: "insufficient_cash" };
   }
   return { ok: true, reserve, delta: reserve - currentReserve };
+}
+
+/**
+ * O aumento do dividendo de colocação esperado do clube, pela colocação do ano anterior (a mesma regra de `placementPrice`):
+ * a tabela da temporada com o bônus de classificação projetado, menos a tabela de 2026 (`PLACEMENT_BASELINE`) de que o preço
+ * sugerido partiu. A penalização de rebaixamento fica de fora: é risco que o mercado precifica, não dividendo esperado.
+ * Nunca fica negativo (tabela menor que a base não derruba o preço sugerido).
+ */
+export function placementUplift(placement: number | null, rules: LeagueRules): Cents {
+  const rank = placement === null ? 20 : placement <= 20 ? placement : placement - 4;
+  return Math.max(0, placementWithQualification(rules, rank) - (PLACEMENT_BASELINE[rank - 1] ?? 0));
 }

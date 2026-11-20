@@ -21,6 +21,12 @@ export const seasonRules = futbolsa.table(
     bPerPoint: money("b_per_point").notNull(),
     /** Colocação final da Série A; índice 0 = 1º lugar, como `BRASILEIRAO_A.placement`. */
     aPlacement: bigint("a_placement", { mode: "number" }).array().notNull(),
+    /** Bônus por ação de quem vai à Libertadores e à Sul-Americana (o admin marca os classificados; zero = sem bônus). */
+    aLibertadoresBonus: money("a_libertadores_bonus").notNull().default(0),
+    aSulamericanaBonus: money("a_sulamericana_bonus").notNull().default(0),
+    /** Penalização por ação dos rebaixados (debitada do caixa no fechamento) e quantos últimos colocados pagam. */
+    aRelegationPenalty: money("a_relegation_penalty").notNull().default(0),
+    aRelegationSlots: integer("a_relegation_slots").notNull().default(0),
     promotionPerShare: money("promotion_per_share").notNull(),
     promotionSlots: integer("promotion_slots").notNull(),
     /** Múltiplo da recompra em pontos-base: 15.000 = 1,5×. */
@@ -30,9 +36,31 @@ export const seasonRules = futbolsa.table(
   (t) => [
     check(
       "season_rules_values_check",
-      sql`${t.aPerPoint} >= 0 and ${t.bPerPoint} >= 0 and ${t.promotionPerShare} >= 0 and ${t.promotionSlots} >= 0 and ${t.buybackMultipleBp} >= 0`,
+      sql`${t.aPerPoint} >= 0 and ${t.bPerPoint} >= 0 and ${t.promotionPerShare} >= 0 and ${t.promotionSlots} >= 0 and ${t.buybackMultipleBp} >= 0 and ${t.aLibertadoresBonus} >= 0 and ${t.aSulamericanaBonus} >= 0 and ${t.aRelegationPenalty} >= 0 and ${t.aRelegationSlots} between 0 and 20`,
     ),
     check("season_rules_placement_check", sql`0 <= all(${t.aPlacement})`),
+  ],
+);
+
+/**
+ * Os classificados da Série A para o ano seguinte, marcados pelo admin no fechamento (Dividendos e recompra, "Classificação
+ * para o ano seguinte"): um clube pode estar nas duas listas e então recebe só o bônus da Libertadores. Fora da trava dos
+ * valores: a marcação acontece depois da abertura do IPO.
+ */
+export const seasonQualifications = futbolsa.table(
+  "season_qualifications",
+  {
+    seasonId: integer("season_id")
+      .notNull()
+      .references(() => seasons.id),
+    clubId: integer("club_id")
+      .notNull()
+      .references(() => clubs.id),
+    cup: text("cup").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.seasonId, t.clubId, t.cup] }),
+    check("season_qualifications_cup_check", sql`${t.cup} in ('libertadores', 'sulamericana')`),
   ],
 );
 

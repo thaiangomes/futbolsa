@@ -41,7 +41,8 @@ export function buybackEvents(
 ): PayoutEvent[] {
   const totals = new Map<string, Cents>([...listed].map((clubId) => [clubId, 0]));
   for (const e of events) {
-    if (e.kind === "buyback") continue;
+    // A recompra não entra na própria base, e a penalização de rebaixamento fica fora dela.
+    if (e.kind === "buyback" || e.kind === "relegation") continue;
     if (e.closedAt > closedAt) {
       throw new Error(`O evento ${e.key} fecha depois do instante da recompra`);
     }

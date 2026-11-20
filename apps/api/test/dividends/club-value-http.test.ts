@@ -77,7 +77,7 @@ describe("GET /clubs/:ticker/dividends (T12)", () => {
       buybackMultipleBp: 15_000,
       leagueRules: { perPoint: 10 },
     });
-    expect(view.leagueRules.placement.slice(0, 3)).toEqual([500, 450, 400]);
+    expect(view.leagueRules.placement.slice(0, 3)).toEqual([1000, 700, 500]);
     expect(view.cups.map((c) => [c.competition, c.currentPhase, c.outcome])).toEqual([
       ["copa-do-brasil", "oitavas", "playing"],
       ["libertadores", "grupos", "playing"],
@@ -86,7 +86,7 @@ describe("GET /clubs/:ticker/dividends (T12)", () => {
     expect(view.cups[0]!.title).toBe(800);
   });
 
-  it("livro 38: o navegador e o motor dão o mesmo número com o que a rota devolve (faltam R$ 14,35; valor R$ 39,93; preço com downside de 10%)", async () => {
+  it("livro 38: o navegador e o motor dão o mesmo número com o que a rota devolve (faltam R$ 18,35; valor R$ 49,93; preço com upside de 13%)", async () => {
     const view = clubValueViewSchema.parse((await get("/clubs/FLA3/dividends")).json());
     const values = {
       leagues: { [view.league]: view.leagueRules },
@@ -105,10 +105,11 @@ describe("GET /clubs/:ticker/dividends (T12)", () => {
     };
     expect(clubValue(input).buybackNow).toBe(450);
     const s = clubValue(input, { points: 68, position: 3, cups: { "copa-do-brasil": "quartas", libertadores: "quartas" } }).simulation!;
-    expect(s.missing.total).toBe(1435);
-    expect(s.buyback).toBe(2558);
-    expect(s.value).toBe(3993);
-    expect(s.outlook).toEqual({ kind: "downside", percent: 10 });
+    // 3º lugar com a tabela de 2026-11-20: R$ 5,00 de colocação e R$ 3,00 da Libertadores (eram R$ 4,00): +R$ 4,00 em tudo
+    expect(s.missing.total).toBe(1835);
+    expect(s.buyback).toBe(3158);
+    expect(s.value).toBe(4993);
+    expect(s.outlook).toEqual({ kind: "upside", percent: 13 });
   });
 
   it("clube sem jogo de copa devolve só o campeonato, e sem pagamentos zera o pago e o a receber", async () => {

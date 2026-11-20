@@ -5,6 +5,7 @@ import type { ClubRef, CupView, SeasonView } from "@futbolsa/contracts";
 import type { AdminApi } from "./api";
 import { COMPETITION_LABELS, formatCents, formatInstant } from "./forms";
 import { brasiliaInputToIso, isoToBrasiliaInput } from "./season/dates";
+import { LeaguesCard } from "./season/leagues-card";
 import { PostponeIpo } from "./season/postpone-ipo";
 import { Card, ErrorNote, LoadState, useAction, useLoader } from "./ui";
 
@@ -193,14 +194,7 @@ export function SeasonScreen({ admin }: { admin: AdminApi }) {
       {known.data && <ClubsCard key={season.data.clubs.length} season={current} listed={season.data.clubs} known={known.data.clubs} admin={admin} onDone={reloadAll} />}
       <LoadState loader={rules} />
       {rules.data && (
-        <Card title="Valores das ligas">
-          <div className="g-3 small">
-            <div className="kv"><span>Série A, por ponto</span><span>{formatCents(rules.data.rules.aPerPoint)}</span></div>
-            <div className="kv"><span>Série B, por ponto</span><span>{formatCents(rules.data.rules.bPerPoint)}</span></div>
-            <div className="kv"><span>Acesso, por ação</span><span>{formatCents(rules.data.rules.promotionPerShare)} × {rules.data.rules.promotionSlots}</span></div>
-          </div>
-          <p className="xs muted" style={{ marginBottom: 0 }}>Os valores vêm da temporada anterior (ou das constantes do jogo) e travam na abertura do IPO.</p>
-        </Card>
+        <LeaguesCard key={JSON.stringify(rules.data.rules)} seasonId={current.id} rules={rules.data.rules} locked={locked} admin={admin} onDone={reloadAll} />
       )}
       {rules.data?.cups.map((cup) => (
         <CupCard key={`${cup.competition}-${cup.confirmedAt}-${cup.phases.map((p) => p.perShare).join(",")}`} seasonId={current.id} cup={cup} locked={locked} admin={admin} onDone={reloadAll} />

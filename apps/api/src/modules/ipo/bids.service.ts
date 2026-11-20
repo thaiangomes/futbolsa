@@ -204,7 +204,7 @@ export class IpoBidsService {
       const [bot] = await tx.db.select({ active: bots.active }).from(bots).where(eq(bots.id, wallet.botId!));
       if (!bot?.active) throw ipoError("account_blocked");
     }
-    if (wallet.cash < 0) throw ipoError("negative_cash");
+    if (wallet.cash <= 0) throw ipoError("negative_cash");
   }
 
   private async bidOf(tx: Tx, seasonId: number, clubId: number, walletId: number): Promise<BidRow | undefined> {

@@ -196,7 +196,7 @@ describe("abertura do IPO", () => {
       expect(me).toMatchObject({ season: { status: "ipo_open", hasWallet: true } });
     });
 
-    it("ipo 5 pelo banco: FLA3 3º com R$ 4,22 de copas esperadas tem a faixa de R$ 30,33 a R$ 70,77 (e 2, 3, 4 e 6)", async () => {
+    it("ipo 5 pelo banco: FLA3 3º com R$ 4,22 de copas esperadas e o dividendo de colocação maior tem a faixa de R$ 36,33 a R$ 84,77 (e 2, 3, 4 e 6)", async () => {
       // A conta do motor com os mesmos jogos: Libertadores desde os grupos (R$ 2,53125) e Copa do Brasil na 3ª fase
       // (R$ 1,6875) somam R$ 4,21875, arredondados para R$ 4,22.
       const m = (id: string, competition: string, phase: string, home: string, away: string, kickoff: string, extra: Partial<Match> = {}): Match => ({
@@ -213,18 +213,22 @@ describe("abertura do IPO", () => {
         },
       ]);
       expect(cupExpected("FLA3", dates.closesAt, cups)).toBe(422);
+      // a faixa de antes da tabela de 2026-11-20 (sem aumento da colocação): R$ 30,33 a R$ 70,77
       expect(ipoBand({ placement: 3, cupExpected: 422, buybackBp: 15_000 })).toMatchObject({ center: 5055, floor: 3033, ceiling: 7077 });
+      // com a tabela nova o 3º da Série A rende R$ 5,00 + R$ 3,00 (Libertadores) em vez de R$ 4,00: +R$ 4,00 × 2,5 = +R$ 10,00 no centro
+      expect(ipoBand({ placement: 3, cupExpected: 422, buybackBp: 15_000, placementUplift: 400 })).toMatchObject({ center: 6055, floor: 3633, ceiling: 8477 });
 
-      expect(await bandOf(seasonId, "FLA3")).toEqual({ center: 5055, floor: 3033, ceiling: 7077 });
-      // ipo 2: 1º sem copa
-      expect(await bandOf(seasonId, "PAL3")).toEqual({ center: 5000, floor: 3000, ceiling: 7000 });
+      expect(await bandOf(seasonId, "FLA3")).toEqual({ center: 6055, floor: 3633, ceiling: 8477 });
+      // ipo 2: 1º sem copa: R$ 13,00 em vez de R$ 5,00, +R$ 8,00 × 2,5 = +R$ 20,00 no centro
+      expect(await bandOf(seasonId, "PAL3")).toEqual({ center: 7000, floor: 4200, ceiling: 9800 });
       // ipo 3: Clube dos Treze na Série B, sem colocação
       expect(await bandOf(seasonId, SERIE_B_TICKER)).toEqual({ center: 300, floor: 180, ceiling: 420 });
       // ipo 4: os quatro promovidos, na ordem da Série B
       const promoted = await Promise.all(["JUV3", "VIT3", "MIR3", "RBB3"].map(async (t) => (await bandOf(seasonId, t)).center));
       expect(promoted).toEqual([900, 700, 500, 300]);
       // ipo 6: eliminado da Copa do Brasil antes do fechamento: as copas somam zero
-      expect((await bandOf(seasonId, "BOT3")).center).toBe(placementPrice(5));
+      // (o 5º ganha R$ 7,00 em vez de R$ 3,00 de colocação: +R$ 4,00 × 2,5)
+      expect((await bandOf(seasonId, "BOT3")).center).toBe(placementPrice(5) + 1000);
       // todo clube listado tem faixa
       const missing = await database.db
         .select()

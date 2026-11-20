@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { BRASILEIRAO_A, COPA_DO_BRASIL, LIBERTADORES, scheduleCupPayouts, SULAMERICANA } from "../src/engine/dividends.js";
+import { BRASILEIRAO_A_2026 as BRASILEIRAO_A, COPA_DO_BRASIL, LIBERTADORES, scheduleCupPayouts, SULAMERICANA } from "../src/engine/dividends.js";
 import { Ledger } from "../src/engine/ledger.js";
 import { Exchange } from "../src/engine/orderbook.js";
 import type { Match } from "../src/engine/types.js";

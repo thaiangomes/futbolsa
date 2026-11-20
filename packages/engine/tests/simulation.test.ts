@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { loadSeason, markOutOfWindow } from "../src/data/season.js";
-import { LIBERTADORES } from "../src/engine/dividends.js";
+import { BRASILEIRAO_A_2026, LIBERTADORES } from "../src/engine/dividends.js";
 import { DEFAULT_MARKET_MAKER } from "../src/engine/marketMaker.js";
 import type { Match } from "../src/engine/types.js";
 import { simulate, TREASURY } from "../src/sim/simulate.js";
 
 const season = loadSeason("tests/fixtures/mini-season.json");
-const small = { bots: { dividendos: 2, momentum: 2, torcedor: 4, aleatorio: 2, trader: 0, captura: 0, analista: 0, concentrador: 0, antecipador: 0 }, stepHours: 6 };
+const small = { bots: { dividendos: 2, momentum: 2, torcedor: 4, aleatorio: 2, trader: 0, captura: 0, analista: 0, concentrador: 0, antecipador: 0 }, stepHours: 6, rules: BRASILEIRAO_A_2026 };
 
 describe("simulação com o fixture de exemplo", () => {
   const result = simulate(season, { ...small, buyback: 0 });

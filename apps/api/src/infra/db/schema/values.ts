@@ -96,7 +96,7 @@ export type RefreshReason = (typeof REFRESH_REASONS)[number];
 export const CANDLE_INTERVALS = ["15m", "1d"] as const;
 export type CandleInterval = (typeof CANDLE_INTERVALS)[number];
 
-export const PAYOUT_KINDS = ["points", "placement", "cup_phase", "cup_title", "promotion", "buyback"] as const;
+export const PAYOUT_KINDS = ["points", "placement", "qualification", "relegation", "cup_phase", "cup_title", "promotion", "buyback"] as const;
 export type PayoutKindValue = (typeof PAYOUT_KINDS)[number];
 
 export const PAYOUT_STATUSES = ["pending", "approved", "superseded"] as const;

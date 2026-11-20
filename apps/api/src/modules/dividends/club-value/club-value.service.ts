@@ -53,7 +53,12 @@ export class ClubValueService {
     return {
       ticker,
       league,
-      leagueRules: { perPoint: rules.perPoint, placement: rules.placement },
+      leagueRules: {
+        perPoint: rules.perPoint,
+        placement: rules.placement,
+        ...(rules.qualification ? { qualification: rules.qualification } : {}),
+        ...(rules.penalty ? { penalty: rules.penalty } : {}),
+      },
       leagueOpen: await this.leagueOpen(season.id, league),
       points: standing?.points ?? 0,
       position: standing?.position ?? null,
@@ -83,7 +88,9 @@ export class ClubValueService {
         and(
           eq(payoutEvents.seasonId, seasonId),
           eq(payoutEvents.clubId, clubId),
+          // a recompra à parte e a penalização de rebaixamento, que é débito (negativo) e fica fora da base da recompra
           ne(payoutEvents.kind, "buyback"),
+          ne(payoutEvents.kind, "relegation"),
           ne(payoutEvents.status, "superseded"),
           lte(payoutEvents.closedAt, this.clock.now()),
         ),

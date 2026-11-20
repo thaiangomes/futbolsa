@@ -78,15 +78,23 @@ export const seasonRulesSchema = z.strictObject({
   aPerPoint: z.number().int().min(0),
   bPerPoint: z.number().int().min(0),
   /** Colocação final da Série A, do 1º ao último (centavos por ação). */
-  aPlacement: z.array(z.number().int().min(0)).min(1),
+  aPlacement: z.array(z.number().int().min(0)).min(1).max(20),
+  /** Classificação para o ano seguinte (centavos por ação): Libertadores e Sul-Americana; quem vai às duas recebe só a primeira. */
+  aLibertadoresBonus: z.number().int().min(0),
+  aSulamericanaBonus: z.number().int().min(0),
+  /** Rebaixamento: centavos por ação debitados dos rebaixados no fechamento, e quantos últimos colocados pagam. */
+  aRelegationPenalty: z.number().int().min(0),
+  aRelegationSlots: z.number().int().min(0).max(20),
   promotionPerShare: z.number().int().min(0),
   promotionSlots: z.number().int().min(0),
   buybackMultipleBp: z.number().int().min(0),
   lockedAt: z.string().nullable(),
 });
 export type SeasonRulesView = z.infer<typeof seasonRulesSchema>;
+/** Os campos de classificação e rebaixamento são opcionais no corpo: omitidos, ficam como estão. */
 export const putSeasonRulesBodySchema = seasonRulesSchema
   .omit({ lockedAt: true })
+  .partial({ aLibertadoresBonus: true, aSulamericanaBonus: true, aRelegationPenalty: true, aRelegationSlots: true })
   .extend({ reason: adminReasonSchema.optional() });
 export type PutSeasonRulesBody = z.infer<typeof putSeasonRulesBodySchema>;
 

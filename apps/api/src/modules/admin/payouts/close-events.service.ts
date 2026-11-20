@@ -60,7 +60,7 @@ export type AfterPassHook = (seasonId: number, loaded: SeasonEngineInput, now: D
 /** Os dividendos: pontos, colocação, acesso, fases e títulos das copas, pelo `eventsFor` do motor. A recompra fica de fora. */
 export const DIVIDEND_EVENTS: PayoutEventSource = {
   name: "dividendos",
-  kinds: ["points", "placement", "promotion", "cup_phase", "cup_title"],
+  kinds: ["points", "placement", "qualification", "relegation", "promotion", "cup_phase", "cup_title"],
   events: (loaded) => eventsResultOf(loaded).events,
 };
 

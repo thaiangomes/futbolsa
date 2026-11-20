@@ -13,6 +13,7 @@ export const ADMIN_ACTIONS = {
   // Classificação oficial (F7)
   "standings.update": { reasonRequired: true },
   "standings.confirm": { reasonRequired: false },
+  "standings.qualified": { reasonRequired: false },
   // Temporada e copas (F7)
   "season.create": { reasonRequired: false },
   "season.update": { reasonRequired: false },

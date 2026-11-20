@@ -1,5 +1,7 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put } from "@nestjs/common";
 import {
+  type PutQualifiedBody,
+  putQualifiedBodySchema,
   type PatchStandingsBody,
   patchStandingsBodySchema,
   type StandingsCompetition,
@@ -31,6 +33,15 @@ export class StandingsController {
     @Body(new ZodValidationPipe(patchStandingsBodySchema)) body: PatchStandingsBody,
   ): Promise<StandingsView> {
     return this.standings.correct(admin.id, competition, body);
+  }
+
+  /** Marca os classificados para a Libertadores e a Sul-Americana (só a Série A). */
+  @Put("brasileirao-a/qualified")
+  setQualified(
+    @CurrentUser() admin: ResolvedUser,
+    @Body(new ZodValidationPipe(putQualifiedBodySchema)) body: PutQualifiedBody,
+  ): Promise<StandingsView> {
+    return this.standings.setQualified(admin.id, body);
   }
 
   @HttpCode(200)

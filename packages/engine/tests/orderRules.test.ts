@@ -91,6 +91,14 @@ describe("validateOrder", () => {
     expect(validateOrder(market("sell", 100), negative).ok).toBe(true);
   });
 
+  it("caixa zerado (depois do débito do rebaixamento) também só vende; a casa com caixa zero não é barrada pela regra", () => {
+    const zero = state({ cash: 0, availableCash: 0 });
+    expect(validateOrder(market("buy", 1), zero)).toEqual({ ok: false, code: "negative_cash" });
+    expect(validateOrder(limit("buy", 1, 4000), zero)).toEqual({ ok: false, code: "negative_cash" });
+    expect(validateOrder(market("sell", 100), zero).ok).toBe(true);
+    expect(validateOrder(limit("buy", 1, 4000), state({ cash: 0, availableCash: 0, isHouse: true }))).toMatchObject({ code: "insufficient_cash" });
+  });
+
   it("compra limitada maior que o caixa livre é recusada; a mercado passa (executa até o livre)", () => {
     expect(validateOrder(limit("buy", 100, 4000), state({ availableCash: 399_999 }))).toEqual({ ok: false, code: "insufficient_cash" });
     expect(validateOrder(limit("buy", 100, 4000), state({ availableCash: 400_000 })).ok).toBe(true);

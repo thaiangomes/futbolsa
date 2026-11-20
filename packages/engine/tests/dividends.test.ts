@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyBuyback,
   applyPayout,
-  BRASILEIRAO_A,
+  BRASILEIRAO_A_2026 as BRASILEIRAO_A,
   BRASILEIRAO_B,
   computeStandings,
   scheduleBuyback,

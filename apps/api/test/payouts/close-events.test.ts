@@ -635,13 +635,13 @@ describe("fechamento dos eventos de pagamento (closeEvents)", () => {
         ["placement", fimDoJogo, null, null],
         ["points", fimDoJogo, null, null],
       ]);
-      expect(fla.find((e) => e.kind === "placement")).toMatchObject({ perShare: 500, eventKey: "placement|brasileirao-a|fim|FLA3" });
+      expect(fla.find((e) => e.kind === "placement")).toMatchObject({ perShare: 1000, eventKey: "placement|brasileirao-a|fim|FLA3" });
       expect(fla.find((e) => e.kind === "points")).toMatchObject({ perShare: 30, eventKey: "points|brasileirao-a|fim|FLA3" });
       const placements = (await eventsOf(s.seasonId)).filter((e) => e.kind === "placement");
       expect(placements.every((e) => e.closedAt.getTime() === fimDoJogo.getTime())).toBe(true);
     });
 
-    it("div 7: BOT3 em 1º recebe R$ 5,00, CEA3 em 16º R$ 0,20 e SPT3 em 17º nada", async () => {
+    it("div 7: BOT3 em 1º recebe R$ 10,00, CEA3 em 16º R$ 0,30 e SPT3 em 17º nada de colocação (só o débito do rebaixamento)", async () => {
       const s = await newSeason();
       await insertMatches([game(s.seasonId, 38, "BOT3", "CEA3", [1, 0], at("2027-12-05T16:00:00-03:00"))]);
       // a tabela tem 20 clubes: com os promovidos de 2026 a lista de clubes conhecidos passou de 20, então só os 17 primeiros entram
@@ -653,9 +653,13 @@ describe("fechamento dos eventos de pagamento (closeEvents)", () => {
       const placement = Object.fromEntries(
         (await eventsOf(s.seasonId)).filter((e) => e.kind === "placement").map((e) => [CLUBS.find((c) => club(c.id) === e.clubId)!.id, e]),
       );
-      expect(placement.BOT3).toMatchObject({ perShare: 500, reason: "1º lugar", status: "pending" });
-      expect(placement.CEA3).toMatchObject({ perShare: 20, reason: "16º lugar" });
+      expect(placement.BOT3).toMatchObject({ perShare: 1000, reason: "1º lugar", status: "pending" });
+      expect(placement.CEA3).toMatchObject({ perShare: 30, reason: "16º lugar" });
       expect(placement.SPT3).toBeUndefined();
+      // o 17º só tem o débito de R$ 1,00 por ação (e o rebaixamento ainda aguarda a tabela conferida)
+      const relegation = (await eventsOf(s.seasonId)).filter((e) => e.kind === "relegation");
+      expect(relegation.map((e) => [CLUBS.find((c) => club(c.id) === e.clubId)!.id, e.perShare, e.reason])).toContainEqual(["SPT3", -100, "rebaixamento: 17º lugar"]);
+      expect(relegation.length).toBeGreaterThanOrEqual(1); // só os clubes listados têm débito
     });
 
     it("div 9: GRE3 em 3º na Série B recebe R$ 2,00 de acesso e VAS3 em 5º nada", async () => {
@@ -781,7 +785,7 @@ describe("fechamento dos eventos de pagamento (closeEvents)", () => {
         "brasileirao-a",
         CLUBS.map((c, i) => ({ clubName: c.name, position: i + 1, points: 80 - i })),
       );
-      expect(await eventOf(s.seasonId, "FLA3", "pending")).toContainEqual(expect.objectContaining({ kind: "placement", perShare: 500 }));
+      expect(await eventOf(s.seasonId, "FLA3", "pending")).toContainEqual(expect.objectContaining({ kind: "placement", perShare: 1000 }));
 
       // o admin corrige: FLU3 em 1º, FLA3 em 2º
       const admin = await createUser(t.db);
@@ -790,11 +794,11 @@ describe("fechamento dos eventos de pagamento (closeEvents)", () => {
       await standingsService.correct(admin, "brasileirao-a", { order, reason: "punição do tribunal" });
       const fla = (await eventOf(s.seasonId, "FLA3")).filter((e) => e.kind === "placement");
       expect(fla.map((e) => [e.version, e.status, e.perShare])).toEqual([
-        [1, "superseded", 500],
-        [2, "pending", 450],
+        [1, "superseded", 1000],
+        [2, "pending", 700],
       ]);
       const flu = (await eventOf(s.seasonId, "FLU3", "pending")).filter((e) => e.kind === "placement");
-      expect(flu).toEqual([expect.objectContaining({ version: 2, perShare: 500 })]);
+      expect(flu).toEqual([expect.objectContaining({ version: 2, perShare: 1000 })]);
     });
   });
 

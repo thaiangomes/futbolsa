@@ -44,7 +44,15 @@ export function SummaryCards({ view }: { view: WalletView }) {
       </div>
       {view.negativeCash && (
         <div className="note note-err" role="alert" data-testid="aviso-caixa-negativo">
-          <div>Seu caixa está negativo por um estorno de pagamento. Compras ficam bloqueadas até o caixa voltar ao positivo; o patrimônio já soma o valor negativo.</div>
+          <div>
+            <b>Seu caixa está negativo ({formatMoney(view.cash.total)}).</b> Isso acontece com um estorno de pagamento ou com o débito de rebaixamento (R$ 1,00 por ação dos clubes que caíram).
+            Suas ordens de compra abertas foram canceladas e compras ficam bloqueadas até o caixa voltar a ficar positivo (venda ações ou receba dividendos). O patrimônio já soma o valor negativo.
+          </div>
+        </div>
+      )}
+      {!view.negativeCash && view.cash.total === 0 && (
+        <div className="note" role="status" data-testid="aviso-caixa-zerado">
+          <div>Seu caixa está zerado: compras ficam bloqueadas até entrar dinheiro (venda de ações ou dividendos).</div>
         </div>
       )}
       {view.buybackClosed && (
@@ -166,6 +174,12 @@ export function ResultsTable({ view }: { view: WalletView }) {
 const shortDate = (iso: string) =>
   new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
+/** O nome do movimento no extrato: o débito de rebaixamento sai como estorno no livro-razão, mas não é um estorno para o jogador. */
+export function entryLabel(e: EntryItem): string {
+  if (e.kind === "reversal" && e.payout?.reason.startsWith("rebaixamento")) return "Débito de rebaixamento";
+  return ENTRY_KIND_LABELS[e.kind] ?? e.kind;
+}
+
 /** O que a linha do extrato diz além do tipo: o evento do dividendo, o motivo do estorno ou do ajuste, o leilão. */
 export function entryDetail(e: EntryItem): string {
   if (e.payout) return `${e.payout.reason} · ${formatMoney(e.payout.perShare)} × ${formatShares(e.payout.shares)} ações`;
@@ -179,7 +193,7 @@ export function EntryRow({ entry }: { entry: EntryItem }) {
     <tr data-testid="linha-extrato" data-entry-id={entry.id}>
       <td className="num">{shortDate(entry.at)}</td>
       <td>
-        <span className="b">{ENTRY_KIND_LABELS[entry.kind] ?? entry.kind}</span>
+        <span className="b">{entryLabel(entry)}</span>
         {entry.annulled && <span className="chip chip-down" data-testid="marca-anulado" style={{ marginLeft: 6 }}>anulado</span>}
         {entry.inAuction && <span className="chip chip-live" data-testid="marca-leilao" style={{ marginLeft: 6 }}>no leilão</span>}
         {entryDetail(entry) && <div className="xs muted">{entryDetail(entry)}</div>}
