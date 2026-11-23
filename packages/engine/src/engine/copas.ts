@@ -215,3 +215,10 @@ export function sampleGroup(rng: RandomSource, matches: readonly Match[], now: n
   }
   return rankRows([...rows.values()]);
 }
+
+/** Confronto de jogo único entre dois clubes ainda sem calendário (fases que o sorteio não definiu): o mando sai no sorteio. */
+export function sampleNeutralTie(rng: RandomSource, a: string, b: string, strength: (id: string) => number): { winner: string; loser: string } {
+  const [home, away] = rng.next() < 0.5 ? [a, b] : [b, a];
+  const leg: Match = { id: `${home}-${away}`, competition: "", kickoff: "2999-01-01T00:00:00Z", home, away, homeGoals: null, awayGoals: null, status: "scheduled" };
+  return sampleTie(rng, [leg], 0, strength, () => undefined);
+}

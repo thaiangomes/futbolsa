@@ -16,6 +16,8 @@ import { finishTime, kickoffTime, type Match } from "./types.js";
 
 /** Uma copa pronta para as contas: fases em ordem de início e o fim de cada uma. */
 export interface PreparedCup {
+  /** A competição dos jogos ("copa-do-brasil", "libertadores"...). */
+  competition: string;
   rules: CupRules;
   /** Fases na ordem em que começam, inclusive as preliminares que não pagam. */
   phases: string[];
@@ -35,7 +37,7 @@ export function prepareCups(cups: ReadonlyArray<{ matches: readonly Match[]; rul
         return [p, list.every((m) => m.status === "finished") ? Math.max(...list.map(finishTime)) : Infinity];
       }),
     );
-    return { rules, phases, byPhase, completeAt };
+    return { competition: live[0]?.competition ?? "", rules, phases, byPhase, completeAt };
   });
 }
 
