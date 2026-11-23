@@ -156,6 +156,11 @@ describe("tarefa dos bots", () => {
   it("item 23: com um jogo em andamento a visão dos bots enxerga o placar parcial; sem ele, o valor justo é o de sempre", async () => {
     const snapshots = app.get(BotSnapshotService);
     const [, , c, d] = world.tickers as [string, string, string, string];
+    // o jogo em andamento existe no calendário (começou antes de agora e não terminou): só assim o placar parcial vale nos cenários
+    const [emAndamento] = await database.db
+      .insert(matches)
+      .values({ seasonId: world.seasonId, competition: "brasileirao-a", round: 4, homeClubId: world.clubIds.get(c)!, awayClubId: world.clubIds.get(d)!, kickoff: new Date(TUESDAY.getTime() - 70 * 60_000), status: "scheduled" })
+      .returning({ id: matches.id });
     const normal = await snapshots.load(world.seasonId, TUESDAY);
     const spy = vi.spyOn(app.get(PartialScores), "at").mockReturnValue([{ home: c, away: d, homeGoals: 2, awayGoals: 0, minute: 70 }]);
     try {
@@ -168,6 +173,7 @@ describe("tarefa dos bots", () => {
     }
     const depois = await snapshots.load(world.seasonId, TUESDAY);
     expect(depois.leagues.get(c)!.fairValue(c)).toBe(normal.leagues.get(c)!.fairValue(c));
+    await database.db.delete(matches).where(eq(matches.id, emAndamento!.id));
   });
 
   it("item 23 (atenção no gol): com clubes em foco, os bots que olham para eles só negociam esses clubes; sem foco, olham o mercado todo", async () => {

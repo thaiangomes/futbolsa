@@ -101,6 +101,7 @@ export const BRASILEIRAO_A: LeagueRules = {
   placement: [1000, 700, 500, 450, 400, 350, 300, 270, 240, 210, 180, 150, 120, 90, 60, 30],
   qualification: { libertadores: 300, sulamericana: 100 },
   penalty: [...Array<number>(16).fill(0), 100, 100, 100, 100],
+  relegationSlots: 4,
 };
 
 /** Série B: metade por ponto; bônus de R$ 2,00 para os quatro que sobem. */
