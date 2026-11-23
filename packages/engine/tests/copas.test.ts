@@ -57,6 +57,12 @@ describe("chance de avançar nas copas", () => {
     expect(chance([ida, volta], () => undefined, 200)).toBe(1);
   });
 
+  it("ida e volta empatada no agregado, sem vencedor da fonte, vai aos pênaltis: o placar da volta não decide", () => {
+    const ida = jogo("1", "A", "B", { status: "finished", homeGoals: 3, awayGoals: 1, kickoff: "2026-11-13T19:00:00-03:00" });
+    const volta = jogo("2", "B", "A", { status: "finished", homeGoals: 2, awayGoals: 0, kickoff: "2026-11-20T19:00:00-03:00" });
+    expect(chance([ida, volta], () => undefined, 4000)).toBeCloseTo(0.5, 1);
+  });
+
   it("clube mais forte passa mais vezes", () => {
     const j = jogo("1", "A", "B");
     const forte = chance([j], () => undefined, 20000, (id) => (id === "A" ? 2 : 1));

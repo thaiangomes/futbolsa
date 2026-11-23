@@ -122,7 +122,7 @@ export function sampleTie(
   const penalties = rng.next();
   if (goalsA !== goalsB) return goalsA > goalsB ? { winner: a, loser: b } : { winner: b, loser: a };
   if (allDone) {
-    const known = decider.winner ?? byScore(decider);
+    const known = decider.winner ?? (legs.length === 1 ? byScore(decider) : undefined); // na volta, o placar do jogo não decide o confronto
     if (known === a || known === b) return known === a ? { winner: a, loser: b } : { winner: b, loser: a };
   } else {
     const [extraA, extraB] = decider.home === a ? [extraHome, extraAway] : [extraAway, extraHome];

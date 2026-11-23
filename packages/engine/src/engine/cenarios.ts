@@ -126,6 +126,7 @@ export function runScenarios(input: ScenarioInput): Map<string, ClubScenario> {
     clubIds.map((c) => [c, { points: 0, placementQual: 0, penalty: 0, cupFuture: 0, pLibertadores: 0, pSulamericana: 0, pRelegated: 0 }]),
   );
   const listed = new Set(clubIds);
+  const relegatedCount = rules.relegationSlots ?? (rules.penalty ?? []).filter((p) => p > 0).length;
   const qualification = rules.qualification;
 
   for (let s = 0; s < input.scenarios; s++) {
@@ -138,7 +139,7 @@ export function runScenarios(input: ScenarioInput): Map<string, ClubScenario> {
     const table = rankRows([...rows.values()]);
     const relegated = new Set<string>();
     table.forEach((club, i) => {
-      if ((rules.penalty?.[i] ?? 0) > 0) relegated.add(club);
+      if (i >= table.length - relegatedCount) relegated.add(club);
     });
 
     // copas
@@ -194,8 +195,14 @@ function structureOf(list: readonly Match[], groups: boolean): Match[][] {
 
 /**
  * Uma copa sorteada até o fim: os jogos que o calendário já tem (com o placar parcial dos que estão rolando) e, depois deles, as
- * fases que o sorteio ainda não definiu (adversários sorteados entre os que seguem vivos). Credita em `pay` o que cada clube do
- * campeonato recebe das fases que ainda não fecharam e devolve campeão e vice.
+ * fases que o sorteio ainda não definiu. Credita em `pay` o que cada clube do campeonato recebe das fases que ainda não
+ * fecharam e devolve campeão e vice.
+ *
+ * - Quem sobrevive de uma fase para a seguinte vem do calendário quando ele já tem a fase seguinte; só a fase final do calendário
+ *   alimenta as fases futuras.
+ * - Fases futuras: a chave é completada até o tamanho esperado (2 elevado às fases que faltam) com adversários de força média,
+ *   que também ocupam o lugar de quem ainda não está no calendário (entrada direta, 3º da Libertadores). Ninguém passa sem jogar.
+ * - Fase de grupos que o calendário ainda não tem não é sorteada (os clubes dela são desconhecidos): fica fora da chave.
  */
 function simulateCup(
   cup: PreparedCup,
@@ -212,7 +219,10 @@ function simulateCup(
     if (club !== undefined && amount && listed.has(club)) pay.set(club, pay.get(club)! + amount);
   };
   let alive: string[] = [];
+  /** Quem passou dos grupos para uma fase de repescagem (o 2º da Sul-Americana). */
   let repechage: string[] = [];
+  /** Quem pulou a repescagem por regra (o 1º do grupo da Sul-Americana): só entra de novo na fase seguinte. */
+  let direct: string[] = [];
   let lastIdx = -1;
   let final: CupFinal = {};
 
@@ -227,11 +237,13 @@ function simulateCup(
       const repechageTo = rules.advanceTo?.[phase];
       alive = [];
       repechage = [];
+      direct = [];
       for (const group of structureOf(list, true)) {
         const [first, second] = sampleGroup(rngOf(`grupo|${group[0]!.id}`), group, now, strength, live);
         if (first === undefined) continue;
         alive.push(first);
         if (pays) credit(first, rules.advance[phase]);
+        if (repechageTo) direct.push(first);
         if (second === undefined) continue;
         if (repechageTo) {
           repechage.push(second);
@@ -245,7 +257,8 @@ function simulateCup(
     }
 
     const playing = new Set(list.flatMap((m) => [m.home, m.away]));
-    const carry = alive.filter((c) => !playing.has(c));
+    const carry = direct.filter((c) => !playing.has(c));
+    direct = [];
     const winners: string[] = [];
     const losers: string[] = [];
     for (const tie of structureOf(list, false)) {
@@ -255,20 +268,36 @@ function simulateCup(
       if (pays) credit(result.winner, idx === last ? rules.title : rules.advance[phase]);
     }
     alive = [...winners, ...carry];
+    repechage = [];
     if (idx === last) final = { champion: winners[0], runnerUp: losers[0] };
   }
 
   // fases que o calendário ainda não tem
+  let filler = 0;
+  const average = () => `~media${filler++}`;
   for (let q = lastIdx + 1; q <= last; q++) {
     const name = rules.phases[q]!;
+    if (GROUPS.test(name)) continue;
     const previous = rules.phases[q - 1];
     const isRepechage = previous !== undefined && rules.advanceTo?.[previous]?.[name] !== undefined;
-    const pool = isRepechage ? repechage : alive;
-    if (pool.length < 2) {
-      if (isRepechage) repechage = [];
+    if (isRepechage) {
+      // cada clube da repescagem enfrenta um adversário médio (o 3º da Libertadores, que o calendário ainda não traz)
+      for (const club of repechage) {
+        const result = sampleNeutralTie(rngOf(`repescagem|${q}|${club}`), club, average(), strength);
+        if (result.winner === club) {
+          alive.push(club);
+          credit(club, rules.advance[name]);
+        }
+      }
+      repechage = [];
       continue;
     }
-    const order = rngOf(`sorteio|${q}`).shuffle([...pool].sort());
+    // chave cheia: 2 elevado às fases de mata-mata que faltam, com adversários médios no lugar de quem não está no calendário
+    const remaining = rules.phases.slice(q).filter((p) => !GROUPS.test(p)).length;
+    const size = 2 ** remaining;
+    const pool = [...alive];
+    while (pool.length < size) pool.push(average());
+    const order = rngOf(`sorteio|${q}`).shuffle(pool.sort());
     const winners: string[] = [];
     const losers: string[] = [];
     for (let i = 0; i + 1 < order.length; i += 2) {
@@ -277,11 +306,7 @@ function simulateCup(
       losers.push(result.loser);
       credit(result.winner, q === last ? rules.title : rules.advance[name]);
     }
-    if (order.length % 2 === 1) winners.push(order[order.length - 1]!);
-    if (isRepechage) {
-      alive = [...alive, ...winners];
-      repechage = [];
-    } else alive = winners;
+    alive = winners;
     if (q === last) final = { champion: winners[0], runnerUp: losers[0] };
   }
   return final;

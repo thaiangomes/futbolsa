@@ -4,7 +4,8 @@
  * Serve ao valor justo dos bots (um cenário simulado de cada vez); o pagamento usa sempre a marcação do admin.
  *
  * Ordem da cascata:
- * 1. as rotas pelas copas ocupam vagas primeiro, destino mais forte antes (a ordem de `destinations`);
+ * Destino por destino, do mais forte (Libertadores) para o mais fraco (Sul-Americana):
+ * 1. as rotas pelas copas ocupam vagas primeiro;
  * 2. o dono da rota que está rebaixado, ou que já tem vaga, devolve a vaga: ela passa para a tabela do mesmo destino;
  * 3. as vagas da tabela (as fixas mais as devolvidas) vão, na ordem da classificação final, a quem ainda não tem vaga e não caiu.
  * Dono de rota que não é da Série A (campeão estrangeiro, clube da Série B) ocupa a vaga fora da tabela e não mexe nela.
@@ -39,6 +40,9 @@ export const DEFAULT_SLOT_RULES: SlotRules = {
   ],
 };
 
+/** Do destino mais forte para o mais fraco: o clube que vai à Libertadores não ocupa vaga da Sul-Americana. */
+const DESTINATION_ORDER: readonly SlotDestination[] = ["libertadores", "sulamericana"];
+
 /** Quem foi campeão e quem foi vice de uma copa, num cenário. */
 export interface CupFinal {
   champion?: string;
@@ -57,23 +61,22 @@ export function resolveSlots(
 ): Map<string, SlotDestination> {
   const inTable = new Set(table);
   const taken = new Map<string, SlotDestination>();
-  const freed = new Map<SlotDestination, number>();
+  // do destino mais forte para o mais fraco, qualquer que seja a ordem em que o admin os escreveu
+  const ordered = [...rules.destinations].sort((a, b) => DESTINATION_ORDER.indexOf(a.destination) - DESTINATION_ORDER.indexOf(b.destination));
 
-  for (const rule of rules.destinations) {
+  for (const rule of ordered) {
+    let freed = 0;
     for (const route of rule.routes) {
       const final = cups[route.cup];
       const owner = route.result === "champion" ? final?.champion : final?.runnerUp;
       if (owner === undefined || !inTable.has(owner)) continue; // sem dono da Série A: a vaga não mexe na tabela
       if (relegated.has(owner) || taken.has(owner)) {
-        freed.set(rule.destination, (freed.get(rule.destination) ?? 0) + 1);
+        freed++;
         continue;
       }
       taken.set(owner, rule.destination);
     }
-  }
-
-  for (const rule of rules.destinations) {
-    let left = rule.tableSlots + (freed.get(rule.destination) ?? 0);
+    let left = rule.tableSlots + freed;
     for (const club of table) {
       if (left <= 0) break;
       if (relegated.has(club) || taken.has(club)) continue;

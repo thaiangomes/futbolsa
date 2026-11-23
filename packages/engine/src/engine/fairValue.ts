@@ -38,7 +38,7 @@ export function prepareCups(cups: ReadonlyArray<{ matches: readonly Match[]; rul
         return [p, list.every((m) => m.status === "finished") ? Math.max(...list.map(finishTime)) : Infinity];
       }),
     );
-    return { competition: live[0]?.competition ?? "", rules, phases, byPhase, completeAt };
+    return { competition: (live[0]?.competition ?? "").replace("sul-americana", "sulamericana"), rules, phases, byPhase, completeAt };
   });
 }
 

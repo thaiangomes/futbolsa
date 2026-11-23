@@ -85,5 +85,16 @@ describe("cascata das vagas", () => {
     const vagas = resolveSlots(regras, ["A", "B", "C", "D", "E", "F", "G"], new Set(), { libertadores: { champion: "BOCA" } });
     expect([...vagas.values()].filter((d) => d === "libertadores")).toHaveLength(5);
   });
+  it("rota da Sul-Americana não tira o 1º colocado da Libertadores, e a ordem escrita pelo admin não importa", () => {
+    const sul: SlotRules = {
+      destinations: [
+        { destination: "sulamericana", tableSlots: 2, routes: [{ cup: "copa-do-brasil", result: "runnerUp" }] },
+        { destination: "libertadores", tableSlots: 4, routes: [] },
+      ],
+    };
+    const vagas = resolveSlots(sul, ["A", "B", "C", "D", "E", "F", "G", "H"], new Set(), { "copa-do-brasil": { runnerUp: "A" } });
+    expect(vagas.get("A")).toBe("libertadores"); // já entrou pela tabela: a rota devolve a vaga
+    expect([...vagas].filter(([, d]) => d === "libertadores").map(([c]) => c)).toEqual(["A", "B", "C", "D"]);
+    expect([...vagas].filter(([, d]) => d === "sulamericana").map(([c]) => c)).toEqual(["E", "F", "G"]); // 2 da tabela + 1 devolvida
+  });
 });
-

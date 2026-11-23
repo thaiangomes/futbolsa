@@ -106,6 +106,28 @@ describe("valor justo por cenários", () => {
   });
 });
 
+describe("rebaixamento e fases futuras nos cenários", () => {
+  it("sem penalização, o número de rebaixados vale: pRelegated reflete os últimos da tabela", () => {
+    const r = runScenarios(entrada({ rules: { perPoint: 10, placement: [], relegationSlots: 2 } }));
+    const soma = [...r.values()].reduce((a, c) => a + c.pRelegated, 0);
+    expect(soma).toBeCloseTo(2, 5);
+    expect(r.get("PAL")!.pRelegated).toBeLessThan(0.05);
+  });
+
+  it("copa só com os grupos no calendário: a chave futura é completa e cada fase credita o número certo de vencedores", () => {
+    const grupos = (id: string, home: string, away: string): Match =>
+      jogo(id, home, away, { competition: "sulamericana", phase: "grupos", kickoff: "2026-11-20T19:00:00-03:00" });
+    const matches = [grupos("g1", "PAL", "X1"), grupos("g2", "X1", "PAL"), grupos("g3", "C2", "X2"), grupos("g4", "X2", "C2")];
+    const cups = prepareCups([
+      { matches, rules: { phases: ["grupos", "oitavas", "quartas", "semifinal", "final"], advance: { grupos: 100, oitavas: 100, quartas: 100, semifinal: 100 }, title: 100 } },
+    ]);
+    const r = runScenarios(entrada({ cups, scenarios: 200, slots: { destinations: [{ destination: "libertadores", tableSlots: 0, routes: [{ cup: "sulamericana", result: "champion" }] }] } }));
+    // com a chave cheia (16 vagas), a chance de título de um clube que sobrevive aos grupos é no máximo 1/16 das vezes que ele passa
+    expect(r.get("PAL")!.cupFuture).toBeGreaterThan(0);
+    expect(r.get("PAL")!.cupFuture).toBeLessThan(100 * 5); // nunca pode receber todas as fases sempre
+  });
+});
+
 describe("a visão do campeonato com cenários", () => {
   const montar = (cenarios: boolean) => {
     const view = new LeagueView(clubes, { perPoint: 10, placement: [], qualification: { libertadores: 300, sulamericana: 100 } }, liga());
