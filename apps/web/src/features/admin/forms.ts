@@ -54,6 +54,8 @@ export const ACTION_LABELS: Record<string, string> = {
   "cup.confirm": "Tabela da copa confirmada",
   "cup.correct": "Tabela da copa corrigida depois da abertura do IPO",
   "season.rules.correct": "Valores das ligas corrigidos depois da abertura do IPO",
+  "season.slots.update": "Regras de vaga da temporada",
+  "season.slots.correct": "Regras de vaga corrigidas depois da abertura do IPO",
   "import.run": "Importação na hora",
   "suspension.set": "Negociação suspensa",
   "suspension.clear": "Negociação retomada",

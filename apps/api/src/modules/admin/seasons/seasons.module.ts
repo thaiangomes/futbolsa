@@ -13,6 +13,8 @@ import { SeasonCloseController } from "./season-close.controller.js";
 import { SeasonCloseService } from "./season-close.service.js";
 import { PublicSeasonController, SeasonsController } from "./seasons.controller.js";
 import { SeasonsService } from "./seasons.service.js";
+import { SlotsController } from "./slots.controller.js";
+import { SlotsService } from "./slots.service.js";
 
 /**
  * Preparar a temporada, valores das ligas e tabelas das copas (T11 a T13). Importa o `IpoModule` para o
@@ -22,8 +24,8 @@ import { SeasonsService } from "./seasons.service.js";
  */
 @Module({
   imports: [AdminLogModule, DividendsModule, IpoModule, PayoutsModule, RankingsModule, PortfolioModule, MarketModule],
-  controllers: [PublicSeasonController, SeasonsController, RulesController, ClubsController, SeasonCloseController],
-  providers: [SeasonsService, RulesService, SeasonCloseService],
-  exports: [SeasonsService, RulesService, SeasonCloseService],
+  controllers: [PublicSeasonController, SeasonsController, RulesController, ClubsController, SeasonCloseController, SlotsController],
+  providers: [SeasonsService, RulesService, SeasonCloseService, SlotsService],
+  exports: [SeasonsService, RulesService, SeasonCloseService, SlotsService],
 })
 export class SeasonsModule {}

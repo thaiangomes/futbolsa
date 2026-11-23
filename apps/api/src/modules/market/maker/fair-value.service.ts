@@ -1,8 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { asc, eq } from "drizzle-orm";
+import { slotRulesSchema } from "@futbolsa/contracts";
 import type { Cents, Match } from "@futbolsa/engine";
 import { DB, type Database, type DrizzleTx, Tx } from "../../../infra/db/index.js";
-import { clubs, matches, seasonClubs, seasonRules, standings } from "../../../infra/db/schema/index.js";
+import { clubs, matches, seasonClubs, seasonRules, seasonSlots, standings } from "../../../infra/db/schema/index.js";
 import { SeasonValuesService } from "../../dividends/season-values/season-values.service.js";
 import { toEngineMatch } from "../../admin/results/to-engine.js";
 import { fairValuesAt, type FairValueData } from "./fair-value.js";

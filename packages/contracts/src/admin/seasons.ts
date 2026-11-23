@@ -159,3 +159,33 @@ export const correctRulesBodySchema = z.strictObject({
   reason: adminReasonSchema,
 });
 export type CorrectRulesBody = z.infer<typeof correctRulesBodySchema>;
+
+/**
+ * As regras de vaga para a Libertadores e a Sul-Americana do ano seguinte, montadas pelo admin (Vagas e copas no valor justo dos
+ * bots): vagas da tabela e rotas pelas copas de cada destino, do mais forte para o mais fraco. Só o valor justo dos bots usa.
+ */
+export const slotRulesSchema = z
+  .strictObject({
+    destinations: z
+      .array(
+        z.strictObject({
+          destination: z.enum(["libertadores", "sulamericana"]),
+          tableSlots: z.number().int().min(0).max(20),
+          routes: z
+            .array(z.strictObject({ cup: z.enum(["copa-do-brasil", "libertadores", "sulamericana"]), result: z.enum(["champion", "runnerUp"]) }))
+            .max(10),
+        }),
+      )
+      .min(1)
+      .max(2),
+  })
+  .refine((v) => new Set(v.destinations.map((d) => d.destination)).size === v.destinations.length, { message: "destino repetido" });
+export type SlotRulesView = z.infer<typeof slotRulesSchema>;
+
+/** `GET /admin/seasons/:id/slots`: as regras de vaga (`null` enquanto o admin não montou; os bots usam as seis vagas da tabela). */
+export const slotRulesResponseSchema = z.strictObject({ slots: slotRulesSchema.nullable(), locked: z.boolean() });
+export type SlotRulesResponse = z.infer<typeof slotRulesResponseSchema>;
+
+/** `PUT /admin/seasons/:id/slots` (antes do IPO) e `POST /admin/seasons/:id/slots/correction` (depois, com motivo no registro). */
+export const putSlotsBodySchema = z.strictObject({ slots: slotRulesSchema, reason: adminReasonSchema });
+export type PutSlotsBody = z.infer<typeof putSlotsBodySchema>;
