@@ -66,6 +66,8 @@ export interface SimConfig {
    * faixa de 20% para os bots. Desligada (padrão), a simulação é a da Fase 0.
    */
   gameRules?: boolean;
+  /** Quantos cenários o valor justo dos bots sorteia (vagas, rebaixamento e copas); ausente, os bots usam a conta de sempre. A casa nunca usa. */
+  scenarios?: number;
   /**
    * Rodada Z: a referência da faixa de 20% e da margem da casa anda do último preço ao valor justo, 10% por dia
    * depois de 2 dias sem negócio (`nextReference`). Sem ela, a referência é o preço exibido.
@@ -187,6 +189,7 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
   const view = new MarketView(exchange, ledger, clubIds, config.rules, matches);
   view.buybackMultiple = config.buyback;
   view.setCups(config.cups);
+  if (config.scenarios) view.setScenarios({ count: config.scenarios });
   view.cupHype = config.fanCupHype;
   view.enforceBand = config.gameRules === true;
   const clubShares = new Map<string, number>();
@@ -196,7 +199,7 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
   // A mesma regra da API (`nextReference`): carência de 2 dias, só com o preço a mais de 20% do justo.
   const reference = config.referenceDecay
     ? (id: string) =>
-        nextReference({ lastPrice: exchange.price(id) ?? 0, lastTradeAt: lastTradeAt.get(id) || null, fair: Math.max(50, view.fairValue(id)), now: exchange.now, minGapBp: config.referenceGapBp }) ??
+        nextReference({ lastPrice: exchange.price(id) ?? 0, lastTradeAt: lastTradeAt.get(id) || null, fair: Math.max(50, view.houseFairValue(id)), now: exchange.now, minGapBp: config.referenceGapBp }) ??
         exchange.price(id) ?? 0
     : undefined;
   if (reference) view.reference = reference;
@@ -206,7 +209,7 @@ export function simulate(season: SeasonFile, partial: Partial<SimConfig> = {}, h
     ledger,
     TREASURY,
     config.marketMaker,
-    (id) => view.fairValue(id),
+    (id) => view.houseFairValue(id),
     config.gameRules
       ? (id, inMatch) =>
           inMatch

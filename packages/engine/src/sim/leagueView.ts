@@ -90,9 +90,10 @@ export class LeagueView {
   private scenarios(): Map<string, ClubScenario> | undefined {
     const config = this.scenarioConfig;
     if (!config) return undefined;
-    const done = this.allMatches.filter((m) => m.status === "finished" && finishTime(m) <= this.now).length;
+    const finished = (m: Match) => m.status === "finished" && finishTime(m) <= this.now;
+    const done = this.allMatches.filter(finished).length + this.cups.reduce((n, c) => n + [...c.byPhase.values()].reduce((k, list) => k + list.filter(finished).length, 0), 0);
     const liveKey = this.live.map((l) => `${l.home}|${l.away}|${l.homeGoals}|${l.awayGoals}|${Math.floor(l.minute / 5)}`).join(";");
-    const key = `${this.now}|${this.known.length}|${done}|${liveKey}|${JSON.stringify(config.slots)}`;
+    const key = `${done}|${this.known.length}|${liveKey}|${JSON.stringify(config.slots)}`;
     if (this.scenarioCache?.key === key) return this.scenarioCache.value;
     const value = runScenarios({
       now: this.now,
@@ -227,6 +228,14 @@ export class LeagueView {
     return Math.max(0, fairValue(this.fairValueInput(clubId)));
   }
 
+  /**
+   * O valor justo da casa (formador de mercado e referência de preço): sempre a conta de sempre, sem os cenários, que só os
+   * bots enxergam. Com os cenários desligados é o mesmo número de `fairValue`.
+   */
+  houseFairValue(clubId: string): Cents {
+    return Math.max(0, fairValue(this.fairValueInput(clubId, false)));
+  }
+
   /** Linha da tabela do clube com os jogos já encerrados. */
   standing(clubId: string): StandingRow | undefined {
     return this.projection.standings.get(clubId);
@@ -240,8 +249,8 @@ export class LeagueView {
     return Math.max(0, fairValueWithPpg(this.fairValueInput(clubId), ppg));
   }
 
-  private fairValueInput(clubId: string): FairValueInput {
-    const scenario = this.scenarios()?.get(clubId);
+  private fairValueInput(clubId: string, withScenarios = true): FairValueInput {
+    const scenario = withScenarios ? this.scenarios()?.get(clubId) : undefined;
     return {
       ...(scenario ? { scenario } : {}),
       projection: this.projection,

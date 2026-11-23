@@ -21,7 +21,7 @@ const jogo = (id: string, kickoff: string, extra: Partial<Match> = {}): Match =>
 });
 
 describe("placar parcial na fonte da partida (item 23)", () => {
-  it("só aparece com o jogo em andamento: entre o apito e 3 horas depois, com o minuto de jogo", () => {
+  it("só aparece com o jogo em andamento (Brasileirão e copas): entre o apito e 3 horas depois, com o minuto de jogo", () => {
     let agora = new Date("2026-11-18T22:00:00Z");
     const fonte = new ReplaySource(() => agora, undefined, {
       ano: 2026,
@@ -37,7 +37,11 @@ describe("placar parcial na fonte da partida (item 23)", () => {
     // 19h30 em Brasília = 22h30Z: antes do apito, nada
     expect(fonte.parciais()).toEqual([]);
     agora = new Date(new Date("2026-11-18T22:30:00Z").getTime() + 30 * MIN);
-    expect(fonte.parciais()).toEqual([{ home: "FLA3", away: "PAL3", homeGoals: 1, awayGoals: 0, minute: 30 }]); // só o Brasileirão, só o em andamento
+    // só o em andamento: o Brasileirão e a copa, cada um com o seu placar
+    expect(fonte.parciais()).toEqual([
+      { home: "FLA3", away: "PAL3", homeGoals: 1, awayGoals: 0, minute: 30 },
+      { home: "FLA3", away: "PAL3", homeGoals: 3, awayGoals: 0, minute: 30 },
+    ]);
     agora = new Date(new Date("2026-11-18T22:30:00Z").getTime() + 4 * 60 * MIN);
     expect(fonte.parciais()).toEqual([]); // passou de 3 horas: o dado não vale mais
   });
