@@ -69,10 +69,19 @@ interface Row {
 }
 
 /** Gerador de cada coisa sorteada (um jogo, um confronto, um grupo) em cada cenário: só depende da semente, do cenário e do nome dela. */
+const keyHashes = new Map<string, number>();
+function keyHash(key: string): number {
+  let h = keyHashes.get(key);
+  if (h === undefined) {
+    h = 2166136261;
+    for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619) >>> 0;
+    if (keyHashes.size > 20000) keyHashes.clear();
+    keyHashes.set(key, h);
+  }
+  return h;
+}
 function streamOf(seed: number, scenario: number, key: string): Rng {
-  let h = (2166136261 ^ seed ^ Math.imul(scenario + 1, 0x9e3779b1)) >>> 0;
-  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619) >>> 0;
-  return new Rng(h);
+  return new Rng(Math.imul(keyHash(key) ^ seed, 0x85ebca6b) ^ Math.imul(scenario + 1, 0x9e3779b1));
 }
 
 const liveKey = (m: { home: string; away: string }) => `${m.home}|${m.away}`;
@@ -172,6 +181,17 @@ export function runScenarios(input: ScenarioInput): Map<string, ClubScenario> {
 
 const GROUPS = /grupo/i;
 
+/** A estrutura de uma fase (confrontos ou grupos) não muda de um cenário para o outro: calculada uma vez por lista de jogos. */
+const structures = new WeakMap<readonly Match[], Match[][]>();
+function structureOf(list: readonly Match[], groups: boolean): Match[][] {
+  let s = structures.get(list);
+  if (!s) {
+    s = groups ? groupsOf(list) : groupIntoTies(list);
+    structures.set(list, s);
+  }
+  return s;
+}
+
 /**
  * Uma copa sorteada até o fim: os jogos que o calendário já tem (com o placar parcial dos que estão rolando) e, depois deles, as
  * fases que o sorteio ainda não definiu (adversários sorteados entre os que seguem vivos). Credita em `pay` o que cada clube do
@@ -207,7 +227,7 @@ function simulateCup(
       const repechageTo = rules.advanceTo?.[phase];
       alive = [];
       repechage = [];
-      for (const group of groupsOf(list)) {
+      for (const group of structureOf(list, true)) {
         const [first, second] = sampleGroup(rngOf(`grupo|${group[0]!.id}`), group, now, strength, live);
         if (first === undefined) continue;
         alive.push(first);
@@ -228,7 +248,7 @@ function simulateCup(
     const carry = alive.filter((c) => !playing.has(c));
     const winners: string[] = [];
     const losers: string[] = [];
-    for (const tie of groupIntoTies(list)) {
+    for (const tie of structureOf(list, false)) {
       const result = sampleTie(rngOf(`jogo|${tie[0]!.id}`), tie, now, strength, live);
       winners.push(result.winner);
       losers.push(result.loser);
