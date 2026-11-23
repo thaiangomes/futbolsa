@@ -185,7 +185,7 @@ describe("valor justo (puro)", () => {
 // O serviço lê o banco e entrega a mesma conta.
 import { beforeAll } from "vitest";
 import { eq } from "drizzle-orm";
-import { seasons } from "../../src/infra/db/schema/index.js";
+import { seasonRules, seasonSlots, seasons } from "../../src/infra/db/schema/index.js";
 import { withTransaction } from "../../src/infra/db/index.js";
 import { FairValueService } from "../../src/modules/market/index.js";
 import { SeasonValuesService } from "../../src/modules/dividends/season-values/season-values.service.js";
@@ -231,5 +231,35 @@ describe("valor justo (banco)", () => {
     // a vitória de 2 a 0 já fechou (rodada 1 inteira terminou às 23h): o FLA3 ganhou 3 pontos esperados no jogo que faltava, mas os 3 pontos
     // já fechados saem do "a receber"; o que importa aqui é que o valor justo foi refeito com os jogos do banco
     expect(after.get("FLA3")).not.toBe(before.get("FLA3"));
+  });
+
+  it("vagas gravadas pelo admin: load() as devolve, o valor justo dos bots muda e o da casa não; linha inválida volta ao padrão", async () => {
+    const agora = new Date("2027-04-13T12:00:00Z");
+    const bots = async () => {
+      const data = await service.load(s.seasonId);
+      const view = leagueViewsAt(data, agora.getTime()).get("PAL3")!;
+      return { data, valor: view.fairValue("PAL3") };
+    };
+    // com 4 clubes e 4 vagas de rebaixamento todos cairiam em todo cenário e a vaga não importaria: sem rebaixamento neste caso
+    await t.db.update(seasonRules).set({ aRelegationSlots: 0 }).where(eq(seasonRules.seasonId, s.seasonId));
+    const semRegra = await bots();
+    expect(semRegra.data.slots).toBeUndefined(); // sem linha: o padrão do motor (6 + 6) entra na visão dos bots
+    const casaAntes = fairValuesAt(semRegra.data, agora.getTime());
+
+    // só uma vaga de Libertadores e nenhuma de Sul-Americana: quase ninguém classifica, então o bônus esperado cai
+    const regras = { destinations: [{ destination: "libertadores" as const, tableSlots: 1, routes: [] }, { destination: "sulamericana" as const, tableSlots: 0, routes: [] }] };
+    await t.db.insert(seasonSlots).values({ seasonId: s.seasonId, rules: regras, updatedAt: new Date() });
+    const comRegra = await bots();
+    expect(comRegra.data.slots).toEqual(regras);
+    expect(comRegra.valor).not.toBe(semRegra.valor);
+    expect(fairValuesAt(comRegra.data, agora.getTime())).toEqual(casaAntes); // a casa não lê as vagas
+
+    // conteúdo inválido na linha não quebra a leitura: vale o padrão
+    await t.db.update(seasonSlots).set({ rules: { destinations: [] } }).where(eq(seasonSlots.seasonId, s.seasonId));
+    const invalida = await bots();
+    expect(invalida.data.slots).toBeUndefined();
+    expect(invalida.valor).toBe(semRegra.valor);
+    await t.db.delete(seasonSlots).where(eq(seasonSlots.seasonId, s.seasonId));
+    await t.db.update(seasonRules).set({ aRelegationSlots: 4 }).where(eq(seasonRules.seasonId, s.seasonId));
   });
 });
