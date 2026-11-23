@@ -4,6 +4,7 @@ import { prepareCups } from "../src/engine/fairValue.js";
 import { loadSeason } from "../src/data/season.js";
 import { BRASILEIRAO_A } from "../src/engine/dividends.js";
 import type { Match } from "../src/engine/types.js";
+import { LeagueView } from "../src/sim/leagueView.js";
 import { DEFAULT_SLOT_RULES, type SlotRules } from "../src/engine/vagas.js";
 import { defaultRunConfig } from "../src/sim/regressao.js";
 
@@ -102,5 +103,39 @@ describe("valor justo por cenários", () => {
     expect(Date.now() - inicio).toBeLessThan(2000);
     const totalL = [...r.values()].reduce((a, c) => a + c.pLibertadores, 0);
     expect(totalL).toBeCloseTo(6, 5);
+  });
+});
+
+describe("a visão do campeonato com cenários", () => {
+  const montar = (cenarios: boolean) => {
+    const view = new LeagueView(clubes, { perPoint: 10, placement: [], qualification: { libertadores: 300, sulamericana: 100 } }, liga());
+    view.now = AGORA;
+    view.buybackMultiple = 1.5;
+    view.setCups([
+      {
+        matches: [
+          { ...jogo("s1", "PAL", "FORA1"), competition: "libertadores", phase: "semifinal", kickoff: "2026-11-20T19:00:00-03:00" },
+          { ...jogo("s2", "FORA2", "FORA3"), competition: "libertadores", phase: "semifinal", kickoff: "2026-11-20T19:00:00-03:00" },
+        ],
+        rules: { phases: ["semifinal", "final"], advance: { semifinal: 100 }, title: 500 },
+      },
+    ]);
+    if (cenarios) view.setScenarios({ slots: regras, count: 400 });
+    return view;
+  };
+  const parcial = [{ home: "PAL", away: "FORA1", homeGoals: 2, awayGoals: 0, minute: 85 }];
+
+  it("o valor justo dos bots reage ao placar de um jogo de copa de outro clube", () => {
+    const antes = montar(true);
+    const depois = montar(true);
+    depois.setLive(parcial);
+    expect(depois.fairValue("C2")).toBeGreaterThan(antes.fairValue("C2"));
+  });
+
+  it("sem cenários ligados, o jogo de copa não mexe no valor justo (a conta de sempre)", () => {
+    const antes = montar(false);
+    const depois = montar(false);
+    depois.setLive(parcial);
+    expect(depois.fairValue("C2")).toBe(antes.fairValue("C2"));
   });
 });

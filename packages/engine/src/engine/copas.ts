@@ -21,17 +21,22 @@ export interface RandomSource {
   next(): number;
 }
 
-/** Sorteia uma contagem de gols com média `lambda` (método de Knuth; médias baixas). */
+/**
+ * Sorteia uma contagem de gols com média `lambda` por inversão da distribuição: um número aleatório só por sorteio, e o resultado
+ * cresce junto com a média. Assim, com a mesma semente, mudar o placar ou o minuto de um jogo só muda o que a mudança causa.
+ */
 export function samplePoisson(rng: RandomSource, lambda: number): number {
+  const u = rng.next();
   if (lambda <= 0) return 0;
-  const limit = Math.exp(-lambda);
+  let p = Math.exp(-lambda);
+  let cumulative = p;
   let k = 0;
-  let p = 1;
-  do {
+  while (u > cumulative && k < 30) {
     k++;
-    p *= rng.next();
-  } while (p > limit && k < 30);
-  return k - 1;
+    p = (p * lambda) / k;
+    cumulative += p;
+  }
+  return k;
 }
 
 /** Gols esperados do mandante e do visitante num jogo inteiro, pelas forças (pontos por jogo) dos dois. */
@@ -92,6 +97,8 @@ export function sampleTie(
     let home: number;
     let away: number;
     if (isDone(leg, now)) {
+      rng.next(); // gasta os mesmos sorteios de um jogo por jogar, para os outros jogos do confronto não mudarem de sorteio
+      rng.next();
       home = leg.homeGoals ?? 0;
       away = leg.awayGoals ?? 0;
     } else {
@@ -108,19 +115,20 @@ export function sampleTie(
       goalsB += home;
     }
   }
-  if (goalsA !== goalsB) return goalsA > goalsB ? { winner: a, loser: b } : { winner: b, loser: a };
   const decider = legs[legs.length - 1]!;
+  const rates = goalRates(strength(decider.home), strength(decider.away));
+  const extraHome = samplePoisson(rng, rates.home / 3);
+  const extraAway = samplePoisson(rng, rates.away / 3);
+  const penalties = rng.next();
+  if (goalsA !== goalsB) return goalsA > goalsB ? { winner: a, loser: b } : { winner: b, loser: a };
   if (allDone) {
     const known = decider.winner ?? byScore(decider);
     if (known === a || known === b) return known === a ? { winner: a, loser: b } : { winner: b, loser: a };
   } else {
-    const rates = goalRates(strength(decider.home), strength(decider.away));
-    const extraHome = samplePoisson(rng, rates.home / 3);
-    const extraAway = samplePoisson(rng, rates.away / 3);
     const [extraA, extraB] = decider.home === a ? [extraHome, extraAway] : [extraAway, extraHome];
     if (extraA !== extraB) return extraA > extraB ? { winner: a, loser: b } : { winner: b, loser: a };
   }
-  return rng.next() < 0.5 ? { winner: a, loser: b } : { winner: b, loser: a };
+  return penalties < 0.5 ? { winner: a, loser: b } : { winner: b, loser: a };
 }
 
 /** Os confrontos de uma fase de mata-mata: os jogos de cada par de clubes, em ordem de início. */
@@ -189,6 +197,8 @@ export function sampleGroup(rng: RandomSource, matches: readonly Match[], now: n
     let home: number;
     let away: number;
     if (isDone(m, now)) {
+      rng.next();
+      rng.next();
       home = m.homeGoals ?? 0;
       away = m.awayGoals ?? 0;
     } else {

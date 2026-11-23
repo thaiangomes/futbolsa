@@ -68,11 +68,17 @@ interface Row {
   luck: number;
 }
 
+/** Gerador de cada coisa sorteada (um jogo, um confronto, um grupo) em cada cenário: só depende da semente, do cenário e do nome dela. */
+function streamOf(seed: number, scenario: number, key: string): Rng {
+  let h = (2166136261 ^ seed ^ Math.imul(scenario + 1, 0x9e3779b1)) >>> 0;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619) >>> 0;
+  return new Rng(h);
+}
+
 const liveKey = (m: { home: string; away: string }) => `${m.home}|${m.away}`;
 
 export function runScenarios(input: ScenarioInput): Map<string, ClubScenario> {
   const { now, clubIds, rules, leagueMatches, cups, strength, slots } = input;
-  const rng = new Rng(input.seed);
   const livePositions = new Map<string, LivePosition>(
     input.live.map((l) => [liveKey(l), { homeGoals: l.homeGoals, awayGoals: l.awayGoals, minute: l.minute }]),
   );
@@ -115,9 +121,9 @@ export function runScenarios(input: ScenarioInput): Map<string, ClubScenario> {
 
   for (let s = 0; s < input.scenarios; s++) {
     // campeonato
-    const rows = new Map<string, Row>([...base].map(([c, r]) => [c, { ...r, luck: rng.next() }]));
+    const rows = new Map<string, Row>([...base].map(([c, r]) => [c, { ...r, luck: streamOf(input.seed, s, `sorte|${c}`).next() }]));
     for (const m of pending) {
-      const score = sampleScore(rng, m.home, m.away, strength, live(m));
+      const score = sampleScore(streamOf(input.seed, s, m.id), m.home, m.away, strength, live(m));
       add(rows, m, score.home, score.away);
     }
     const table = rankRows([...rows.values()]);
@@ -129,7 +135,7 @@ export function runScenarios(input: ScenarioInput): Map<string, ClubScenario> {
     // copas
     const pay = new Map<string, number>(clubIds.map((c) => [c, 0]));
     const finals: Record<string, CupFinal> = {};
-    for (const cup of cups) finals[cup.competition] = simulateCup(cup, rng, now, strength, live, listed, pay);
+    for (const cup of cups) finals[cup.competition] = simulateCup(cup, (key) => streamOf(input.seed, s, `${cup.competition}|${key}`), now, strength, live, listed, pay);
 
     // vagas
     const vagas = resolveSlots(slots, table, relegated, finals);
@@ -173,7 +179,7 @@ const GROUPS = /grupo/i;
  */
 function simulateCup(
   cup: PreparedCup,
-  rng: Rng,
+  rngOf: (key: string) => Rng,
   now: number,
   strength: (id: string) => number,
   live: LiveLookup,
@@ -202,7 +208,7 @@ function simulateCup(
       alive = [];
       repechage = [];
       for (const group of groupsOf(list)) {
-        const [first, second] = sampleGroup(rng, group, now, strength, live);
+        const [first, second] = sampleGroup(rngOf(`grupo|${group[0]!.id}`), group, now, strength, live);
         if (first === undefined) continue;
         alive.push(first);
         if (pays) credit(first, rules.advance[phase]);
@@ -223,7 +229,7 @@ function simulateCup(
     const winners: string[] = [];
     const losers: string[] = [];
     for (const tie of groupIntoTies(list)) {
-      const result = sampleTie(rng, tie, now, strength, live);
+      const result = sampleTie(rngOf(`jogo|${tie[0]!.id}`), tie, now, strength, live);
       winners.push(result.winner);
       losers.push(result.loser);
       if (pays) credit(result.winner, idx === last ? rules.title : rules.advance[phase]);
@@ -242,11 +248,11 @@ function simulateCup(
       if (isRepechage) repechage = [];
       continue;
     }
-    const order = rng.shuffle([...pool]);
+    const order = rngOf(`sorteio|${q}`).shuffle([...pool].sort());
     const winners: string[] = [];
     const losers: string[] = [];
     for (let i = 0; i + 1 < order.length; i += 2) {
-      const result = sampleNeutralTie(rng, order[i]!, order[i + 1]!, strength);
+      const result = sampleNeutralTie(rngOf(`jogo|${q}|${order[i]}|${order[i + 1]}`), order[i]!, order[i + 1]!, strength);
       winners.push(result.winner);
       losers.push(result.loser);
       credit(result.winner, q === last ? rules.title : rules.advance[name]);

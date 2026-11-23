@@ -11,9 +11,14 @@ import {
   type LeagueProjection,
   type PreparedCup,
 } from "../engine/fairValue.js";
+import { DEFAULT_SCENARIOS, runScenarios, type ClubScenario } from "../engine/cenarios.js";
 import { livePointsDelta, type LiveMatch } from "../engine/liveScore.js";
 import type { Cents } from "../engine/money.js";
 import { finishTime, kickoffTime, type Match } from "../engine/types.js";
+import { DEFAULT_SLOT_RULES, type SlotRules } from "../engine/vagas.js";
+
+/** Semente fixa dos cenários: o mesmo mundo dá o mesmo valor, e uma mudança de placar só mexe no valor pelo que ela causa. */
+const SCENARIO_SEED = 20261121;
 
 /**
  * O que se sabe de um campeonato num instante: a tabela dos jogos já encerrados, o valor justo de cada clube
@@ -38,6 +43,10 @@ export class LeagueView {
   /** Jogos em andamento com o placar parcial (só para os bots da partida; o valor justo da casa não usa). */
   private live: readonly LiveMatch[] = [];
   private cups: PreparedCup[] = [];
+  /** Valor justo por cenários (vagas, rebaixamento e copas); desligado, vale a conta de sempre. */
+  private scenarioConfig: { slots: SlotRules; count: number } | undefined;
+  private scenarioCache: { key: string; value: Map<string, ClubScenario> } | undefined;
+  private readonly allMatches: readonly Match[];
   private readonly gamesPerClub: number;
   /** Os jogos do campeonato como "mandante|visitante" (o placar parcial só vale para eles). */
   private readonly leaguePairs: ReadonlySet<string>;
@@ -54,6 +63,7 @@ export class LeagueView {
     /** Peso do palpite inicial, em jogos. */
     private readonly priorWeight = 5,
   ) {
+    this.allMatches = allMatches;
     this.gamesPerClub = (2 * allMatches.length) / clubIds.length;
     this.leaguePairs = new Set(allMatches.map((m) => `${m.home}|${m.away}`));
     for (const id of clubIds) {
@@ -67,9 +77,43 @@ export class LeagueView {
     this.recompute();
   }
 
+  /**
+   * Liga o valor justo por cenários (só os bots): as vagas vêm das regras da temporada (sem elas, as seis vagas de cada destino
+   * da tabela), e o placar parcial dos jogos de copa entra também. `undefined` desliga.
+   */
+  setScenarios(config: { slots?: SlotRules; count?: number } | undefined): void {
+    this.scenarioConfig = config ? { slots: config.slots ?? DEFAULT_SLOT_RULES, count: config.count ?? DEFAULT_SCENARIOS } : undefined;
+    this.scenarioCache = undefined;
+  }
+
+  /** As médias dos cenários de cada clube, calculadas uma vez por estado do mundo (mesma entrada, mesma semente). */
+  private scenarios(): Map<string, ClubScenario> | undefined {
+    const config = this.scenarioConfig;
+    if (!config) return undefined;
+    const done = this.allMatches.filter((m) => m.status === "finished" && finishTime(m) <= this.now).length;
+    const liveKey = this.live.map((l) => `${l.home}|${l.away}|${l.homeGoals}|${l.awayGoals}|${Math.floor(l.minute / 5)}`).join(";");
+    const key = `${this.now}|${this.known.length}|${done}|${liveKey}|${JSON.stringify(config.slots)}`;
+    if (this.scenarioCache?.key === key) return this.scenarioCache.value;
+    const value = runScenarios({
+      now: this.now,
+      clubIds: this.clubIds,
+      rules: this.rules,
+      leagueMatches: this.allMatches.filter((m) => m.status !== "cancelled"),
+      cups: this.cups,
+      live: this.live,
+      strength: (id) => this.ppg(id),
+      slots: config.slots,
+      scenarios: config.count,
+      seed: SCENARIO_SEED,
+    });
+    this.scenarioCache = { key, value };
+    return value;
+  }
+
   /** Copas que valem dividendos nesta temporada, com todos os jogos (inclusive os que ainda vão acontecer). */
   setCups(cups: ReadonlyArray<{ matches: readonly Match[]; rules: CupRules }>): void {
     this.cups = prepareCups(cups);
+    this.scenarioCache = undefined;
   }
 
   /**
@@ -116,6 +160,7 @@ export class LeagueView {
   /** Os jogos em andamento e o placar parcial de cada um (item 23). */
   setLive(matches: readonly LiveMatch[]): void {
     this.live = matches;
+    this.scenarioCache = undefined;
     this.recompute();
   }
 
@@ -136,6 +181,7 @@ export class LeagueView {
 
   setKnownMatches(matches: Match[]): void {
     this.known = matches;
+    this.scenarioCache = undefined;
     this.recompute();
   }
 
@@ -195,7 +241,9 @@ export class LeagueView {
   }
 
   private fairValueInput(clubId: string): FairValueInput {
+    const scenario = this.scenarios()?.get(clubId);
     return {
+      ...(scenario ? { scenario } : {}),
       projection: this.projection,
       clubId,
       rules: this.rules,
@@ -203,7 +251,7 @@ export class LeagueView {
       closedPoints: this.paidPoints.get(clubId) ?? 0,
       placementClosed: this.placementPaid,
       cupClosed: this.cupPaid.get(clubId) ?? 0,
-      cupExpected: this.cupExpected(clubId),
+      cupExpected: scenario ? scenario.cupFuture : this.cupExpected(clubId),
     };
   }
 

@@ -1,3 +1,4 @@
+import type { ClubScenario } from "./cenarios.js";
 import { computeStandings, placementWithQualification, type CupRules, type LeagueRules, type StandingRow } from "./dividends.js";
 import type { Cents } from "./money.js";
 import { finishTime, kickoffTime, type Match } from "./types.js";
@@ -147,6 +148,11 @@ export interface FairValueInput {
   cupClosed: Cents;
   /** Dividendos de copa esperados daqui para a frente (`cupExpected`). */
   cupExpected: Cents;
+  /**
+   * Médias sobre os cenários simulados (vagas, rebaixamento e copas; só os bots). Presente: substitui a colocação projetada, o
+   * bônus, a penalização e os pontos esperados de `fairValue`.
+   */
+  scenario?: ClubScenario;
 }
 
 /**
@@ -156,6 +162,12 @@ export interface FairValueInput {
  * esperada (o múltiplo vezes os dividendos projetados da temporada inteira).
  */
 export function fairValue(i: FairValueInput): Cents {
+  if (i.scenario) {
+    const s = i.scenario;
+    const placement = i.placementClosed ? 0 : s.placementQual - s.penalty;
+    const seasonTotal = s.points * i.rules.perPoint + s.placementQual + i.cupClosed + s.cupFuture;
+    return Math.round((s.points - i.closedPoints) * i.rules.perPoint + placement + s.cupFuture + i.buybackMultiple * seasonTotal);
+  }
   const row = i.projection.standings.get(i.clubId);
   const played = row?.played ?? 0;
   const points = (row?.points ?? 0) + (i.projection.liveDelta?.get(i.clubId) ?? 0);
