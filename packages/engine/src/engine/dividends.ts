@@ -53,6 +53,8 @@ export interface LeagueRules {
    * debitado do caixa de quem tem a ação, mesmo que fique negativo. Fica fora da base da recompra. Faltando = zero.
    */
   penalty?: Cents[];
+  /** Quantos clubes caem (os últimos da tabela). Faltando, vale o número de colocações com penalização. */
+  relegationSlots?: number;
 }
 
 /** Vagas que a projeção usa para o bônus de classificação: Libertadores do 1º ao 6º, Sul-Americana do 7º ao 12º. */
@@ -83,6 +85,7 @@ export function scaleLeagueRules(rules: LeagueRules, scale: number): LeagueRules
     placement: rules.placement.map(k),
     ...(rules.qualification ? { qualification: { libertadores: k(rules.qualification.libertadores), sulamericana: k(rules.qualification.sulamericana) } } : {}),
     ...(rules.penalty ? { penalty: rules.penalty.map(k) } : {}),
+    ...(rules.relegationSlots !== undefined ? { relegationSlots: rules.relegationSlots } : {}),
   };
 }
 
@@ -98,6 +101,7 @@ export const BRASILEIRAO_A: LeagueRules = {
   placement: [1000, 700, 500, 450, 400, 350, 300, 270, 240, 210, 180, 150, 120, 90, 60, 30],
   qualification: { libertadores: 300, sulamericana: 100 },
   penalty: [...Array<number>(16).fill(0), 100, 100, 100, 100],
+  relegationSlots: 4,
 };
 
 /** Série B: metade por ponto; bônus de R$ 2,00 para os quatro que sobem. */

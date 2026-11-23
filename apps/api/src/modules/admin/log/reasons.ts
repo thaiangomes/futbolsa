@@ -24,6 +24,9 @@ export const ADMIN_ACTIONS = {
   // Correção da tabela da copa depois da abertura do IPO (item 16 da fila da partida de teste): o motivo é obrigatório.
   "cup.correct": { reasonRequired: true },
   "season.rules.correct": { reasonRequired: true },
+  // Regras de vaga para a Libertadores e a Sul-Americana (valor justo dos bots): o motivo é registrado nas duas.
+  "season.slots.update": { reasonRequired: true },
+  "season.slots.correct": { reasonRequired: true },
   // Importar na hora (F7): o admin só pede, quem traz os dados é a fonte; motivo aceito e não exigido.
   "import.run": { reasonRequired: false },
   // Adiar o fechamento das ofertas do IPO (F8): como as outras ações de temporada, motivo aceito e não exigido.

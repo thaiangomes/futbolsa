@@ -13,6 +13,7 @@ import { Exchange } from "../../../../packages/engine/src/engine/orderbook.js";
 import { Ledger } from "../../../../packages/engine/src/engine/ledger.js";
 import { MarketView } from "../../../../packages/engine/src/sim/market.js";
 import { fairValuesAt, type FairValueData } from "../../src/modules/market/index.js";
+import { leagueViewsAt } from "../../src/modules/market/maker/fair-value.js";
 
 // T9 do Plano do livro de ofertas e formador: o valor justo montado dos jogos, da classificação e dos valores da temporada,
 // conferido contra o `MarketView.fairValue` da simulação calibrada.
@@ -140,6 +141,25 @@ describe("valor justo (puro)", () => {
     const semCopa = fairValuesAt(data(league()), now);
     expect(mine.get("FLA3")!).toBeGreaterThan(semCopa.get("FLA3")!);
     expect(mine.get("COR3")).toBe(semCopa.get("COR3"));
+  });
+
+  it("vagas e copas: o placar de um jogo de copa mexe no valor justo dos bots, mas não no da casa", () => {
+    const cup: CupRules = { phases: ["quartas", "semifinal", "final"], advance: { quartas: 250, semifinal: 400 }, title: 800 };
+    const cupMatches: Match[] = [
+      { id: "c1", competition: "copa-do-brasil", phase: "quartas", kickoff: iso("2027-05-05T21:00:00Z"), home: "FLA3", away: "PAL3", homeGoals: null, awayGoals: null, status: "scheduled" },
+    ];
+    const values: SeasonValues = { ...VALUES, cups: { "copa-do-brasil": cup } };
+    const d = data([...league(), ...cupMatches], { values });
+    const now = ms("2027-05-05T22:30:00Z"); // 1h30 depois do apito
+    const casaAntes = fairValuesAt(d, now);
+    const sem = leagueViewsAt(d, now);
+    const com = leagueViewsAt(d, now);
+    for (const v of new Set(com.values())) v.setLive([{ home: "FLA3", away: "PAL3", homeGoals: 2, awayGoals: 0, minute: 80 }]);
+    // os bots: o FLA3 que vence por 2 a 0 aos 80 minutos vale mais, e o PAL3 vale menos
+    expect(com.get("FLA3")!.fairValue("FLA3")).toBeGreaterThan(sem.get("FLA3")!.fairValue("FLA3"));
+    expect(com.get("PAL3")!.fairValue("PAL3")).toBeLessThan(sem.get("PAL3")!.fairValue("PAL3"));
+    // a casa só conhece o resultado final: nada mudou
+    expect(fairValuesAt(d, now)).toEqual(casaAntes);
   });
 
   it("clube da Série B usa as regras da B (R$ 0,05 por ponto)", () => {

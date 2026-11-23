@@ -93,7 +93,7 @@ describe("registro do admin (record)", () => {
     // as duas dos pagamentos (F12): aprovar não pede motivo, corrigir pede
     expect(reasonRequired("payout.approve")).toBe(false);
     expect(reasonRequired("payout.correct")).toBe(true);
-    expect(Object.keys(ADMIN_ACTIONS)).toHaveLength(34);
+    expect(Object.keys(ADMIN_ACTIONS)).toHaveLength(36);
   });
 
   it("admin 33: ação sem motivo que exige motivo é recusada e nada é gravado", async () => {

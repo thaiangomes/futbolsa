@@ -85,6 +85,13 @@
       "when": 1795190180169,
       "tag": "0011_correcao_das_regras_das_ligas",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795441936885,
+      "tag": "0012_vagas_para_o_ano_seguinte",
+      "breakpoints": true
     }
   ]
 }

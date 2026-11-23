@@ -9,6 +9,7 @@ import {
   type LeagueProjection,
   type Match,
   type SeasonValues,
+  type SlotRules,
 } from "@futbolsa/engine";
 
 /**
@@ -30,6 +31,8 @@ export interface FairValueData {
   listed: ReadonlyMap<string, "A" | "B">;
   /** A recompra em múltiplos dos dividendos da temporada (1,5 = 15.000 pontos-base). */
   buybackMultiple: number;
+  /** As regras de vaga da temporada, se o admin montou (só os bots usam, no valor justo por cenários). */
+  slots?: SlotRules;
 }
 
 const LEAGUE_OF = { A: "brasileirao-a", B: "brasileirao-b" } as const;
@@ -136,6 +139,8 @@ export function leagueViewsAt(data: FairValueData, now: number): Map<string, Lea
     view.now = now;
     view.buybackMultiple = data.buybackMultiple;
     view.setCups(cupMatches);
+    // os bots enxergam o valor justo por cenários (vagas, rebaixamento e copas); o valor justo da casa continua o de sempre
+    if (division === "A") view.setScenarios({ ...(data.slots ? { slots: data.slots } : {}) });
     view.setKnownMatches(leagueMatches.filter((m) => m.status === "finished"));
     const closedAt = closes[competition];
     view.placementPaid = closedAt !== undefined && closedAt <= now && data.officialStandings[competition] !== undefined;

@@ -43,6 +43,20 @@ export const seasonRules = futbolsa.table(
 );
 
 /**
+ * As regras de vaga para a Libertadores e a Sul-Americana do ano seguinte (Vagas e copas no valor justo dos bots): as vagas da
+ * tabela e as rotas pelas copas de cada destino, em JSON no formato do motor (`SlotRules`). Só o valor justo dos bots lê;
+ * nenhum pagamento depende dela (a marcação dos classificados continua do admin). Antes do IPO o admin edita; depois, só pela
+ * rota de correção, com motivo. Sem linha, os bots usam as seis vagas da tabela de cada destino.
+ */
+export const seasonSlots = futbolsa.table("season_slots", {
+  seasonId: integer("season_id")
+    .primaryKey()
+    .references(() => seasons.id),
+  rules: jsonb("rules").notNull(),
+  updatedAt: instant("updated_at").notNull().default(sql`now()`),
+});
+
+/**
  * Os classificados da Série A para o ano seguinte, marcados pelo admin no fechamento (Dividendos e recompra, "Classificação
  * para o ano seguinte"): um clube pode estar nas duas listas e então recebe só o bônus da Libertadores. Fora da trava dos
  * valores: a marcação acontece depois da abertura do IPO.

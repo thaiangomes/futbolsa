@@ -72,6 +72,7 @@ export function leaguesFromRules(rules: RulesRow): { "brasileirao-a": LeagueRule
       ...(rules.aLibertadoresBonus > 0 || rules.aSulamericanaBonus > 0
         ? { qualification: { libertadores: rules.aLibertadoresBonus, sulamericana: rules.aSulamericanaBonus } }
         : {}),
+      ...(rules.aRelegationSlots > 0 ? { relegationSlots: rules.aRelegationSlots } : {}),
       ...(rules.aRelegationPenalty > 0 && rules.aRelegationSlots > 0
         ? { penalty: relegationPenalty(rules.aRelegationPenalty, rules.aRelegationSlots) }
         : {}),

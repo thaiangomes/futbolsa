@@ -111,13 +111,13 @@ export class ReplaySource implements ResultSource {
   }
 
   /**
-   * Os jogos do Brasileirão em andamento agora, com o placar parcial que a última baixa trouxe (item 23). Só os bots da
+   * Os jogos do Brasileirão e das copas em andamento agora, com o placar parcial que a última baixa trouxe (item 23). Só os bots da
    * partida usam isto; quem decide se o dado ainda vale (baixado há pouco, relógio na hora real) é a partida.
    */
   parciais(): LiveMatch[] {
     const now = this.now().getTime();
     const out: LiveMatch[] = [];
-    for (const c of ["brasileirao-a", "brasileirao-b"] as const) {
+    for (const c of ["brasileirao-a", "brasileirao-b", "copa-do-brasil", "libertadores", "sulamericana"] as const) {
       for (const m of this.matchesOf(c)) {
         if (!m.parcial || m.status === "finished") continue;
         const inicio = kickoffTime(m);

@@ -22,6 +22,7 @@
  * --torcida-copa  torcedores compram o próprio time antes dos mata-matas de copa
  * --ipo-copas  a faixa do IPO soma os dividendos de copa esperados (com a recompra);
  *          ligado por padrão, --no-ipo-copas desliga
+ * --cenarios  quantos cenários o valor justo dos bots sorteia (vagas, rebaixamento e copas; 0 = a conta de sempre, padrão)
  * --regras-do-jogo  lote do formador, quantidade proporcional, ordem contra si mesmo recusada e faixa de 20% (P5 do Plano do ensaio)
  * --faixa  largura da faixa do IPO para cada lado do centro (padrão 0.4 = 60% a 140%)
  */
@@ -54,6 +55,7 @@ const { values } = parseArgs({
     acerto: { type: "string", default: "0.3,0.5,0.7" },
     faixa: { type: "string", default: "0.4" },
     "regras-do-jogo": { type: "boolean", default: false },
+    cenarios: { type: "string", default: "0" },
   },
 });
 
@@ -95,11 +97,12 @@ const result = simulate(season, {
   ipoCups: values["ipo-copas"],
   bandWidth: Number(values.faixa),
   gameRules: values["regras-do-jogo"],
+  ...(Number(values.cenarios) > 0 ? { scenarios: Number(values.cenarios) } : {}),
 });
 const report = renderReport(result);
 
 mkdirSync(values.out!, { recursive: true });
-const tag = `${season.season}-semente${values.seed}-ponto${perPoint}-${values.ancora}-recompra${values.recompra}${traders ? `-traders${traders}` : ""}${acerto.length ? `-acerto${acerto.join("_")}` : ""}${values.captura !== "0" ? `-captura${values.captura}` : ""}${values.extras ? `-${values.extras.replace(/[=,]/g, "")}` : ""}${cups.length ? `-copas${values.copas!.replace(/,/g, "_")}` : ""}${values["torcida-copa"] ? "-torcidacopa" : ""}${values["ipo-copas"] ? "-ipocopas" : ""}${values["regras-do-jogo"] ? "-regras" : ""}${values.faixa !== "0.4" ? `-faixa${values.faixa}` : ""}`;
+const tag = `${season.season}-semente${values.seed}-ponto${perPoint}-${values.ancora}-recompra${values.recompra}${traders ? `-traders${traders}` : ""}${acerto.length ? `-acerto${acerto.join("_")}` : ""}${values.captura !== "0" ? `-captura${values.captura}` : ""}${values.extras ? `-${values.extras.replace(/[=,]/g, "")}` : ""}${cups.length ? `-copas${values.copas!.replace(/,/g, "_")}` : ""}${values["torcida-copa"] ? "-torcidacopa" : ""}${values["ipo-copas"] ? "-ipocopas" : ""}${values["regras-do-jogo"] ? "-regras" : ""}${Number(values.cenarios) > 0 ? `-cenarios${values.cenarios}` : ""}${values.faixa !== "0.4" ? `-faixa${values.faixa}` : ""}`;
 writeFileSync(join(values.out!, `resultado-${tag}.json`), JSON.stringify(result, null, 2));
 writeFileSync(join(values.out!, `resumo-${tag}.md`), report);
 console.log(report);
