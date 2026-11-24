@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { asc, eq } from "drizzle-orm";
 import { slotRulesSchema } from "@futbolsa/contracts";
-import type { Cents, Match } from "@futbolsa/engine";
+import type { Cents, Match, SlotRules } from "@futbolsa/engine";
 import { DB, type Database, type DrizzleTx, Tx } from "../../../infra/db/index.js";
 import { clubs, matches, seasonClubs, seasonRules, seasonSlots, standings } from "../../../infra/db/schema/index.js";
 import { SeasonValuesService } from "../../dividends/season-values/season-values.service.js";
@@ -59,6 +59,10 @@ export class FairValueService {
     if (!rules) throw new Error(`temporada sem valores: ${seasonId}`);
     // `loadSeasonValues` recebe um `Tx`; fora de transação, um `Tx` em volta do banco serve, porque só lê
     const values = await this.values.loadSeasonValues(new Tx(executor as DrizzleTx), seasonId);
+    // regras de vaga do admin (só os bots leem); sem linha ou com conteúdo inválido, vale o padrão do motor
+    const [slotRow] = await executor.select({ rules: seasonSlots.rules }).from(seasonSlots).where(eq(seasonSlots.seasonId, seasonId));
+    const parsedSlots = slotRow ? slotRulesSchema.safeParse(slotRow.rules) : undefined;
+    const slots: SlotRules | undefined = parsedSlots?.success ? parsedSlots.data : undefined;
 
     return {
       matches: matchRows.map((m): Match => toEngineMatch(m, tickerOf)),
@@ -66,6 +70,7 @@ export class FairValueService {
       values,
       listed: new Map(listedRows.map((r) => [tickerOf(r.clubId), r.division as "A" | "B"])),
       buybackMultiple: rules.bp / 10_000,
+      ...(slots ? { slots } : {}),
     };
   }
 
