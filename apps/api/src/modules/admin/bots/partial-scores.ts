@@ -21,3 +21,23 @@ export abstract class AttentionClubs {
 }
 
 export const noAttention: AttentionClubs = { clubs: () => [] };
+
+/**
+ * Traduz os nomes de um placar ao vivo (os da fonte: o ticker do clube listado, ou `EXT-NOME-DO-CLUBE` para o não listado) para os
+ * ids que a visão dos bots usa (o ticker, ou `EXT-<id do banco>`). Sem isto o parcial de um jogo de copa contra clube não listado
+ * não casava com o jogo gravado e era ignorado. Nome que não achar clube fica como veio.
+ */
+export function liveWithEngineIds(
+  live: readonly LiveMatch[],
+  clubRows: readonly { id: number; ticker: string | null; name: string }[],
+  normalize: (name: string) => string,
+): LiveMatch[] {
+  const byName = new Map<string, string>();
+  const tickers = new Set<string>();
+  for (const c of clubRows) {
+    if (c.ticker) tickers.add(c.ticker);
+    else byName.set(normalize(c.name), `EXT-${c.id}`);
+  }
+  const idOf = (name: string): string => (tickers.has(name) ? name : (byName.get(normalize(name)) ?? name));
+  return live.map((m) => ({ ...m, home: idOf(m.home), away: idOf(m.away) }));
+}
